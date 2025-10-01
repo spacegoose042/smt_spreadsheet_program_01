@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getDashboard, updateWorkOrder } from '../api'
+import { getDashboard, getWorkOrders, updateWorkOrder } from '../api'
 import { format, addDays, differenceInDays, startOfWeek, isWeekend } from 'date-fns'
 import { Lock, AlertCircle } from 'lucide-react'
 
@@ -62,6 +62,13 @@ export default function VisualScheduler() {
   const { data: dashboard, isLoading } = useQuery({
     queryKey: ['dashboard'],
     queryFn: getDashboard,
+    refetchInterval: 30000,
+  })
+
+  // Fetch all work orders to get unscheduled ones
+  const { data: allWorkOrders } = useQuery({
+    queryKey: ['workOrders'],
+    queryFn: () => getWorkOrders({ include_complete: false }),
     refetchInterval: 30000,
   })
 
@@ -140,8 +147,7 @@ export default function VisualScheduler() {
   }
 
   const lines = dashboard?.data?.lines || []
-  const allWorkOrders = lines.flatMap(l => l.work_orders)
-  const unscheduledWOs = allWorkOrders.filter(wo => !wo.line_id)
+  const unscheduledWOs = allWorkOrders?.data?.filter(wo => !wo.line_id) || []
 
   return (
     <div className="container">
