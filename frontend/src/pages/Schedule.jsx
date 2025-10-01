@@ -138,12 +138,22 @@ export default function Schedule() {
     completeMutation.mutate({ id: completingWO.id, data })
   }
 
-  if (showForm) {
+  if (completingWO) {
     return (
-      <div className="container">
-        <div className="page-header">
-          <h1 className="page-title">{editingWO ? 'Edit Work Order' : 'New Work Order'}</h1>
-        </div>
+      <>
+        <CompleteJobModal
+          workOrder={completingWO}
+          onComplete={handleComplete}
+          onCancel={() => setCompletingWO(null)}
+          isSubmitting={completeMutation.isPending}
+        />
+      </>
+    )
+  }
+
+  return (
+    <div className="container">
+      {showForm && (
         <WorkOrderForm
           initialData={editingWO}
           lines={lines?.data || []}
@@ -151,25 +161,8 @@ export default function Schedule() {
           onCancel={handleCancel}
           isSubmitting={createMutation.isPending || updateMutation.isPending}
         />
-      </div>
-    )
-  }
-
-  if (completingWO) {
-    return (
-      <div className="container">
-        <CompleteJobModal
-          workOrder={completingWO}
-          onComplete={handleComplete}
-          onCancel={() => setCompletingWO(null)}
-          isSubmitting={completeMutation.isPending}
-        />
-      </div>
-    )
-  }
-
-  return (
-    <div className="container">
+      )}
+      
       <div className="page-header">
         <h1 className="page-title">Production Schedule</h1>
         <p className="page-description">Manage all work orders across production lines</p>

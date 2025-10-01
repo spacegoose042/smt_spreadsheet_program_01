@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X } from 'lucide-react'
+import { X, Plus, Edit2 } from 'lucide-react'
 
 export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, isSubmitting }) {
   const [formData, setFormData] = useState({
@@ -70,8 +70,78 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
   }
 
   return (
-    <form onSubmit={handleSubmit} className="card">
-      <div className="grid grid-cols-2">
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0, 0, 0, 0.5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000,
+      padding: '1rem'
+    }}>
+      <div style={{
+        background: 'white',
+        borderRadius: '8px',
+        maxWidth: '900px',
+        width: '100%',
+        maxHeight: '90vh',
+        overflow: 'auto',
+        boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)'
+      }}>
+        <div style={{
+          position: 'sticky',
+          top: 0,
+          background: 'white',
+          borderBottom: '1px solid var(--border)',
+          padding: '0.75rem 1rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          zIndex: 10
+        }}>
+          <h2 style={{ 
+            fontSize: '1.1rem', 
+            fontWeight: 700, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '0.5rem',
+            margin: 0
+          }}>
+            {initialData ? (
+              <>
+                <Edit2 size={18} />
+                Edit Work Order
+              </>
+            ) : (
+              <>
+                <Plus size={18} />
+                New Work Order
+              </>
+            )}
+          </h2>
+          <button 
+            onClick={onCancel} 
+            style={{ 
+              border: 'none', 
+              background: 'none', 
+              cursor: 'pointer', 
+              padding: '0.25rem',
+              display: 'flex',
+              alignItems: 'center'
+            }}
+            disabled={isSubmitting}
+            type="button"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        
+    <form onSubmit={handleSubmit} style={{ padding: '1rem' }}>
+      <div className="grid grid-cols-3" style={{ gap: '0.75rem' }}>
         {/* Basic Info */}
         <div className="form-group">
           <label className="form-label">Customer *</label>
@@ -304,9 +374,11 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
         </div>
       </div>
 
+      </div>
+
       {/* Checkboxes */}
-      <div style={{ display: 'flex', gap: '2rem', marginTop: '1rem' }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+      <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.75rem', fontSize: '0.8rem' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
           <input
             type="checkbox"
             name="is_new_rev_assembly"
@@ -316,7 +388,7 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
           New Rev/Assembly
         </label>
 
-        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
           <input
             type="checkbox"
             name="is_locked"
@@ -328,22 +400,30 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
       </div>
 
       {/* Notes */}
-      <div className="form-group" style={{ marginTop: '1rem' }}>
+      <div className="form-group" style={{ marginTop: '0.75rem' }}>
         <label className="form-label">Notes</label>
         <textarea
           name="notes"
           className="form-input"
           value={formData.notes}
           onChange={handleChange}
-          rows="3"
+          rows="2"
           placeholder="Additional notes..."
+          style={{ fontSize: '0.8rem' }}
         />
       </div>
 
       {/* Actions */}
-      <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', justifyContent: 'flex-end' }}>
+      <div style={{ 
+        display: 'flex', 
+        gap: '0.75rem', 
+        marginTop: '1rem', 
+        paddingTop: '0.75rem',
+        borderTop: '1px solid var(--border)',
+        justifyContent: 'flex-end'
+      }}>
         <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={isSubmitting}>
-          <X size={18} />
+          <X size={16} />
           Cancel
         </button>
         <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
@@ -351,6 +431,8 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
         </button>
       </div>
     </form>
+      </div>
+    </div>
   )
 }
 
