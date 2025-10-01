@@ -13,14 +13,20 @@ def is_weekend(check_date: date) -> bool:
 
 def add_business_days(start_date: date, days: float) -> date:
     """Add business days (skipping weekends) to a date"""
+    import math
+    
     current_date = start_date
     days_remaining = abs(days)
     direction = 1 if days >= 0 else -1
     
-    while days_remaining > 0:
+    # Round up fractional days (0.1 days still counts as needing to move to next day)
+    full_days = math.ceil(days_remaining) if days_remaining > 0 else 0
+    
+    for _ in range(full_days):
         current_date += timedelta(days=direction)
-        if not is_weekend(current_date):
-            days_remaining -= 1
+        # Skip weekends
+        while is_weekend(current_date):
+            current_date += timedelta(days=direction)
     
     return current_date
 
@@ -263,12 +269,8 @@ def calculate_job_dates(session, line_id: int, line_hours_per_day: float = 8.0) 
         minutes_per_day = line_hours_per_day * 60
         days_needed = total_minutes / minutes_per_day
         
-        # Calculate end date by adding business days
+        # Calculate end date by adding business days (rounds up fractional days)
         end_date = add_business_days(start_date, days_needed)
-        
-        # Ensure end date is not a weekend (adjust forward if needed)
-        while is_weekend(end_date):
-            end_date += timedelta(days=1)
         
         results[job.id] = {
             'start_date': start_date,
@@ -276,9 +278,8 @@ def calculate_job_dates(session, line_id: int, line_hours_per_day: float = 8.0) 
         }
         
         # Next job starts the next business day after this one ends
-        current_date = end_date + timedelta(days=1)
-        while is_weekend(current_date):
-            current_date += timedelta(days=1)
+        # Add 1 business day using the add_business_days function
+        current_date = add_business_days(end_date, 1)
     
     return results
 
