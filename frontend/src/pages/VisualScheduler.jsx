@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getDashboard, getWorkOrders, updateWorkOrder } from '../api'
-import { format, addDays, differenceInDays, startOfWeek, isWeekend } from 'date-fns'
-import { Lock, AlertCircle } from 'lucide-react'
+import { format, addDays, differenceInDays, differenceInMinutes, startOfWeek, isWeekend, startOfDay } from 'date-fns'
+import { Lock, AlertCircle, Clock } from 'lucide-react'
 
 const PRIORITY_COLORS = {
   'Critical Mass': '#dc3545',
@@ -12,8 +12,13 @@ const PRIORITY_COLORS = {
   'Power Down': '#adb5bd'
 }
 
-function WorkOrderBlock({ wo, onDragStart, isDragging }) {
+function WorkOrderBlock({ wo, onDragStart, isDragging, showTime = false }) {
   const canDrag = !wo.is_locked
+  
+  // Format time range if available
+  const timeRange = wo.calculated_start_datetime && wo.calculated_end_datetime
+    ? `${format(new Date(wo.calculated_start_datetime), 'h:mm a')} - ${format(new Date(wo.calculated_end_datetime), 'h:mm a')}`
+    : null
   
   return (
     <div
@@ -38,7 +43,7 @@ function WorkOrderBlock({ wo, onDragStart, isDragging }) {
         flexDirection: 'column',
         justifyContent: 'center'
       }}
-      title={`${wo.customer} - ${wo.assembly} ${wo.revision}\nWO: ${wo.wo_number}\n${wo.quantity} units\n${wo.time_minutes} min${wo.is_locked ? ' (LOCKED)' : ''}`}
+      title={`${wo.customer} - ${wo.assembly} ${wo.revision}\nWO: ${wo.wo_number}\n${wo.quantity} units\n${wo.time_minutes} min${timeRange ? '\n' + timeRange : ''}${wo.is_locked ? '\n(LOCKED)' : ''}`}
     >
       {wo.is_locked && (
         <Lock size={10} style={{ position: 'absolute', top: '2px', right: '2px' }} />
@@ -49,6 +54,12 @@ function WorkOrderBlock({ wo, onDragStart, isDragging }) {
       <div style={{ fontSize: '0.65rem', opacity: 0.9 }}>
         {wo.assembly} • {wo.quantity}u
       </div>
+      {showTime && timeRange && (
+        <div style={{ fontSize: '0.6rem', opacity: 0.85, marginTop: '0.15rem' }}>
+          <Clock size={8} style={{ display: 'inline', marginRight: '2px' }} />
+          {timeRange}
+        </div>
+      )}
     </div>
   )
 }
@@ -126,9 +137,27 @@ export default function VisualScheduler() {
   }
 
   const getWOPosition = (wo, lineStartDate) => {
+    // Use datetimes if available, fall back to dates
+    if (wo.calculated_start_datetime && wo.calculated_end_datetime) {
+      const startDT = new Date(wo.calculated_start_datetime)
+      const endDT = new Date(wo.calculated_end_datetime)
+      
+      // Calculate position in minutes from timeline start
+      const totalMinutes = 28 * 24 * 60  // 28 days in minutes
+      const startMinutes = differenceInMinutes(startDT, lineStartDate)
+      const durationMinutes = differenceInMinutes(endDT, startDT)
+      
+      return {
+        left: `${(startMinutes / totalMinutes) * 100}%`,
+        width: `${(durationMinutes / totalMinutes) * 100}%`,
+        startMinutes,
+        durationMinutes
+      }
+    }
+    
+    // Fallback to date-only positioning
     if (!wo.calculated_start_date || !wo.calculated_end_date) return null
     
-    // Parse dates explicitly to avoid timezone issues
     const [startY, startM, startD] = wo.calculated_start_date.split('-').map(Number)
     const [endY, endM, endD] = wo.calculated_end_date.split('-').map(Number)
     
@@ -326,10 +355,13 @@ export default function VisualScheduler() {
 
                 {/* Work Order Blocks */}
                 {line.work_orders
-                  .filter(wo => wo.calculated_start_date && wo.calculated_end_date)
+                  .filter(wo => wo.calculated_start_datetime || wo.calculated_start_date)
                   .map(wo => {
                     const position = getWOPosition(wo, startDate)
-                    if (!position || position.startDiff < 0 || position.startDiff > 28) return null
+                    if (!position) return null
+                    // Only show if within visible timeline
+                    if (position.startMinutes !== undefined && (position.startMinutes < 0 || position.startMinutes > 28 * 24 * 60)) return null
+                    if (position.startDiff !== undefined && (position.startDiff < 0 || position.startDiff > 28)) return null
 
                     return (
                       <div
@@ -347,6 +379,7 @@ export default function VisualScheduler() {
                           wo={wo} 
                           onDragStart={handleDragStart}
                           isDragging={draggedWO?.id === wo.id}
+                          showTime={true}
                         />
                       </div>
                     )

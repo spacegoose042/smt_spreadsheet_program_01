@@ -11,6 +11,7 @@ from database import engine, get_db, Base
 from models import WorkOrder, SMTLine, CompletedWorkOrder, WorkOrderStatus, Priority
 import schemas
 import scheduler as sched
+import time_scheduler as time_sched
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -137,15 +138,17 @@ def get_work_orders(
     
     work_orders = query.order_by(WorkOrder.line_position).all()
     
-    # Calculate dates for each line
+    # Calculate dates AND times for each line
     line_dates = {}
+    line_datetimes = {}
     for wo in work_orders:
         if wo.line_id and wo.line_id not in line_dates:
             line = db.query(SMTLine).filter(SMTLine.id == wo.line_id).first()
             if line:
                 line_dates[wo.line_id] = sched.calculate_job_dates(db, wo.line_id, line.hours_per_day)
+                line_datetimes[wo.line_id] = time_sched.calculate_job_datetimes(db, wo.line_id)
     
-    # Add calculated dates to work orders
+    # Add calculated dates and times to work orders
     result = []
     for wo in work_orders:
         wo_dict = schemas.WorkOrderResponse.model_validate(wo).model_dump()
@@ -153,6 +156,10 @@ def get_work_orders(
             dates = line_dates[wo.line_id][wo.id]
             wo_dict['calculated_start_date'] = dates['start_date']
             wo_dict['calculated_end_date'] = dates['end_date']
+        if wo.line_id and wo.id in line_datetimes.get(wo.line_id, {}):
+            datetimes = line_datetimes[wo.line_id][wo.id]
+            wo_dict['calculated_start_datetime'] = datetimes['start_datetime']
+            wo_dict['calculated_end_datetime'] = datetimes['end_datetime']
         result.append(schemas.WorkOrderResponse(**wo_dict))
     
     return result
@@ -325,8 +332,9 @@ def get_dashboard(db: Session = Depends(get_db)):
             WorkOrderStatus.CLEAR_TO_BUILD_NEW
         ])
         
-        # Calculate job dates for this line
+        # Calculate job dates AND times for this line
         job_dates = sched.calculate_job_dates(db, line.id, line.hours_per_day)
+        job_datetimes = time_sched.calculate_job_datetimes(db, line.id)
         completion_date = sched.get_line_completion_date(db, line.id, line.hours_per_day)
         
         # Add calculated dates to work orders
@@ -336,6 +344,9 @@ def get_dashboard(db: Session = Depends(get_db)):
             if wo.id in job_dates:
                 wo_dict['calculated_start_date'] = job_dates[wo.id]['start_date']
                 wo_dict['calculated_end_date'] = job_dates[wo.id]['end_date']
+            if wo.id in job_datetimes:
+                wo_dict['calculated_start_datetime'] = job_datetimes[wo.id]['start_datetime']
+                wo_dict['calculated_end_datetime'] = job_datetimes[wo.id]['end_datetime']
             wo_responses.append(schemas.WorkOrderResponse(**wo_dict))
         
         line_summaries.append(schemas.LineScheduleSummary(

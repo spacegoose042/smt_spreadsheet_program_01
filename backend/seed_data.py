@@ -3,10 +3,56 @@ Script to seed the database with initial data (lines, sample work orders)
 """
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine
-from models import Base, SMTLine, User, UserRole
+from models import Base, SMTLine, User, UserRole, Shift, ShiftBreak, LineConfiguration
 from passlib.context import CryptContext
+from datetime import time
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def seed_shifts_and_config(db: Session):
+    """Create default shifts and configurations for all lines"""
+    lines = db.query(SMTLine).all()
+    
+    for line in lines:
+        # Create line configuration
+        existing_config = db.query(LineConfiguration).filter(LineConfiguration.line_id == line.id).first()
+        if not existing_config:
+            config = LineConfiguration(
+                line_id=line.id,
+                buffer_time_minutes=15.0,
+                time_rounding_minutes=15,
+                timezone="America/Chicago"
+            )
+            db.add(config)
+        
+        # Create default day shift (7:30 AM - 4:30 PM)
+        existing_shift = db.query(Shift).filter(Shift.line_id == line.id).first()
+        if not existing_shift:
+            day_shift = Shift(
+                line_id=line.id,
+                name="Day Shift",
+                shift_number=1,
+                start_time=time(7, 30),
+                end_time=time(16, 30),
+                active_days="1,2,3,4,5",  # Mon-Fri
+                is_active=True
+            )
+            db.add(day_shift)
+            db.flush()
+            
+            # Add lunch break
+            lunch = ShiftBreak(
+                shift_id=day_shift.id,
+                name="Lunch",
+                start_time=time(11, 30),
+                end_time=time(12, 30),
+                is_paid=False
+            )
+            db.add(lunch)
+    
+    db.commit()
+    print("✓ Seeded shifts and configurations")
 
 
 def seed_lines(db: Session):
@@ -111,11 +157,14 @@ def main():
     try:
         seed_lines(db)
         seed_users(db)
+        seed_shifts_and_config(db)
         print("\n✅ Database seeded successfully!")
         print("\nDefault users:")
         print("  scheduler / password123")
         print("  operator / password123")
         print("  manager / password123")
+        print("\nDefault shift: 7:30 AM - 4:30 PM (Mon-Fri)")
+        print("Lunch break: 11:30 AM - 12:30 PM")
     finally:
         db.close()
 

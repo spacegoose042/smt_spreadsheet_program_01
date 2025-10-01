@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, ForeignKey, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, ForeignKey, Enum as SQLEnum, Time
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -66,6 +66,8 @@ class SMTLine(Base):
     order_position = Column(Integer)  # For display ordering
     
     work_orders = relationship("WorkOrder", back_populates="line")
+    shifts = relationship("Shift", back_populates="line", cascade="all, delete-orphan")
+    configuration = relationship("LineConfiguration", back_populates="line", uselist=False, cascade="all, delete-orphan")
 
 
 class WorkOrder(Base):
@@ -87,13 +89,17 @@ class WorkOrder(Base):
     is_new_rev_assembly = Column(Boolean, default=False)  # Replaces asterisk
     is_complete = Column(Boolean, default=False)
     
-    # Timing
+    # Timing (Dates)
     cetec_ship_date = Column(Date, nullable=False)
     actual_ship_date = Column(Date)  # Calculated
-    wo_start_date = Column(Date)
-    min_start_date = Column(Date)  # Calculated
+    min_start_date = Column(Date)  # Calculated (date only)
     time_minutes = Column(Float, nullable=False)  # Build time in minutes
     setup_time_hours = Column(Float, default=0.0)  # Setup time based on trolleys
+    
+    # Timing (DateTimes - for time-of-day scheduling)
+    calculated_start_datetime = Column(DateTime)  # When job will actually start
+    calculated_end_datetime = Column(DateTime)    # When job will actually end
+    wo_start_datetime = Column(DateTime)  # Manual override for start time
     
     # Resources
     trolley_count = Column(Integer, default=1)
@@ -152,4 +158,74 @@ class Settings(Base):
     value = Column(String, nullable=False)
     description = Column(String)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Shift(Base):
+    """
+    Defines a work shift for a production line.
+    Lines can have multiple shifts per day.
+    """
+    __tablename__ = "shifts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    line_id = Column(Integer, ForeignKey("smt_lines.id"), nullable=False)
+    
+    # Shift identification
+    name = Column(String, nullable=False)  # e.g., "Day Shift", "Evening Shift"
+    shift_number = Column(Integer, default=1)  # 1, 2, 3 for ordering
+    
+    # Shift times (stored as time objects)
+    start_time = Column(Time, nullable=False)  # e.g., 07:30:00
+    end_time = Column(Time, nullable=False)    # e.g., 16:30:00
+    
+    # Days of week this shift runs (comma-separated: "1,2,3,4,5" for Mon-Fri)
+    active_days = Column(String, default="1,2,3,4,5")  # 1=Mon, 7=Sun
+    
+    # Active status
+    is_active = Column(Boolean, default=True)
+    
+    # Relationships
+    line = relationship("SMTLine", back_populates="shifts")
+    breaks = relationship("ShiftBreak", back_populates="shift", cascade="all, delete-orphan")
+
+
+class ShiftBreak(Base):
+    """
+    Defines breaks during a shift (lunch, etc.)
+    """
+    __tablename__ = "shift_breaks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    shift_id = Column(Integer, ForeignKey("shifts.id"), nullable=False)
+    
+    # Break details
+    name = Column(String, nullable=False)  # e.g., "Lunch"
+    start_time = Column(Time, nullable=False)  # e.g., 11:30:00
+    end_time = Column(Time, nullable=False)    # e.g., 12:30:00
+    is_paid = Column(Boolean, default=False)
+    
+    # Relationships
+    shift = relationship("Shift", back_populates="breaks")
+
+
+class LineConfiguration(Base):
+    """
+    Additional configuration for production lines
+    """
+    __tablename__ = "line_configurations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    line_id = Column(Integer, ForeignKey("smt_lines.id"), unique=True, nullable=False)
+    
+    # Buffer time between jobs (in minutes)
+    buffer_time_minutes = Column(Float, default=15.0)
+    
+    # Time rounding (in minutes) - rounds job times to nearest X minutes
+    time_rounding_minutes = Column(Integer, default=15)  # Round to 15-min intervals
+    
+    # Timezone
+    timezone = Column(String, default="America/Chicago")  # CST
+    
+    # Relationships
+    line = relationship("SMTLine", back_populates="configuration")
 

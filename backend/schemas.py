@@ -122,9 +122,14 @@ class WorkOrderResponse(WorkOrderBase):
     created_at: datetime
     updated_at: datetime
     
-    # Calculated dates based on line queue position
+    # Calculated dates based on line queue position (date only)
     calculated_start_date: Optional[date] = None
     calculated_end_date: Optional[date] = None
+    
+    # Calculated datetimes based on line queue position (includes time-of-day)
+    calculated_start_datetime: Optional[datetime] = None
+    calculated_end_datetime: Optional[datetime] = None
+    wo_start_datetime: Optional[datetime] = None
     
     # Include line info if available
     line: Optional[SMTLineResponse] = None

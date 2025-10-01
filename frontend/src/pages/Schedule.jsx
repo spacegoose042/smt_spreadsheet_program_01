@@ -334,10 +334,28 @@ export default function Schedule() {
                     {wo.line?.name || <em style={{ color: 'var(--warning)', fontWeight: 600 }}>⚠️ Unscheduled</em>}
                   </td>
                   <td style={{ fontWeight: 600, color: 'var(--primary)' }}>
-                    {wo.calculated_start_date ? format(new Date(wo.calculated_start_date), 'MMM d, yyyy') : '-'}
+                    {wo.calculated_start_datetime ? (
+                      <div>
+                        <div>{format(new Date(wo.calculated_start_datetime), 'MMM d, yyyy')}</div>
+                        <div style={{ fontSize: '0.7rem', opacity: 0.8 }}>
+                          {format(new Date(wo.calculated_start_datetime), 'h:mm a')}
+                        </div>
+                      </div>
+                    ) : wo.calculated_start_date ? (
+                      format(new Date(wo.calculated_start_date), 'MMM d, yyyy')
+                    ) : '-'}
                   </td>
                   <td style={{ fontWeight: 600, color: 'var(--success)' }}>
-                    {wo.calculated_end_date ? format(new Date(wo.calculated_end_date), 'MMM d, yyyy') : '-'}
+                    {wo.calculated_end_datetime ? (
+                      <div>
+                        <div>{format(new Date(wo.calculated_end_datetime), 'MMM d, yyyy')}</div>
+                        <div style={{ fontSize: '0.7rem', opacity: 0.8 }}>
+                          {format(new Date(wo.calculated_end_datetime), 'h:mm a')}
+                        </div>
+                      </div>
+                    ) : wo.calculated_end_date ? (
+                      format(new Date(wo.calculated_end_date), 'MMM d, yyyy')
+                    ) : '-'}
                   </td>
                   <td>{wo.actual_ship_date ? format(new Date(wo.actual_ship_date), 'MMM d') : '-'}</td>
                   <td>{wo.time_minutes} min</td>
