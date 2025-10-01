@@ -8,7 +8,7 @@ export default function CompleteJobModal({ workOrder, onComplete, onCancel, isSu
   const [formData, setFormData] = useState({
     actual_start_date: today,
     actual_finish_date: today,
-    actual_time_clocked_minutes: workOrder.time_minutes || ''
+    actual_time_clocked_minutes: workOrder.quantity || ''
   })
 
   const handleChange = (e) => {
@@ -73,10 +73,10 @@ export default function CompleteJobModal({ workOrder, onComplete, onCancel, isSu
             {workOrder.customer} - {workOrder.assembly} {workOrder.revision}
           </div>
           <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-            WO: {workOrder.wo_number} • Qty: {workOrder.quantity}
+            WO: {workOrder.wo_number} • Expected Qty: {workOrder.quantity}
           </div>
           <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-            Estimated Time: {workOrder.time_minutes} minutes
+            Build Time: {workOrder.time_minutes} minutes
           </div>
         </div>
 
@@ -109,7 +109,7 @@ export default function CompleteJobModal({ workOrder, onComplete, onCancel, isSu
           </div>
 
           <div className="form-group">
-            <label className="form-label">Actual Time Clocked (minutes) *</label>
+            <label className="form-label">Quantity Completed *</label>
             <input
               type="number"
               name="actual_time_clocked_minutes"
@@ -118,17 +118,21 @@ export default function CompleteJobModal({ workOrder, onComplete, onCancel, isSu
               onChange={handleChange}
               required
               min="1"
-              step="0.1"
+              step="1"
             />
-            {formData.actual_time_clocked_minutes && workOrder.time_minutes && (
+            {formData.actual_time_clocked_minutes && workOrder.quantity && (
               <div style={{ marginTop: '0.5rem', fontSize: '0.875rem' }}>
-                {parseFloat(formData.actual_time_clocked_minutes) > workOrder.time_minutes ? (
-                  <span style={{ color: 'var(--danger)' }}>
-                    ⚠️ Over estimate by {(parseFloat(formData.actual_time_clocked_minutes) - workOrder.time_minutes).toFixed(1)} minutes
+                {parseFloat(formData.actual_time_clocked_minutes) < workOrder.quantity ? (
+                  <span style={{ color: 'var(--warning)' }}>
+                    ⚠️ Short by {(workOrder.quantity - parseFloat(formData.actual_time_clocked_minutes))} units
+                  </span>
+                ) : parseFloat(formData.actual_time_clocked_minutes) > workOrder.quantity ? (
+                  <span style={{ color: 'var(--info)' }}>
+                    ℹ️ Over by {(parseFloat(formData.actual_time_clocked_minutes) - workOrder.quantity)} units
                   </span>
                 ) : (
                   <span style={{ color: 'var(--success)' }}>
-                    ✓ Under estimate by {(workOrder.time_minutes - parseFloat(formData.actual_time_clocked_minutes)).toFixed(1)} minutes
+                    ✓ Complete - {workOrder.quantity} units built
                   </span>
                 )}
               </div>
