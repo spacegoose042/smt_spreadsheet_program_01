@@ -128,8 +128,12 @@ export default function VisualScheduler() {
   const getWOPosition = (wo, lineStartDate) => {
     if (!wo.calculated_start_date || !wo.calculated_end_date) return null
     
-    const startDate = new Date(wo.calculated_start_date)
-    const endDate = new Date(wo.calculated_end_date)
+    // Parse dates explicitly to avoid timezone issues
+    const [startY, startM, startD] = wo.calculated_start_date.split('-').map(Number)
+    const [endY, endM, endD] = wo.calculated_end_date.split('-').map(Number)
+    
+    const startDate = new Date(startY, startM - 1, startD)
+    const endDate = new Date(endY, endM - 1, endD)
     
     const startDiff = differenceInDays(startDate, lineStartDate)
     const duration = differenceInDays(endDate, startDate) + 1
