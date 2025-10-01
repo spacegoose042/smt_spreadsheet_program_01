@@ -1,7 +1,8 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
-import { Home, Calendar, Settings, CheckCircle, List } from 'lucide-react'
+import { Home, Calendar, Settings, CheckCircle, List, LayoutGrid } from 'lucide-react'
 import Dashboard from './pages/Dashboard'
 import Schedule from './pages/Schedule'
+import VisualScheduler from './pages/VisualScheduler'
 import LineView from './pages/LineView'
 import Completed from './pages/Completed'
 import SettingsPage from './pages/SettingsPage'
@@ -27,9 +28,13 @@ function Navigation() {
             <Calendar size={18} />
             Schedule
           </Link>
+          <Link to="/visual" className={isActive('/visual') ? 'active' : ''}>
+            <LayoutGrid size={18} />
+            Visual
+          </Link>
           <Link to="/lines" className={isActive('/lines') ? 'active' : ''}>
             <List size={18} />
-            Line Views
+            Lines
           </Link>
           <Link to="/completed" className={isActive('/completed') ? 'active' : ''}>
             <CheckCircle size={18} />
@@ -54,6 +59,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/schedule" element={<Schedule />} />
+            <Route path="/visual" element={<VisualScheduler />} />
             <Route path="/lines" element={<LineView />} />
             <Route path="/lines/:lineId" element={<LineView />} />
             <Route path="/completed" element={<Completed />} />
