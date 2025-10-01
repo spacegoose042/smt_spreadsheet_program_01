@@ -61,7 +61,8 @@ def calculate_min_start_date(
     actual_ship_date: date,
     time_minutes: float,
     setup_time_hours: float,
-    line_hours_per_day: float = 8.0
+    line_hours_per_day: float = 8.0,
+    line_name: str = None
 ) -> date:
     """
     Calculate the minimum start date by working backwards from the actual ship date.
@@ -71,12 +72,16 @@ def calculate_min_start_date(
         time_minutes: Build time in minutes
         setup_time_hours: Setup time in hours
         line_hours_per_day: How many hours the line runs per day
+        line_name: Name of the line (for Line 1 2x multiplier)
     
     Returns:
         The minimum start date (skipping weekends)
     """
-    # Convert everything to minutes
-    total_minutes = time_minutes + (setup_time_hours * 60)
+    # Line 1 (1-EURO 264) takes twice as long
+    time_multiplier = 2.0 if line_name == "1-EURO 264" else 1.0
+    
+    # Convert everything to minutes (with multiplier)
+    total_minutes = (time_minutes + (setup_time_hours * 60)) * time_multiplier
     minutes_per_day = line_hours_per_day * 60
     
     # Calculate number of business days needed
@@ -99,13 +104,15 @@ def update_work_order_calculations(wo: WorkOrder, line: Optional[SMTLine] = None
     # Calculate setup time based on trolley count
     wo.setup_time_hours = calculate_setup_time_hours(wo.trolley_count)
     
-    # Calculate minimum start date
+    # Calculate minimum start date (with Line 1 2x multiplier if applicable)
     line_hours = line.hours_per_day if line else 8.0
+    line_name = line.name if line else None
     wo.min_start_date = calculate_min_start_date(
         wo.actual_ship_date,
         wo.time_minutes,
         wo.setup_time_hours,
-        line_hours
+        line_hours,
+        line_name
     )
     
     return wo
@@ -215,11 +222,13 @@ def calculate_job_dates(session, line_id: int, line_hours_per_day: float = 8.0) 
     - First job starts today (or its WO start date if set)
     - Each subsequent job starts when the previous one ends
     - End date accounts for build time, setup time, line capacity, and weekends
+    - Line 1 (1-EURO 264) takes twice as long (2x multiplier)
     
     Returns:
         dict mapping work_order_id to {'start_date': date, 'end_date': date}
     """
     from datetime import date as date_type, timedelta
+    from models import SMTLine
     
     # Get all jobs on this line, ordered by position
     jobs = session.query(WorkOrder).filter(
@@ -230,6 +239,10 @@ def calculate_job_dates(session, line_id: int, line_hours_per_day: float = 8.0) 
     if not jobs:
         return {}
     
+    # Check if this is Line 1 (1-EURO 264) - it takes twice as long
+    line = session.query(SMTLine).filter(SMTLine.id == line_id).first()
+    time_multiplier = 2.0 if line and line.name == "1-EURO 264" else 1.0
+    
     results = {}
     current_date = date_type.today()
     
@@ -237,8 +250,8 @@ def calculate_job_dates(session, line_id: int, line_hours_per_day: float = 8.0) 
         # Start date is either the current_date or the job's manual start date
         start_date = job.wo_start_date if job.wo_start_date and job.wo_start_date > current_date else current_date
         
-        # Calculate total time needed
-        total_minutes = job.time_minutes + (job.setup_time_hours * 60)
+        # Calculate total time needed (with Line 1 multiplier if applicable)
+        total_minutes = (job.time_minutes + (job.setup_time_hours * 60)) * time_multiplier
         minutes_per_day = line_hours_per_day * 60
         days_needed = total_minutes / minutes_per_day
         
