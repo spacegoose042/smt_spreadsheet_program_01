@@ -9,7 +9,7 @@ const api = axios.create({
   },
 })
 
-// Dashboard
+// Dashboard & Analytics
 export const getDashboard = () => api.get('/api/dashboard')
 export const getTrolleyStatus = () => api.get('/api/trolley-status')
 

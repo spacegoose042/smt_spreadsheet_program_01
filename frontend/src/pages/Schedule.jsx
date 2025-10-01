@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getWorkOrders, getLines, createWorkOrder, updateWorkOrder, deleteWorkOrder, completeWorkOrder } from '../api'
-import { Plus, Edit2, Trash2, Lock, Unlock, CheckCircle } from 'lucide-react'
+import { getWorkOrders, getLines, createWorkOrder, updateWorkOrder, deleteWorkOrder, completeWorkOrder, getDashboard } from '../api'
+import { Plus, Edit2, Trash2, Lock, Unlock, CheckCircle, Calendar } from 'lucide-react'
 import { format } from 'date-fns'
 import WorkOrderForm from '../components/WorkOrderForm'
 import CompleteJobModal from '../components/CompleteJobModal'
@@ -50,6 +50,12 @@ export default function Schedule() {
   const { data: lines } = useQuery({
     queryKey: ['lines'],
     queryFn: () => getLines(),
+  })
+
+  const { data: dashboard } = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: getDashboard,
+    refetchInterval: 30000,
   })
 
   const createMutation = useMutation({
@@ -160,6 +166,78 @@ export default function Schedule() {
         <h1 className="page-title">Production Schedule</h1>
         <p className="page-description">Manage all work orders across production lines</p>
       </div>
+
+      {/* Line Completion Summary */}
+      {dashboard?.data && (
+        <div className="card" style={{ 
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
+          color: 'white',
+          marginBottom: '1rem',
+          padding: '1rem'
+        }}>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '0.5rem', 
+            marginBottom: '0.75rem',
+            fontSize: '0.875rem',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px'
+          }}>
+            <Calendar size={16} />
+            Line Completion Dates
+          </div>
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
+            gap: '0.75rem' 
+          }}>
+            {dashboard.data.lines
+              .filter(line => line.line.is_active)
+              .map(line => (
+              <div 
+                key={line.line.id}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.15)',
+                  backdropFilter: 'blur(10px)',
+                  borderRadius: '6px',
+                  padding: '0.75rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.25rem'
+                }}
+              >
+                <div style={{ 
+                  fontSize: '0.75rem', 
+                  opacity: 0.9,
+                  fontWeight: 500
+                }}>
+                  {line.line.name}
+                </div>
+                <div style={{ 
+                  fontSize: '1.1rem', 
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  {line.completion_date ? (
+                    <>
+                      {format(new Date(line.completion_date), 'MMM d, yyyy')}
+                      <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>
+                        ({line.total_jobs} jobs)
+                      </span>
+                    </>
+                  ) : (
+                    <span style={{ fontSize: '0.875rem', opacity: 0.7 }}>No jobs</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Filters and Actions */}
       <div className="card">
