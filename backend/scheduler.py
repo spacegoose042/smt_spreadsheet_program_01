@@ -246,9 +246,17 @@ def calculate_job_dates(session, line_id: int, line_hours_per_day: float = 8.0) 
     results = {}
     current_date = date_type.today()
     
+    # Ensure we start on a business day
+    while is_weekend(current_date):
+        current_date += timedelta(days=1)
+    
     for job in jobs:
         # Start date is either the current_date or the job's manual start date
         start_date = job.wo_start_date if job.wo_start_date and job.wo_start_date > current_date else current_date
+        
+        # Ensure start date is not a weekend
+        while is_weekend(start_date):
+            start_date += timedelta(days=1)
         
         # Calculate total time needed (with Line 1 multiplier if applicable)
         total_minutes = (job.time_minutes + (job.setup_time_hours * 60)) * time_multiplier
@@ -258,13 +266,19 @@ def calculate_job_dates(session, line_id: int, line_hours_per_day: float = 8.0) 
         # Calculate end date by adding business days
         end_date = add_business_days(start_date, days_needed)
         
+        # Ensure end date is not a weekend (adjust forward if needed)
+        while is_weekend(end_date):
+            end_date += timedelta(days=1)
+        
         results[job.id] = {
             'start_date': start_date,
             'end_date': end_date
         }
         
-        # Next job starts the day after this one ends (add 1 business day)
-        current_date = add_business_days(end_date, 1)
+        # Next job starts the next business day after this one ends
+        current_date = end_date + timedelta(days=1)
+        while is_weekend(current_date):
+            current_date += timedelta(days=1)
     
     return results
 
