@@ -57,10 +57,15 @@ frontend/**
 
 **Start Command:**
 ```
-npx vite preview --host 0.0.0.0 --port $PORT
+PORT=${PORT:-3000} npx vite preview --host 0.0.0.0 --port $PORT
 ```
 
 **Note:** Build and install are handled automatically by `nixpacks.toml` - no need to set them manually!
+
+**Alternative Start Command (if the above doesn't work):**
+```
+npx vite preview --host 0.0.0.0 --port $PORT
+```
 
 ### Service → Variables
 
