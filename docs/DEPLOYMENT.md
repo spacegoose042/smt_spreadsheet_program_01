@@ -12,26 +12,30 @@ This guide will walk you through deploying the SMT Production Scheduler to Railw
 
 ### 1. Create a New Project on Railway
 
-1. Log in to Railway
+1. Log in to Railway (https://railway.app)
 2. Click "New Project"
-3. Select "Deploy from GitHub repo"
-4. Choose your repository
+3. Select "Empty Project"
+4. Give it a name (e.g., "SMT Scheduler")
 
 ### 2. Add PostgreSQL Database
 
 1. In your Railway project, click "New"
 2. Select "Database" → "PostgreSQL"
 3. Railway will automatically provision a PostgreSQL database
-4. Note the connection string (Railway provides this as `DATABASE_URL`)
+4. The `DATABASE_URL` variable will be automatically available to other services
 
-### 3. Configure Backend Service
+### 3. Deploy Backend Service
 
-Railway should automatically detect your backend. If not:
+**Important**: You need to deploy backend and frontend as **separate services** pointing to different subdirectories.
+
+#### Add Backend Service:
 
 1. Click "New" → "GitHub Repo"
 2. Select your repository
-3. Set the root directory to `/backend` (if needed)
-4. Configure environment variables:
+3. **After the service is created**, go to **Settings**
+4. Under "Build & Deploy" → **Root Directory**, enter: `backend`
+5. Under "Build & Deploy" → **Watch Paths**, enter: `backend/**`
+6. Configure environment variables (see below)
 
 #### Required Environment Variables
 
@@ -58,16 +62,22 @@ ENVIRONMENT=production
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-### 4. Configure Frontend Service
+### 4. Deploy Frontend Service
+
+#### Add Frontend Service:
 
 1. Click "New" in your Railway project
-2. Select "GitHub Repo" (same repository)
-3. Set the root directory to `/frontend`
-4. Configure environment variables:
+2. Select "GitHub Repo" (same repository again)
+3. **After the service is created**, go to **Settings**
+4. Under "Build & Deploy" → **Root Directory**, enter: `frontend`
+5. Under "Build & Deploy" → **Watch Paths**, enter: `frontend/**`
+6. Configure environment variables:
 
 ```bash
 VITE_API_URL=https://your-backend-url.railway.app
 ```
+
+**Note**: You'll need to update `VITE_API_URL` after the backend is deployed and has its URL.
 
 ### 5. Run Database Migrations
 
