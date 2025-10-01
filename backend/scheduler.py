@@ -257,8 +257,8 @@ def calculate_job_dates(session, line_id: int, line_hours_per_day: float = 8.0) 
         current_date += timedelta(days=1)
     
     for job in jobs:
-        # Start date is either the current_date or the job's manual start date
-        start_date = job.wo_start_date if job.wo_start_date and job.wo_start_date > current_date else current_date
+        # Start date is either the current_date or today
+        start_date = current_date
         
         # Ensure start date is not a weekend
         while is_weekend(start_date):
