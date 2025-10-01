@@ -208,12 +208,16 @@ def update_work_order(
     # Update fields
     update_data = wo_update.model_dump(exclude_unset=True)
     
+    # If unscheduling (setting line_id to None), clear line_position
+    if "line_id" in update_data and update_data["line_id"] is None:
+        update_data["line_position"] = None
+    
     # Handle line position changes
-    if "line_position" in update_data and "line_id" in update_data:
+    if "line_position" in update_data and "line_id" in update_data and update_data["line_id"]:
         new_line_id = update_data["line_id"]
         new_position = update_data["line_position"]
         
-        if not sched.validate_line_position(db, new_line_id, new_position, wo_id):
+        if new_position and not sched.validate_line_position(db, new_line_id, new_position, wo_id):
             sched.reorder_line_positions(db, new_line_id, new_position, wo_id)
     
     for key, value in update_data.items():

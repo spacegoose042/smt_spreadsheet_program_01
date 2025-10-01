@@ -38,10 +38,19 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }))
+    setFormData(prev => {
+      const updated = {
+        ...prev,
+        [name]: type === 'checkbox' ? checked : value
+      }
+      
+      // If changing line to unscheduled, clear position
+      if (name === 'line_id' && !value) {
+        updated.line_position = ''
+      }
+      
+      return updated
+    })
   }
 
   const handleSubmit = (e) => {
