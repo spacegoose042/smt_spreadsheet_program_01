@@ -16,7 +16,7 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
     time_minutes: '',
     trolley_count: 1,
     sides: 'Single',
-    line_id: '',
+    line_id: '', // Default to unscheduled
     line_position: '',
     th_wo_number: '',
     th_kit_status: 'N/A',
@@ -211,11 +211,14 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
             value={formData.line_id}
             onChange={handleChange}
           >
-            <option value="">Unassigned</option>
+            <option value="">⚠️ Unscheduled</option>
             {lines.map(line => (
               <option key={line.id} value={line.id}>{line.name}</option>
             ))}
           </select>
+          <small style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem', display: 'block' }}>
+            {formData.line_id ? 'Assigned to a production line' : 'Not yet scheduled - assign to a line when ready'}
+          </small>
         </div>
 
         <div className="form-group">
@@ -228,7 +231,11 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
             onChange={handleChange}
             min="1"
             placeholder="Auto-assigned if empty"
+            disabled={!formData.line_id}
           />
+          <small style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem', display: 'block' }}>
+            {!formData.line_id && 'Select a line first'}
+          </small>
         </div>
 
         {/* Board Type */}

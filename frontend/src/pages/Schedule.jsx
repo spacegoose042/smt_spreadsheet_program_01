@@ -41,10 +41,18 @@ export default function Schedule() {
   const { data: workOrders, isLoading: loadingWOs } = useQuery({
     queryKey: ['workOrders', filterLine, filterStatus],
     queryFn: () => getWorkOrders({
-      line_id: filterLine || undefined,
+      line_id: filterLine === 'unscheduled' ? undefined : (filterLine || undefined),
       status: filterStatus || undefined,
       include_complete: false
     }),
+  })
+
+  // Filter unscheduled if that option is selected
+  const filteredWorkOrders = workOrders?.data.filter(wo => {
+    if (filterLine === 'unscheduled') {
+      return !wo.line_id
+    }
+    return true
   })
 
   const { data: lines } = useQuery({
@@ -249,6 +257,7 @@ export default function Schedule() {
               onChange={(e) => setFilterLine(e.target.value)}
             >
               <option value="">All Lines</option>
+              <option value="unscheduled">⚠️ Unscheduled</option>
               {lines?.data.map(line => (
                 <option key={line.id} value={line.id}>{line.name}</option>
               ))}
@@ -281,9 +290,9 @@ export default function Schedule() {
       {/* Work Orders Table */}
       {loadingWOs ? (
         <div className="loading">Loading work orders...</div>
-      ) : workOrders?.data.length === 0 ? (
+      ) : !filteredWorkOrders || filteredWorkOrders.length === 0 ? (
         <div className="card empty-state">
-          <p>No work orders found. Click "Add Work Order" to create one.</p>
+          <p>{filterLine === 'unscheduled' ? 'No unscheduled work orders.' : 'No work orders found. Click "Add Work Order" to create one.'}</p>
         </div>
       ) : (
         <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
@@ -307,7 +316,7 @@ export default function Schedule() {
               </tr>
             </thead>
             <tbody>
-              {workOrders?.data
+              {filteredWorkOrders
                 .sort((a, b) => {
                   // Sort by line, then position
                   if (a.line_id !== b.line_id) return (a.line_id || 999) - (b.line_id || 999)
@@ -328,7 +337,9 @@ export default function Schedule() {
                   <td>{wo.quantity}</td>
                   <td><StatusBadge status={wo.status} /></td>
                   <td><PriorityBadge priority={wo.priority} /></td>
-                  <td>{wo.line?.name || <em>Unassigned</em>}</td>
+                  <td>
+                    {wo.line?.name || <em style={{ color: 'var(--warning)', fontWeight: 600 }}>⚠️ Unscheduled</em>}
+                  </td>
                   <td style={{ fontWeight: 600, color: 'var(--primary)' }}>
                     {wo.calculated_start_date ? format(new Date(wo.calculated_start_date), 'MMM d, yyyy') : '-'}
                   </td>
