@@ -55,20 +55,12 @@ frontend
 frontend/**
 ```
 
-**Build Command:**
-```
-npm ci && npm run build
-```
-
 **Start Command:**
 ```
 npx vite preview --host 0.0.0.0 --port $PORT
 ```
 
-**Install Command:**
-```
-npm ci
-```
+**Note:** Build and install are handled automatically by `nixpacks.toml` - no need to set them manually!
 
 ### Service → Variables
 
@@ -88,9 +80,8 @@ The Caddy server logs you're seeing mean Railway is auto-detecting your app type
 2. Scroll to **Build & Deploy** section
 3. **CRITICAL**: Set these fields **manually**:
    - ✅ Root Directory: `frontend`
-   - ✅ Build Command: `npm ci && npm run build`
    - ✅ Start Command: `npx vite preview --host 0.0.0.0 --port $PORT`
-   - ✅ Install Command: `npm ci`
+   - ℹ️ Build/Install commands are auto-handled by `nixpacks.toml`
 
 ### For Backend Service:
 
@@ -157,7 +148,7 @@ Check the deployment logs:
 
 **If you see "Cannot find module 'vite'":**
 - ❌ Build didn't run or node_modules missing
-- ✅ Fix: Set Build Command to `npm ci && npm run build`
+- ✅ Fix: Check that `nixpacks.toml` is in frontend folder and Root Directory is set to `frontend`
 
 **If frontend shows blank page:**
 - ❌ API URL not set or CORS issue
