@@ -303,7 +303,7 @@ export default function VisualScheduler() {
 
               {/* Timeline */}
               <div style={{ position: 'relative', padding: '0.5rem 0' }}>
-                {/* Weekend shading */}
+                {/* Weekend shading - make more visible */}
                 {days.map((day, i) => (
                   isWeekend(day) && (
                     <div
@@ -314,8 +314,11 @@ export default function VisualScheduler() {
                         width: `${(1 / 28) * 100}%`,
                         top: 0,
                         bottom: 0,
-                        background: 'rgba(0,0,0,0.02)',
-                        pointerEvents: 'none'
+                        background: 'repeating-linear-gradient(45deg, #f8f9fa, #f8f9fa 10px, #e9ecef 10px, #e9ecef 20px)',
+                        borderLeft: '2px solid #dee2e6',
+                        borderRight: '2px solid #dee2e6',
+                        pointerEvents: 'none',
+                        zIndex: 1
                       }}
                     />
                   )
@@ -336,7 +339,8 @@ export default function VisualScheduler() {
                           left: position.left,
                           width: position.width,
                           top: '0.5rem',
-                          marginBottom: '0.5rem'
+                          marginBottom: '0.5rem',
+                          zIndex: 5
                         }}
                       >
                         <WorkOrderBlock 
