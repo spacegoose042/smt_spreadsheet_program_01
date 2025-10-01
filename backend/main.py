@@ -42,6 +42,22 @@ def health_check():
     return {"status": "healthy"}
 
 
+@app.post("/api/recalculate-all")
+def recalculate_all_work_orders(db: Session = Depends(get_db)):
+    """Recalculate all work order dates (use after schedule logic changes)"""
+    work_orders = db.query(WorkOrder).filter(WorkOrder.is_complete == False).all()
+    
+    updated_count = 0
+    for wo in work_orders:
+        line = db.query(SMTLine).filter(SMTLine.id == wo.line_id).first() if wo.line_id else None
+        sched.update_work_order_calculations(wo, line)
+        updated_count += 1
+    
+    db.commit()
+    
+    return {"status": "success", "updated": updated_count}
+
+
 # ========== SMT Lines ==========
 
 @app.get("/api/lines", response_model=List[schemas.SMTLineResponse])
