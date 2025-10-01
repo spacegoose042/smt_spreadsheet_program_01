@@ -122,6 +122,10 @@ class WorkOrderResponse(WorkOrderBase):
     created_at: datetime
     updated_at: datetime
     
+    # Calculated dates based on line queue position
+    calculated_start_date: Optional[date] = None
+    calculated_end_date: Optional[date] = None
+    
     # Include line info if available
     line: Optional[SMTLineResponse] = None
 
@@ -165,6 +169,7 @@ class LineScheduleSummary(BaseModel):
     work_orders: list[WorkOrderResponse]
     total_jobs: int
     trolleys_in_use: int
+    completion_date: Optional[date] = None  # When will all jobs on this line finish
 
 
 class DashboardResponse(BaseModel):

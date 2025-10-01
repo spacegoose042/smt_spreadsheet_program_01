@@ -127,7 +127,7 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', fontSize: '0.875rem' }}>
+                <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', fontSize: '0.875rem' }}>
                 <div>
                   <Package size={16} style={{ display: 'inline', marginRight: '0.25rem' }} />
                   {line.trolleys_in_use} trolleys
@@ -136,6 +136,11 @@ export default function Dashboard() {
                   <Clock size={16} style={{ display: 'inline', marginRight: '0.25rem' }} />
                   {line.line.hours_per_day}h/day
                 </div>
+                {line.completion_date && (
+                  <div style={{ fontWeight: 600, color: 'var(--primary)' }}>
+                    Completes: {format(new Date(line.completion_date), 'MMM d')}
+                  </div>
+                )}
               </div>
 
               {line.work_orders.length > 0 ? (

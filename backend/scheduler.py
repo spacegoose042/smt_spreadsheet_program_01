@@ -206,3 +206,69 @@ def validate_line_position(session, line_id: int, position: int, wo_id: Optional
     
     return query.first() is None
 
+
+def calculate_job_dates(session, line_id: int, line_hours_per_day: float = 8.0) -> dict:
+    """
+    Calculate actual start and end dates for all jobs in a line's queue.
+    
+    This calculates sequentially:
+    - First job starts today (or its WO start date if set)
+    - Each subsequent job starts when the previous one ends
+    - End date accounts for build time, setup time, line capacity, and weekends
+    
+    Returns:
+        dict mapping work_order_id to {'start_date': date, 'end_date': date}
+    """
+    from datetime import date as date_type, timedelta
+    
+    # Get all jobs on this line, ordered by position
+    jobs = session.query(WorkOrder).filter(
+        WorkOrder.line_id == line_id,
+        WorkOrder.is_complete == False
+    ).order_by(WorkOrder.line_position).all()
+    
+    if not jobs:
+        return {}
+    
+    results = {}
+    current_date = date_type.today()
+    
+    for job in jobs:
+        # Start date is either the current_date or the job's manual start date
+        start_date = job.wo_start_date if job.wo_start_date and job.wo_start_date > current_date else current_date
+        
+        # Calculate total time needed
+        total_minutes = job.time_minutes + (job.setup_time_hours * 60)
+        minutes_per_day = line_hours_per_day * 60
+        days_needed = total_minutes / minutes_per_day
+        
+        # Calculate end date by adding business days
+        end_date = add_business_days(start_date, days_needed)
+        
+        results[job.id] = {
+            'start_date': start_date,
+            'end_date': end_date
+        }
+        
+        # Next job starts the day after this one ends (add 1 business day)
+        current_date = add_business_days(end_date, 1)
+    
+    return results
+
+
+def get_line_completion_date(session, line_id: int, line_hours_per_day: float = 8.0) -> Optional[date]:
+    """
+    Get the completion date of the last job in a line's queue.
+    
+    Returns:
+        The end date of the last job, or None if no jobs
+    """
+    job_dates = calculate_job_dates(session, line_id, line_hours_per_day)
+    
+    if not job_dates:
+        return None
+    
+    # Get the latest end date
+    end_dates = [dates['end_date'] for dates in job_dates.values()]
+    return max(end_dates) if end_dates else None
+

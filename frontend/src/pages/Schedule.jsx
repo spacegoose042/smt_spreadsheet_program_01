@@ -191,8 +191,9 @@ export default function Schedule() {
                 <th>Status</th>
                 <th>Priority</th>
                 <th>Line</th>
+                <th>Start Date</th>
+                <th>End Date</th>
                 <th>Ship Date</th>
-                <th>Min Start</th>
                 <th>Time</th>
                 <th>Trolleys</th>
                 <th>Actions</th>
@@ -221,8 +222,13 @@ export default function Schedule() {
                   <td><StatusBadge status={wo.status} /></td>
                   <td><PriorityBadge priority={wo.priority} /></td>
                   <td>{wo.line?.name || <em>Unassigned</em>}</td>
+                  <td style={{ fontWeight: 600, color: 'var(--primary)' }}>
+                    {wo.calculated_start_date ? format(new Date(wo.calculated_start_date), 'MMM d, yyyy') : '-'}
+                  </td>
+                  <td style={{ fontWeight: 600, color: 'var(--success)' }}>
+                    {wo.calculated_end_date ? format(new Date(wo.calculated_end_date), 'MMM d, yyyy') : '-'}
+                  </td>
                   <td>{wo.actual_ship_date ? format(new Date(wo.actual_ship_date), 'MMM d') : '-'}</td>
-                  <td>{wo.min_start_date ? format(new Date(wo.min_start_date), 'MMM d') : '-'}</td>
                   <td>{wo.time_minutes} min</td>
                   <td>{wo.trolley_count}</td>
                   <td>

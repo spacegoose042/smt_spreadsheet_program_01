@@ -87,20 +87,21 @@ export default function LineView() {
           <div className="card" style={{ padding: 0 }}>
             <table>
               <thead>
-                <tr>
-                  <th>Pos</th>
-                  <th>Customer</th>
-                  <th>Assembly</th>
-                  <th>WO #</th>
-                  <th>Qty</th>
-                  <th>Status</th>
-                  <th>Priority</th>
-                  <th>Ship Date</th>
-                  <th>Min Start</th>
-                  <th>Time</th>
-                  <th>Trolleys</th>
-                  <th>Notes</th>
-                </tr>
+              <tr>
+                <th>Pos</th>
+                <th>Customer</th>
+                <th>Assembly</th>
+                <th>WO #</th>
+                <th>Qty</th>
+                <th>Status</th>
+                <th>Priority</th>
+                <th>Start Date</th>
+                <th>End Date</th>
+                <th>Ship Date</th>
+                <th>Time</th>
+                <th>Trolleys</th>
+                <th>Notes</th>
+              </tr>
               </thead>
               <tbody>
                 {filteredWOs.map((wo, idx) => (
@@ -118,8 +119,13 @@ export default function LineView() {
                     <td>{wo.quantity}</td>
                     <td><StatusBadge status={wo.status} /></td>
                     <td><PriorityBadge priority={wo.priority} /></td>
-                    <td>{format(new Date(wo.actual_ship_date), 'MMM d, yyyy')}</td>
-                    <td>{format(new Date(wo.min_start_date), 'MMM d, yyyy')}</td>
+                    <td style={{ fontWeight: 600, color: 'var(--primary)' }}>
+                      {wo.calculated_start_date ? format(new Date(wo.calculated_start_date), 'MMM d, yyyy') : '-'}
+                    </td>
+                    <td style={{ fontWeight: 600, color: 'var(--success)' }}>
+                      {wo.calculated_end_date ? format(new Date(wo.calculated_end_date), 'MMM d, yyyy') : '-'}
+                    </td>
+                    <td>{wo.actual_ship_date ? format(new Date(wo.actual_ship_date), 'MMM d') : '-'}</td>
                     <td>{wo.time_minutes} min</td>
                     <td>{wo.trolley_count}</td>
                     <td>{wo.notes}</td>

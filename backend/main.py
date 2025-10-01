@@ -119,7 +119,27 @@ def get_work_orders(
     if priority:
         query = query.filter(WorkOrder.priority == priority)
     
-    return query.order_by(WorkOrder.line_position).all()
+    work_orders = query.order_by(WorkOrder.line_position).all()
+    
+    # Calculate dates for each line
+    line_dates = {}
+    for wo in work_orders:
+        if wo.line_id and wo.line_id not in line_dates:
+            line = db.query(SMTLine).filter(SMTLine.id == wo.line_id).first()
+            if line:
+                line_dates[wo.line_id] = sched.calculate_job_dates(db, wo.line_id, line.hours_per_day)
+    
+    # Add calculated dates to work orders
+    result = []
+    for wo in work_orders:
+        wo_dict = schemas.WorkOrderResponse.model_validate(wo).model_dump()
+        if wo.line_id and wo.id in line_dates.get(wo.line_id, {}):
+            dates = line_dates[wo.line_id][wo.id]
+            wo_dict['calculated_start_date'] = dates['start_date']
+            wo_dict['calculated_end_date'] = dates['end_date']
+        result.append(schemas.WorkOrderResponse(**wo_dict))
+    
+    return result
 
 
 @app.get("/api/work-orders/{wo_id}", response_model=schemas.WorkOrderResponse)
@@ -285,11 +305,25 @@ def get_dashboard(db: Session = Depends(get_db)):
             WorkOrderStatus.CLEAR_TO_BUILD_NEW
         ])
         
+        # Calculate job dates for this line
+        job_dates = sched.calculate_job_dates(db, line.id, line.hours_per_day)
+        completion_date = sched.get_line_completion_date(db, line.id, line.hours_per_day)
+        
+        # Add calculated dates to work orders
+        wo_responses = []
+        for wo in work_orders:
+            wo_dict = schemas.WorkOrderResponse.model_validate(wo).model_dump()
+            if wo.id in job_dates:
+                wo_dict['calculated_start_date'] = job_dates[wo.id]['start_date']
+                wo_dict['calculated_end_date'] = job_dates[wo.id]['end_date']
+            wo_responses.append(schemas.WorkOrderResponse(**wo_dict))
+        
         line_summaries.append(schemas.LineScheduleSummary(
             line=schemas.SMTLineResponse.model_validate(line),
-            work_orders=[schemas.WorkOrderResponse.model_validate(wo) for wo in work_orders],
+            work_orders=wo_responses,
             total_jobs=len(work_orders),
-            trolleys_in_use=line_trolleys
+            trolleys_in_use=line_trolleys,
+            completion_date=completion_date
         ))
     
     # Get upcoming deadlines (next 7 days)
