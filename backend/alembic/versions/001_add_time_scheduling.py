@@ -19,13 +19,30 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Add datetime columns to work_orders
-    op.add_column('work_orders', sa.Column('calculated_start_datetime', sa.DateTime(), nullable=True))
-    op.add_column('work_orders', sa.Column('calculated_end_datetime', sa.DateTime(), nullable=True))
-    op.add_column('work_orders', sa.Column('wo_start_datetime', sa.DateTime(), nullable=True))
+    from sqlalchemy import inspect
+    from alembic import op
+    import sqlalchemy as sa
     
-    # Create shifts table
-    op.create_table('shifts',
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    
+    # Add datetime columns to work_orders if they don't exist
+    existing_columns = [c['name'] for c in inspector.get_columns('work_orders')]
+    
+    if 'calculated_start_datetime' not in existing_columns:
+        op.add_column('work_orders', sa.Column('calculated_start_datetime', sa.DateTime(), nullable=True))
+    
+    if 'calculated_end_datetime' not in existing_columns:
+        op.add_column('work_orders', sa.Column('calculated_end_datetime', sa.DateTime(), nullable=True))
+    
+    if 'wo_start_datetime' not in existing_columns:
+        op.add_column('work_orders', sa.Column('wo_start_datetime', sa.DateTime(), nullable=True))
+    
+    # Create shifts table if it doesn't exist
+    existing_tables = inspector.get_table_names()
+    
+    if 'shifts' not in existing_tables:
+        op.create_table('shifts',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('line_id', sa.Integer(), nullable=False),
         sa.Column('name', sa.String(), nullable=False),
@@ -37,10 +54,11 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['line_id'], ['smt_lines.id'], ),
         sa.PrimaryKeyConstraint('id')
     )
-    op.create_index(op.f('ix_shifts_id'), 'shifts', ['id'], unique=False)
+        op.create_index(op.f('ix_shifts_id'), 'shifts', ['id'], unique=False)
     
-    # Create shift_breaks table
-    op.create_table('shift_breaks',
+    # Create shift_breaks table if it doesn't exist
+    if 'shift_breaks' not in existing_tables:
+        op.create_table('shift_breaks',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('shift_id', sa.Integer(), nullable=False),
         sa.Column('name', sa.String(), nullable=False),
@@ -50,10 +68,11 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['shift_id'], ['shifts.id'], ),
         sa.PrimaryKeyConstraint('id')
     )
-    op.create_index(op.f('ix_shift_breaks_id'), 'shift_breaks', ['id'], unique=False)
+        op.create_index(op.f('ix_shift_breaks_id'), 'shift_breaks', ['id'], unique=False)
     
-    # Create line_configurations table
-    op.create_table('line_configurations',
+    # Create line_configurations table if it doesn't exist
+    if 'line_configurations' not in existing_tables:
+        op.create_table('line_configurations',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('line_id', sa.Integer(), nullable=False),
         sa.Column('buffer_time_minutes', sa.Float(), nullable=True),
@@ -63,7 +82,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('line_id')
     )
-    op.create_index(op.f('ix_line_configurations_id'), 'line_configurations', ['id'], unique=False)
+        op.create_index(op.f('ix_line_configurations_id'), 'line_configurations', ['id'], unique=False)
 
 
 def downgrade() -> None:
