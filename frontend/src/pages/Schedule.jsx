@@ -1,0 +1,260 @@
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { getWorkOrders, getLines, createWorkOrder, updateWorkOrder, deleteWorkOrder } from '../api'
+import { Plus, Edit2, Trash2, Lock, Unlock } from 'lucide-react'
+import { format } from 'date-fns'
+import WorkOrderForm from '../components/WorkOrderForm'
+
+function PriorityBadge({ priority }) {
+  const colors = {
+    'Critical Mass': 'badge-danger',
+    'Overclocked': 'badge-warning',
+    'Factory Default': 'badge-info',
+    'Trickle Charge': 'badge-secondary',
+    'Power Down': 'badge-secondary'
+  }
+  return <span className={`badge ${colors[priority] || 'badge-secondary'}`}>{priority}</span>
+}
+
+function StatusBadge({ status }) {
+  const colors = {
+    'Running': 'badge-success',
+    '2nd Side Running': 'badge-success',
+    'Clear to Build': 'badge-info',
+    'Clear to Build *': 'badge-info',
+    'On Hold': 'badge-warning',
+    'Program/Stencil': 'badge-secondary'
+  }
+  return <span className={`badge ${colors[status] || 'badge-secondary'}`}>{status}</span>
+}
+
+export default function Schedule() {
+  const [showForm, setShowForm] = useState(false)
+  const [editingWO, setEditingWO] = useState(null)
+  const [filterLine, setFilterLine] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
+  
+  const queryClient = useQueryClient()
+
+  const { data: workOrders, isLoading: loadingWOs } = useQuery({
+    queryKey: ['workOrders', filterLine, filterStatus],
+    queryFn: () => getWorkOrders({
+      line_id: filterLine || undefined,
+      status: filterStatus || undefined,
+      include_complete: false
+    }),
+  })
+
+  const { data: lines } = useQuery({
+    queryKey: ['lines'],
+    queryFn: () => getLines(),
+  })
+
+  const createMutation = useMutation({
+    mutationFn: createWorkOrder,
+    onSuccess: () => {
+      queryClient.invalidateQueries(['workOrders'])
+      queryClient.invalidateQueries(['dashboard'])
+      setShowForm(false)
+    },
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }) => updateWorkOrder(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['workOrders'])
+      queryClient.invalidateQueries(['dashboard'])
+      setEditingWO(null)
+      setShowForm(false)
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteWorkOrder,
+    onSuccess: () => {
+      queryClient.invalidateQueries(['workOrders'])
+      queryClient.invalidateQueries(['dashboard'])
+    },
+  })
+
+  const toggleLock = (wo) => {
+    updateMutation.mutate({
+      id: wo.id,
+      data: { is_locked: !wo.is_locked }
+    })
+  }
+
+  const handleEdit = (wo) => {
+    setEditingWO(wo)
+    setShowForm(true)
+  }
+
+  const handleDelete = (id) => {
+    if (window.confirm('Are you sure you want to delete this work order?')) {
+      deleteMutation.mutate(id)
+    }
+  }
+
+  const handleSubmit = (data) => {
+    if (editingWO) {
+      updateMutation.mutate({ id: editingWO.id, data })
+    } else {
+      createMutation.mutate(data)
+    }
+  }
+
+  const handleCancel = () => {
+    setShowForm(false)
+    setEditingWO(null)
+  }
+
+  if (showForm) {
+    return (
+      <div className="container">
+        <div className="page-header">
+          <h1 className="page-title">{editingWO ? 'Edit Work Order' : 'New Work Order'}</h1>
+        </div>
+        <WorkOrderForm
+          initialData={editingWO}
+          lines={lines?.data || []}
+          onSubmit={handleSubmit}
+          onCancel={handleCancel}
+          isSubmitting={createMutation.isPending || updateMutation.isPending}
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div className="container">
+      <div className="page-header">
+        <h1 className="page-title">Production Schedule</h1>
+        <p className="page-description">Manage all work orders across production lines</p>
+      </div>
+
+      {/* Filters and Actions */}
+      <div className="card">
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '200px' }}>
+            <select 
+              className="form-select"
+              value={filterLine}
+              onChange={(e) => setFilterLine(e.target.value)}
+            >
+              <option value="">All Lines</option>
+              {lines?.data.map(line => (
+                <option key={line.id} value={line.id}>{line.name}</option>
+              ))}
+            </select>
+          </div>
+          
+          <div style={{ flex: 1, minWidth: '200px' }}>
+            <select 
+              className="form-select"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+            >
+              <option value="">All Statuses</option>
+              <option value="Clear to Build">Clear to Build</option>
+              <option value="Clear to Build *">Clear to Build *</option>
+              <option value="Running">Running</option>
+              <option value="2nd Side Running">2nd Side Running</option>
+              <option value="On Hold">On Hold</option>
+              <option value="Program/Stencil">Program/Stencil</option>
+            </select>
+          </div>
+          
+          <button className="btn btn-primary" onClick={() => setShowForm(true)}>
+            <Plus size={18} />
+            Add Work Order
+          </button>
+        </div>
+      </div>
+
+      {/* Work Orders Table */}
+      {loadingWOs ? (
+        <div className="loading">Loading work orders...</div>
+      ) : workOrders?.data.length === 0 ? (
+        <div className="card empty-state">
+          <p>No work orders found. Click "Add Work Order" to create one.</p>
+        </div>
+      ) : (
+        <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Pos</th>
+                <th>Customer</th>
+                <th>Assembly</th>
+                <th>WO #</th>
+                <th>Qty</th>
+                <th>Status</th>
+                <th>Priority</th>
+                <th>Line</th>
+                <th>Ship Date</th>
+                <th>Min Start</th>
+                <th>Time</th>
+                <th>Trolleys</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {workOrders?.data
+                .sort((a, b) => {
+                  // Sort by line, then position
+                  if (a.line_id !== b.line_id) return (a.line_id || 999) - (b.line_id || 999)
+                  return (a.line_position || 999) - (b.line_position || 999)
+                })
+                .map((wo) => (
+                <tr key={wo.id} style={{ 
+                  background: wo.is_locked ? '#fff3cd' : 'transparent',
+                  opacity: wo.run_together_group ? 0.95 : 1
+                }}>
+                  <td>{wo.line_position || '-'}</td>
+                  <td>{wo.customer}</td>
+                  <td>
+                    {wo.assembly} {wo.revision}
+                    {wo.is_new_rev_assembly && <span style={{ color: 'var(--danger)', marginLeft: '0.25rem' }}>*</span>}
+                  </td>
+                  <td><code>{wo.wo_number}</code></td>
+                  <td>{wo.quantity}</td>
+                  <td><StatusBadge status={wo.status} /></td>
+                  <td><PriorityBadge priority={wo.priority} /></td>
+                  <td>{wo.line?.name || <em>Unassigned</em>}</td>
+                  <td>{wo.actual_ship_date ? format(new Date(wo.actual_ship_date), 'MMM d') : '-'}</td>
+                  <td>{wo.min_start_date ? format(new Date(wo.min_start_date), 'MMM d') : '-'}</td>
+                  <td>{wo.time_minutes} min</td>
+                  <td>{wo.trolley_count}</td>
+                  <td>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button 
+                        className="btn btn-sm btn-secondary" 
+                        onClick={() => toggleLock(wo)}
+                        title={wo.is_locked ? 'Unlock' : 'Lock'}
+                      >
+                        {wo.is_locked ? <Unlock size={14} /> : <Lock size={14} />}
+                      </button>
+                      <button 
+                        className="btn btn-sm btn-secondary" 
+                        onClick={() => handleEdit(wo)}
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                      <button 
+                        className="btn btn-sm btn-danger" 
+                        onClick={() => handleDelete(wo.id)}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
