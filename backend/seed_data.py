@@ -148,9 +148,13 @@ def seed_users(db: Session):
 
 def main():
     """Run all seeding functions"""
-    # Create tables
-    Base.metadata.create_all(bind=engine)
-    print("✓ Created database tables")
+    # Create tables (this will create new tables and columns)
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("✓ Created database tables")
+    except Exception as e:
+        print(f"Note: {e}")
+        print("Continuing with seed...")
     
     # Seed data
     db = SessionLocal()
