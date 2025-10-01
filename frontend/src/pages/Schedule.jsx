@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getWorkOrders, getLines, createWorkOrder, updateWorkOrder, deleteWorkOrder } from '../api'
-import { Plus, Edit2, Trash2, Lock, Unlock } from 'lucide-react'
+import { getWorkOrders, getLines, createWorkOrder, updateWorkOrder, deleteWorkOrder, completeWorkOrder } from '../api'
+import { Plus, Edit2, Trash2, Lock, Unlock, CheckCircle } from 'lucide-react'
 import { format } from 'date-fns'
 import WorkOrderForm from '../components/WorkOrderForm'
+import CompleteJobModal from '../components/CompleteJobModal'
 
 function PriorityBadge({ priority }) {
   const colors = {
@@ -31,6 +32,7 @@ function StatusBadge({ status }) {
 export default function Schedule() {
   const [showForm, setShowForm] = useState(false)
   const [editingWO, setEditingWO] = useState(null)
+  const [completingWO, setCompletingWO] = useState(null)
   const [filterLine, setFilterLine] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   
@@ -77,6 +79,16 @@ export default function Schedule() {
     },
   })
 
+  const completeMutation = useMutation({
+    mutationFn: ({ id, data }) => completeWorkOrder(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['workOrders'])
+      queryClient.invalidateQueries(['dashboard'])
+      queryClient.invalidateQueries(['completed'])
+      setCompletingWO(null)
+    },
+  })
+
   const toggleLock = (wo) => {
     updateMutation.mutate({
       id: wo.id,
@@ -108,6 +120,10 @@ export default function Schedule() {
     setEditingWO(null)
   }
 
+  const handleComplete = (data) => {
+    completeMutation.mutate({ id: completingWO.id, data })
+  }
+
   if (showForm) {
     return (
       <div className="container">
@@ -120,6 +136,19 @@ export default function Schedule() {
           onSubmit={handleSubmit}
           onCancel={handleCancel}
           isSubmitting={createMutation.isPending || updateMutation.isPending}
+        />
+      </div>
+    )
+  }
+
+  if (completingWO) {
+    return (
+      <div className="container">
+        <CompleteJobModal
+          workOrder={completingWO}
+          onComplete={handleComplete}
+          onCancel={() => setCompletingWO(null)}
+          isSubmitting={completeMutation.isPending}
         />
       </div>
     )
@@ -234,6 +263,13 @@ export default function Schedule() {
                   <td>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <button 
+                        className="btn btn-sm btn-success" 
+                        onClick={() => setCompletingWO(wo)}
+                        title="Mark as Complete"
+                      >
+                        <CheckCircle size={14} />
+                      </button>
+                      <button 
                         className="btn btn-sm btn-secondary" 
                         onClick={() => toggleLock(wo)}
                         title={wo.is_locked ? 'Unlock' : 'Lock'}
@@ -243,12 +279,14 @@ export default function Schedule() {
                       <button 
                         className="btn btn-sm btn-secondary" 
                         onClick={() => handleEdit(wo)}
+                        title="Edit"
                       >
                         <Edit2 size={14} />
                       </button>
                       <button 
                         className="btn btn-sm btn-danger" 
                         onClick={() => handleDelete(wo.id)}
+                        title="Delete"
                       >
                         <Trash2 size={14} />
                       </button>

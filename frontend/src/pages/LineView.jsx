@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { getLines, getWorkOrders } from '../api'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { getLines, getWorkOrders, completeWorkOrder } from '../api'
 import { format } from 'date-fns'
-import { Clock, Package, Calendar } from 'lucide-react'
+import { Clock, Package, Calendar, CheckCircle } from 'lucide-react'
+import CompleteJobModal from '../components/CompleteJobModal'
 
 function StatusBadge({ status }) {
   const colors = {
@@ -29,6 +31,8 @@ function PriorityBadge({ priority }) {
 
 export default function LineView() {
   const { lineId } = useParams()
+  const [completingWO, setCompletingWO] = useState(null)
+  const queryClient = useQueryClient()
   
   const { data: lines } = useQuery({
     queryKey: ['lines'],
@@ -44,6 +48,20 @@ export default function LineView() {
     enabled: !!lineId || !lineId, // Always enabled
     refetchInterval: 10000, // Refresh every 10 seconds for operators
   })
+
+  const completeMutation = useMutation({
+    mutationFn: ({ id, data }) => completeWorkOrder(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['workOrders'])
+      queryClient.invalidateQueries(['dashboard'])
+      queryClient.invalidateQueries(['completed'])
+      setCompletingWO(null)
+    },
+  })
+
+  const handleComplete = (data) => {
+    completeMutation.mutate({ id: completingWO.id, data })
+  }
 
   // Group work orders by line if no specific line selected
   const groupedByLine = !lineId && workOrders?.data && lines?.data
@@ -65,6 +83,19 @@ export default function LineView() {
 
   if (isLoading) {
     return <div className="container loading">Loading...</div>
+  }
+
+  if (completingWO) {
+    return (
+      <>
+        <CompleteJobModal
+          workOrder={completingWO}
+          onComplete={handleComplete}
+          onCancel={() => setCompletingWO(null)}
+          isSubmitting={completeMutation.isPending}
+        />
+      </>
+    )
   }
 
   // Single line view
@@ -101,6 +132,7 @@ export default function LineView() {
                 <th>Time</th>
                 <th>Trolleys</th>
                 <th>Notes</th>
+                <th>Actions</th>
               </tr>
               </thead>
               <tbody>
@@ -129,6 +161,15 @@ export default function LineView() {
                     <td>{wo.time_minutes} min</td>
                     <td>{wo.trolley_count}</td>
                     <td>{wo.notes}</td>
+                    <td>
+                      <button 
+                        className="btn btn-sm btn-success" 
+                        onClick={() => setCompletingWO(wo)}
+                        title="Mark as Complete"
+                      >
+                        <CheckCircle size={14} />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
