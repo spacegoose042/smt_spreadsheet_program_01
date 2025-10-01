@@ -374,8 +374,6 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
         </div>
       </div>
 
-      </div>
-
       {/* Checkboxes */}
       <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.75rem', fontSize: '0.8rem' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
