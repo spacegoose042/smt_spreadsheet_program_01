@@ -89,8 +89,16 @@ export default function CapacityCalendar() {
   function getDefaultHours(date) {
     if (!calendarData?.default_shifts) return 0
     
-    const dayOfWeek = date.getDay() // 0=Sunday, 1=Monday, etc.
-    const shiftsForDay = calendarData.default_shifts.filter(s => s.day_of_week === dayOfWeek && s.is_active)
+    // Convert JS day (0=Sunday, 6=Saturday) to our format (1=Monday, 7=Sunday)
+    const dayOfWeek = date.getDay()
+    const dayNumber = dayOfWeek === 0 ? 7 : dayOfWeek // Convert Sunday from 0 to 7
+    
+    // Filter shifts that are active on this day
+    const shiftsForDay = calendarData.default_shifts.filter(s => {
+      if (!s.is_active || !s.active_days) return false
+      const activeDays = s.active_days.split(',').map(d => parseInt(d))
+      return activeDays.includes(dayNumber)
+    })
     
     if (shiftsForDay.length === 0) return 0
     

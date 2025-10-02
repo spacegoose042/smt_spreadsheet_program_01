@@ -634,8 +634,7 @@ def get_capacity_calendar(
     
     # Get default shifts for this line
     shifts = db.query(Shift).filter(
-        Shift.line_id == line_id,
-        Shift.is_active == True
+        Shift.line_id == line_id
     ).all()
     
     # Get line configuration
@@ -662,7 +661,9 @@ def get_capacity_calendar(
         "default_shifts": [
             {
                 "id": s.id,
-                "day_of_week": s.day_of_week,
+                "name": s.name,
+                "shift_number": s.shift_number,
+                "active_days": s.active_days,
                 "start_time": s.start_time.isoformat() if s.start_time else None,
                 "end_time": s.end_time.isoformat() if s.end_time else None,
                 "is_active": s.is_active,
