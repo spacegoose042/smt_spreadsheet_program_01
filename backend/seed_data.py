@@ -163,6 +163,16 @@ def main():
         print(f"Note: {e}")
         print("Continuing with seed...")
     
+    # Add admin to userrole enum if it doesn't exist
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'admin'"))
+            conn.commit()
+        print("✓ Added admin role to enum")
+    except Exception as e:
+        print(f"Note: {e}")
+    
     # Seed data
     db = SessionLocal()
     try:
