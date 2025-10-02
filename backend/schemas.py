@@ -79,7 +79,8 @@ class WorkOrderBase(BaseModel):
     revision: str
     wo_number: str
     quantity: int
-    status: WorkOrderStatus
+    status_id: Optional[int] = None  # New: FK to Status table
+    status: Optional[WorkOrderStatus] = None  # Legacy: for backward compatibility
     priority: Priority = Priority.FACTORY_DEFAULT
     is_locked: bool = False
     is_new_rev_assembly: bool = False
@@ -104,7 +105,8 @@ class WorkOrderUpdate(BaseModel):
     assembly: Optional[str] = None
     revision: Optional[str] = None
     quantity: Optional[int] = None
-    status: Optional[WorkOrderStatus] = None
+    status_id: Optional[int] = None  # New: FK to Status table
+    status: Optional[WorkOrderStatus] = None  # Legacy: for backward compatibility
     priority: Optional[Priority] = None
     is_locked: Optional[bool] = None
     is_new_rev_assembly: Optional[bool] = None
@@ -131,6 +133,10 @@ class WorkOrderResponse(WorkOrderBase):
     is_complete: bool
     created_at: datetime
     updated_at: datetime
+    
+    # Status details
+    status_name: Optional[str] = None  # Computed: name from status_obj or legacy status
+    status_color: Optional[str] = None  # Color from status_obj
     
     # Calculated dates based on line queue position (date only)
     calculated_start_date: Optional[date] = None

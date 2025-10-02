@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { getStatuses } from '../api'
 import { X, Plus, Edit2 } from 'lucide-react'
 
 export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, isSubmitting }) {
@@ -8,7 +10,7 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
     revision: '',
     wo_number: '',
     quantity: '',
-    status: 'Clear to Build',
+    status_id: '',  // New: use status_id
     priority: 'Factory Default',
     is_locked: false,
     is_new_rev_assembly: false,
@@ -24,6 +26,14 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
     notes: '',
     ...initialData
   })
+
+  // Fetch statuses
+  const { data: statusesData } = useQuery({
+    queryKey: ['statuses'],
+    queryFn: () => getStatuses(false).then(res => res.data)
+  })
+
+  const statuses = statusesData || []
 
   // Convert dates to YYYY-MM-DD format for input
   useEffect(() => {
@@ -64,7 +74,11 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
       trolley_count: parseInt(formData.trolley_count),
       line_id: formData.line_id ? parseInt(formData.line_id) : null,
       line_position: formData.line_position ? parseInt(formData.line_position) : null,
+      status_id: formData.status_id ? parseInt(formData.status_id) : null,
     }
+    
+    // Remove legacy status field
+    delete submitData.status
     
     onSubmit(submitData)
   }
@@ -249,18 +263,16 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
         <div className="form-group">
           <label className="form-label">Status *</label>
           <select
-            name="status"
+            name="status_id"
             className="form-select"
-            value={formData.status}
+            value={formData.status_id}
             onChange={handleChange}
             required
           >
-            <option value="Clear to Build">Clear to Build</option>
-            <option value="Clear to Build *">Clear to Build *</option>
-            <option value="Running">Running</option>
-            <option value="2nd Side Running">2nd Side Running</option>
-            <option value="On Hold">On Hold</option>
-            <option value="Program/Stencil">Program/Stencil</option>
+            <option value="">Select status...</option>
+            {statuses.map(status => (
+              <option key={status.id} value={status.id}>{status.name}</option>
+            ))}
           </select>
         </div>
 

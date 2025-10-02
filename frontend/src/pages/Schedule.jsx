@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getWorkOrders, getLines, createWorkOrder, updateWorkOrder, deleteWorkOrder, completeWorkOrder, getDashboard } from '../api'
+import { getWorkOrders, getLines, createWorkOrder, updateWorkOrder, deleteWorkOrder, completeWorkOrder, getDashboard, getStatuses } from '../api'
 import { Plus, Edit2, Trash2, Lock, Unlock, CheckCircle, Calendar } from 'lucide-react'
 import { format } from 'date-fns'
 import WorkOrderForm from '../components/WorkOrderForm'
@@ -17,8 +17,13 @@ function PriorityBadge({ priority }) {
   return <span className={`badge ${colors[priority] || 'badge-secondary'}`}>{priority}</span>
 }
 
-function StatusBadge({ status }) {
-  const colors = {
+function StatusBadge({ status, statusName, statusColor }) {
+  // Use new status system if available, fallback to legacy
+  const name = statusName || (status ? status : 'Unknown')
+  const color = statusColor
+  
+  // Legacy fallback colors if no color provided
+  const legacyColors = {
     'Running': 'badge-success',
     '2nd Side Running': 'badge-success',
     'Clear to Build': 'badge-info',
@@ -26,7 +31,21 @@ function StatusBadge({ status }) {
     'On Hold': 'badge-warning',
     'Program/Stencil': 'badge-secondary'
   }
-  return <span className={`badge ${colors[status] || 'badge-secondary'}`}>{status}</span>
+  
+  if (color) {
+    // Use custom color
+    return (
+      <span 
+        className="badge"
+        style={{ background: color, color: 'white', padding: '0.25rem 0.5rem' }}
+      >
+        {name}
+      </span>
+    )
+  }
+  
+  // Use legacy color classes
+  return <span className={`badge ${legacyColors[name] || 'badge-secondary'}`}>{name}</span>
 }
 
 export default function Schedule() {
@@ -61,6 +80,13 @@ export default function Schedule() {
     queryKey: ['lines'],
     queryFn: () => getLines(),
   })
+
+  const { data: statusesData } = useQuery({
+    queryKey: ['statuses'],
+    queryFn: () => getStatuses(false).then(res => res.data)
+  })
+
+  const statuses = statusesData || []
 
   const { data: dashboard } = useQuery({
     queryKey: ['dashboard'],
@@ -314,12 +340,9 @@ export default function Schedule() {
               onChange={(e) => setFilterStatus(e.target.value)}
             >
               <option value="">All Statuses</option>
-              <option value="Clear to Build">Clear to Build</option>
-              <option value="Clear to Build *">Clear to Build *</option>
-              <option value="Running">Running</option>
-              <option value="2nd Side Running">2nd Side Running</option>
-              <option value="On Hold">On Hold</option>
-              <option value="Program/Stencil">Program/Stencil</option>
+              {statuses.map(status => (
+                <option key={status.id} value={status.name}>{status.name}</option>
+              ))}
             </select>
           </div>
           
@@ -403,7 +426,7 @@ export default function Schedule() {
                   </td>
                   <td><code>{wo.wo_number}</code></td>
                   <td>{wo.quantity}</td>
-                  <td><StatusBadge status={wo.status} /></td>
+                  <td><StatusBadge status={wo.status} statusName={wo.status_name} statusColor={wo.status_color} /></td>
                   <td><PriorityBadge priority={wo.priority} /></td>
                   <td>
                     {wo.line?.name || <em style={{ color: 'var(--warning)', fontWeight: 600 }}>⚠️ Unscheduled</em>}

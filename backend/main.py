@@ -299,6 +299,15 @@ def get_work_orders(
             datetimes = line_datetimes[wo.line_id][wo.id]
             wo_dict['calculated_start_datetime'] = datetimes['start_datetime']
             wo_dict['calculated_end_datetime'] = datetimes['end_datetime']
+        
+        # Add status name and color
+        if wo.status_obj:
+            wo_dict['status_name'] = wo.status_obj.name
+            wo_dict['status_color'] = wo.status_obj.color
+        elif wo.status:
+            wo_dict['status_name'] = wo.status.value
+            wo_dict['status_color'] = None
+        
         result.append(schemas.WorkOrderResponse(**wo_dict))
     
     return result
