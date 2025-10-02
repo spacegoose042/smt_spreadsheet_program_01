@@ -187,11 +187,19 @@ def create_work_order(wo: schemas.WorkOrderCreate, db: Session = Depends(get_db)
         if not line:
             raise HTTPException(status_code=404, detail="Line not found")
         
-        # Check line position
-        if db_wo.line_position:
-            if not sched.validate_line_position(db, db_wo.line_id, db_wo.line_position):
-                # Position is taken, auto-renumber
-                sched.reorder_line_positions(db, db_wo.line_id, db_wo.line_position)
+        # Auto-assign position if not provided
+        if not db_wo.line_position:
+            # Get the highest position on this line
+            max_position_query = db.query(WorkOrder).filter(
+                WorkOrder.line_id == db_wo.line_id,
+                WorkOrder.is_complete == False,
+                WorkOrder.line_position.isnot(None)
+            ).order_by(WorkOrder.line_position.desc()).first()
+            
+            db_wo.line_position = (max_position_query.line_position + 1) if max_position_query else 1
+        elif not sched.validate_line_position(db, db_wo.line_id, db_wo.line_position):
+            # Position is taken, auto-renumber
+            sched.reorder_line_positions(db, db_wo.line_id, db_wo.line_position)
     
     # Calculate dates
     db_wo = sched.update_work_order_calculations(db_wo, line)
