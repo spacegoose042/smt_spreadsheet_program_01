@@ -138,10 +138,13 @@ class CompletedWorkOrder(Base):
     actual_start_date = Column(Date, nullable=False)
     actual_finish_date = Column(Date, nullable=False)
     actual_time_clocked_minutes = Column(Float, nullable=False)
+    quantity_completed = Column(Integer, nullable=False)
     
     # Variance tracking
     estimated_time_minutes = Column(Float)  # Copied from WO
     time_variance_minutes = Column(Float)  # actual - estimated
+    estimated_quantity = Column(Integer)  # Copied from WO
+    quantity_variance = Column(Integer)  # actual - estimated
     
     completed_at = Column(DateTime, default=datetime.utcnow)
     completed_by_user_id = Column(Integer, ForeignKey("users.id"))

@@ -296,8 +296,11 @@ def complete_work_order(
         actual_start_date=completion_data.actual_start_date,
         actual_finish_date=completion_data.actual_finish_date,
         actual_time_clocked_minutes=completion_data.actual_time_clocked_minutes,
+        quantity_completed=completion_data.quantity_completed,
         estimated_time_minutes=db_wo.time_minutes,
-        time_variance_minutes=completion_data.actual_time_clocked_minutes - db_wo.time_minutes
+        time_variance_minutes=completion_data.actual_time_clocked_minutes - db_wo.time_minutes,
+        estimated_quantity=db_wo.quantity,
+        quantity_variance=completion_data.quantity_completed - db_wo.quantity
     )
     
     db_wo.is_complete = True
@@ -432,9 +435,12 @@ def update_completed_work_order(
     for key, value in update_data.model_dump(exclude_unset=True).items():
         setattr(completed, key, value)
     
-    # Recalculate variance
+    # Recalculate variances
     if completed.actual_time_clocked_minutes and completed.estimated_time_minutes:
         completed.time_variance_minutes = completed.actual_time_clocked_minutes - completed.estimated_time_minutes
+    
+    if completed.quantity_completed and completed.estimated_quantity:
+        completed.quantity_variance = completed.quantity_completed - completed.estimated_quantity
     
     db.commit()
     db.refresh(completed)

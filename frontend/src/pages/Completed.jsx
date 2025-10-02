@@ -8,6 +8,7 @@ function EditCompletedModal({ completed, onSave, onCancel, isSubmitting }) {
   const [formData, setFormData] = useState({
     actual_start_date: completed.actual_start_date,
     actual_finish_date: completed.actual_finish_date,
+    quantity_completed: completed.quantity_completed,
     actual_time_clocked_minutes: completed.actual_time_clocked_minutes
   })
 
@@ -59,10 +60,23 @@ function EditCompletedModal({ completed, onSave, onCancel, isSubmitting }) {
             <input
               type="number"
               className="form-input"
+              value={formData.quantity_completed}
+              onChange={(e) => setFormData({...formData, quantity_completed: parseInt(e.target.value)})}
+              required
+              min="1"
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Actual Time Clocked (minutes)</label>
+            <input
+              type="number"
+              className="form-input"
               value={formData.actual_time_clocked_minutes}
               onChange={(e) => setFormData({...formData, actual_time_clocked_minutes: parseFloat(e.target.value)})}
               required
               min="1"
+              step="0.1"
             />
           </div>
 
@@ -188,12 +202,13 @@ export default function Completed() {
                 <th>Customer</th>
                 <th>Assembly</th>
                 <th>WO #</th>
-                <th>Qty</th>
-                <th>Start Date</th>
-                <th>Finish Date</th>
-                <th>Est. Qty</th>
-                <th>Actual Qty</th>
-                <th>Variance</th>
+                <th>Start</th>
+                <th>Finish</th>
+                <th>Est Qty</th>
+                <th>Act Qty</th>
+                <th>Est Time</th>
+                <th>Act Time</th>
+                <th>Time Var</th>
                 <th>Completed</th>
                 <th>Actions</th>
               </tr>
@@ -208,24 +223,31 @@ export default function Completed() {
                     <td>{c.work_order?.customer}</td>
                     <td>{c.work_order?.assembly} {c.work_order?.revision}</td>
                     <td><code>{c.work_order?.wo_number}</code></td>
-                    <td>{c.work_order?.quantity}</td>
-                    <td>{format(new Date(c.actual_start_date), 'MMM d, yyyy')}</td>
-                    <td>{format(new Date(c.actual_finish_date), 'MMM d, yyyy')}</td>
-                    <td>{c.work_order?.quantity} units</td>
-                    <td>{c.actual_time_clocked_minutes} units</td>
+                    <td>{format(new Date(c.actual_start_date), 'MMM d')}</td>
+                    <td>{format(new Date(c.actual_finish_date), 'MMM d')}</td>
+                    <td>{c.estimated_quantity || c.work_order?.quantity}</td>
+                    <td>
+                      <span style={{ 
+                        color: c.quantity_variance < 0 ? 'var(--danger)' : 
+                              c.quantity_variance > 0 ? 'var(--info)' : 'var(--success)'
+                      }}>
+                        {c.quantity_completed}
+                      </span>
+                    </td>
+                    <td>{c.estimated_time_minutes ? Math.round(c.estimated_time_minutes) : '-'} min</td>
+                    <td>{Math.round(c.actual_time_clocked_minutes)} min</td>
                     <td>
                       <span style={{ 
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: '0.25rem',
-                        color: c.actual_time_clocked_minutes < c.work_order?.quantity ? 'var(--danger)' : 
-                              c.actual_time_clocked_minutes > c.work_order?.quantity ? 'var(--info)' : 'var(--success)'
+                        color: isOverTime ? 'var(--danger)' : 'var(--success)'
                       }}>
-                        {c.actual_time_clocked_minutes < c.work_order?.quantity ? '⚠️ Short' :
-                         c.actual_time_clocked_minutes > c.work_order?.quantity ? 'ℹ️ Over' : '✓ Match'}
+                        {isOverTime ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                        {isOverTime ? '+' : ''}{Math.round(variance)} min
                       </span>
                     </td>
-                    <td>{format(new Date(c.completed_at), 'MMM d, yyyy')}</td>
+                    <td>{format(new Date(c.completed_at), 'MMM d')}</td>
                     <td>
                       <div style={{ display: 'flex', gap: '0.5rem' }}>
                         <button 

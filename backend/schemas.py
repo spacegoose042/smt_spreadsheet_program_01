@@ -143,12 +143,14 @@ class CompletedWorkOrderCreate(BaseModel):
     actual_start_date: date
     actual_finish_date: date
     actual_time_clocked_minutes: float
+    quantity_completed: int
 
 
 class CompletedWorkOrderUpdate(BaseModel):
     actual_start_date: Optional[date] = None
     actual_finish_date: Optional[date] = None
     actual_time_clocked_minutes: Optional[float] = None
+    quantity_completed: Optional[int] = None
 
 
 class CompletedWorkOrderResponse(BaseModel):
@@ -157,8 +159,11 @@ class CompletedWorkOrderResponse(BaseModel):
     actual_start_date: date
     actual_finish_date: date
     actual_time_clocked_minutes: float
+    quantity_completed: int
     estimated_time_minutes: Optional[float]
     time_variance_minutes: Optional[float]
+    estimated_quantity: Optional[int]
+    quantity_variance: Optional[int]
     completed_at: datetime
     work_order: Optional[WorkOrderResponse] = None
 

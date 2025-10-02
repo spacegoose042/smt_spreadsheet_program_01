@@ -8,7 +8,8 @@ export default function CompleteJobModal({ workOrder, onComplete, onCancel, isSu
   const [formData, setFormData] = useState({
     actual_start_date: today,
     actual_finish_date: today,
-    actual_time_clocked_minutes: workOrder.quantity || ''
+    quantity_completed: workOrder.quantity || '',
+    actual_time_clocked_minutes: workOrder.time_minutes || ''
   })
 
   const handleChange = (e) => {
@@ -26,6 +27,7 @@ export default function CompleteJobModal({ workOrder, onComplete, onCancel, isSu
       work_order_id: workOrder.id,
       actual_start_date: formData.actual_start_date,
       actual_finish_date: formData.actual_finish_date,
+      quantity_completed: parseInt(formData.quantity_completed),
       actual_time_clocked_minutes: parseFloat(formData.actual_time_clocked_minutes)
     }
     
@@ -112,27 +114,54 @@ export default function CompleteJobModal({ workOrder, onComplete, onCancel, isSu
             <label className="form-label">Quantity Completed *</label>
             <input
               type="number"
+              name="quantity_completed"
+              className="form-input"
+              value={formData.quantity_completed}
+              onChange={handleChange}
+              required
+              min="1"
+              step="1"
+            />
+            {formData.quantity_completed && workOrder.quantity && (
+              <div style={{ marginTop: '0.5rem', fontSize: '0.875rem' }}>
+                {parseFloat(formData.quantity_completed) < workOrder.quantity ? (
+                  <span style={{ color: 'var(--warning)' }}>
+                    ⚠️ Short by {(workOrder.quantity - parseFloat(formData.quantity_completed))} units
+                  </span>
+                ) : parseFloat(formData.quantity_completed) > workOrder.quantity ? (
+                  <span style={{ color: 'var(--info)' }}>
+                    ℹ️ Over by {(parseFloat(formData.quantity_completed) - workOrder.quantity)} units
+                  </span>
+                ) : (
+                  <span style={{ color: 'var(--success)' }}>
+                    ✓ Complete - {workOrder.quantity} units built
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Actual Time Clocked (minutes) *</label>
+            <input
+              type="number"
               name="actual_time_clocked_minutes"
               className="form-input"
               value={formData.actual_time_clocked_minutes}
               onChange={handleChange}
               required
               min="1"
-              step="1"
+              step="0.1"
             />
-            {formData.actual_time_clocked_minutes && workOrder.quantity && (
+            {formData.actual_time_clocked_minutes && workOrder.time_minutes && (
               <div style={{ marginTop: '0.5rem', fontSize: '0.875rem' }}>
-                {parseFloat(formData.actual_time_clocked_minutes) < workOrder.quantity ? (
-                  <span style={{ color: 'var(--warning)' }}>
-                    ⚠️ Short by {(workOrder.quantity - parseFloat(formData.actual_time_clocked_minutes))} units
-                  </span>
-                ) : parseFloat(formData.actual_time_clocked_minutes) > workOrder.quantity ? (
-                  <span style={{ color: 'var(--info)' }}>
-                    ℹ️ Over by {(parseFloat(formData.actual_time_clocked_minutes) - workOrder.quantity)} units
+                {parseFloat(formData.actual_time_clocked_minutes) > workOrder.time_minutes ? (
+                  <span style={{ color: 'var(--danger)' }}>
+                    ⚠️ Over estimate by {(parseFloat(formData.actual_time_clocked_minutes) - workOrder.time_minutes).toFixed(1)} min
                   </span>
                 ) : (
                   <span style={{ color: 'var(--success)' }}>
-                    ✓ Complete - {workOrder.quantity} units built
+                    ✓ Under estimate by {(workOrder.time_minutes - parseFloat(formData.actual_time_clocked_minutes)).toFixed(1)} min
                   </span>
                 )}
               </div>
