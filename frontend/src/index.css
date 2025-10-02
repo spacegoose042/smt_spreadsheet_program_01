@@ -11,24 +11,34 @@
   --text-primary: #212529;
   --text-secondary: #6c757d;
   --border: #dee2e6;
-  --primary: #0066cc;
-  --primary-hover: #0052a3;
-  --success: #28a745;
-  --warning: #ffc107;
+  
+  /* S&Y Industries Brand Colors - Green and Gold */
+  --sandy-green: #1a7a3e;
+  --sandy-green-dark: #0f5128;
+  --sandy-green-light: #2e9851;
+  --sandy-gold: #d4af37;
+  --sandy-gold-dark: #b8941f;
+  --sandy-charcoal: #2d3439;
+  
+  /* Primary colors using brand */
+  --primary: #1a7a3e;
+  --primary-hover: #0f5128;
+  --success: #1a7a3e;
+  --warning: #d4af37;
   --danger: #dc3545;
-  --info: #17a2b8;
+  --info: #2e9851;
   
   /* Priority colors */
   --priority-critical: #dc3545;
   --priority-rush: #ff6b35;
-  --priority-normal: #0066cc;
+  --priority-normal: #1a7a3e;
   --priority-low: #6c757d;
   --priority-hold: #adb5bd;
   
   /* Status colors */
-  --status-running: #28a745;
-  --status-clear: #17a2b8;
-  --status-hold: #ffc107;
+  --status-running: #1a7a3e;
+  --status-clear: #2e9851;
+  --status-hold: #d4af37;
   --status-program: #6f42c1;
 }
 
