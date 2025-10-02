@@ -13,12 +13,12 @@ export default function CapacityCalendar() {
   const [selectedDate, setSelectedDate] = useState(null)
 
   // Fetch lines
-  const { data: linesData } = useQuery({
+  const { data: linesData, isLoading: linesLoading, error: linesError } = useQuery({
     queryKey: ['lines'],
     queryFn: () => getLines(false).then(res => res.data)
   })
 
-  const lines = linesData || []
+  const lines = Array.isArray(linesData) ? linesData : []
 
   // Set default line to first line
   useEffect(() => {
@@ -191,6 +191,14 @@ export default function CapacityCalendar() {
     document.addEventListener('click', handleClick)
     return () => document.removeEventListener('click', handleClick)
   }, [])
+
+  if (linesLoading) {
+    return <div className="loading">Loading lines...</div>
+  }
+
+  if (linesError) {
+    return <div className="error">Error loading lines: {linesError.message}</div>
+  }
 
   if (isLoading) {
     return <div className="loading">Loading capacity calendar...</div>
