@@ -283,12 +283,17 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
 
         {/* Line Assignment */}
         <div className="form-group">
-          <label className="form-label">Line</label>
+          <label className="form-label">
+            Line
+            {formData.is_locked && <span style={{ marginLeft: '0.5rem', color: 'var(--warning)', fontSize: '0.75rem' }}>🔒 Locked</span>}
+          </label>
           <select
             name="line_id"
             className="form-select"
             value={formData.line_id}
             onChange={handleChange}
+            disabled={formData.is_locked}
+            style={formData.is_locked ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
           >
             <option value="">⚠️ Unscheduled</option>
             {lines.map(line => (
@@ -296,12 +301,19 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
             ))}
           </select>
           <small style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem', display: 'block' }}>
-            {formData.line_id ? 'Assigned to a production line' : 'Not yet scheduled - assign to a line when ready'}
+            {formData.is_locked 
+              ? '🔒 Unlock this work order to change the line'
+              : formData.line_id 
+                ? 'Assigned to a production line' 
+                : 'Not yet scheduled - assign to a line when ready'}
           </small>
         </div>
 
         <div className="form-group">
-          <label className="form-label">Line Position</label>
+          <label className="form-label">
+            Line Position
+            {formData.is_locked && <span style={{ marginLeft: '0.5rem', color: 'var(--warning)', fontSize: '0.75rem' }}>🔒 Locked</span>}
+          </label>
           <input
             type="number"
             name="line_position"
@@ -310,10 +322,15 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
             onChange={handleChange}
             min="1"
             placeholder="Auto-assigned if empty"
-            disabled={!formData.line_id}
+            disabled={!formData.line_id || formData.is_locked}
+            style={formData.is_locked ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
           />
           <small style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem', display: 'block' }}>
-            {!formData.line_id && 'Select a line first'}
+            {formData.is_locked 
+              ? '🔒 Unlock this work order to change the position'
+              : !formData.line_id 
+                ? 'Select a line first' 
+                : 'Auto-assigned if empty'}
           </small>
         </div>
 

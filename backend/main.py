@@ -362,13 +362,25 @@ def update_work_order(
     if not db_wo:
         raise HTTPException(status_code=404, detail="Work order not found")
     
-    # Check if locked
-    if db_wo.is_locked and not wo_update.is_locked:
-        # Allow unlocking, but warn about other changes
-        pass
-    
     # Update fields
     update_data = wo_update.model_dump(exclude_unset=True)
+    
+    # Check if locked and trying to change line or position
+    if db_wo.is_locked:
+        # Prevent changing line_id or line_position if locked (unless unlocking)
+        if "line_id" in update_data and update_data["line_id"] != db_wo.line_id:
+            if not ("is_locked" in update_data and update_data["is_locked"] == False):
+                raise HTTPException(
+                    status_code=400, 
+                    detail="Cannot move a locked work order to a different line. Unlock it first."
+                )
+        
+        if "line_position" in update_data and update_data["line_position"] != db_wo.line_position:
+            if not ("is_locked" in update_data and update_data["is_locked"] == False):
+                raise HTTPException(
+                    status_code=400, 
+                    detail="Cannot change position of a locked work order. Unlock it first."
+                )
     
     # If unscheduling (setting line_id to None), clear line_position
     if "line_id" in update_data and update_data["line_id"] is None:
