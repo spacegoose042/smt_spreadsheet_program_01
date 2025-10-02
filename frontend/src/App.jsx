@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
-import { Home, Calendar, Settings, CheckCircle, List, LayoutGrid, LogOut, User as UserIcon, Users, Clock, Timer } from 'lucide-react'
+import { Home, Calendar, Settings, CheckCircle, List, LayoutGrid, LogOut, User as UserIcon, Users, Clock, Timer, Tag } from 'lucide-react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
@@ -11,6 +11,7 @@ import SettingsPage from './pages/SettingsPage'
 import UserManagement from './pages/UserManagement'
 import CapacityCalendar from './pages/CapacityCalendar'
 import ShiftConfiguration from './pages/ShiftConfiguration'
+import StatusManagement from './pages/StatusManagement'
 import './App.css'
 
 function ProtectedRoute({ children, requireAuth = true }) {
@@ -71,10 +72,16 @@ function Navigation() {
             Shifts
           </Link>
           {isAdmin && (
-            <Link to="/users" className={isActive('/users') ? 'active' : ''}>
-              <Users size={16} />
-              Users
-            </Link>
+            <>
+              <Link to="/users" className={isActive('/users') ? 'active' : ''}>
+                <Users size={16} />
+                Users
+              </Link>
+              <Link to="/statuses" className={isActive('/statuses') ? 'active' : ''}>
+                <Tag size={16} />
+                Statuses
+              </Link>
+            </>
           )}
           <Link to="/settings" className={isActive('/settings') ? 'active' : ''}>
             <Settings size={16} />
@@ -118,6 +125,7 @@ function AppContent() {
           <Route path="/capacity" element={<ProtectedRoute><CapacityCalendar /></ProtectedRoute>} />
           <Route path="/shifts" element={<ProtectedRoute><ShiftConfiguration /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
+          <Route path="/statuses" element={<ProtectedRoute><StatusManagement /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
         </Routes>
       </main>

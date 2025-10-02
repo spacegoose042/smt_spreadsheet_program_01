@@ -61,5 +61,12 @@ export const updateShift = (id, data) => api.put(`/api/capacity/shifts/${id}`, d
 export const deleteShift = (id) => api.delete(`/api/capacity/shifts/${id}`)
 export const createShiftBreak = (data) => api.post('/api/capacity/shifts/breaks', data)
 
+// Statuses (Admin only)
+export const getStatuses = (includeInactive = false) => 
+  api.get('/api/statuses', { params: { include_inactive: includeInactive } })
+export const createStatus = (data) => api.post('/api/statuses', data)
+export const updateStatus = (id, data) => api.put(`/api/statuses/${id}`, data)
+export const deleteStatus = (id) => api.delete(`/api/statuses/${id}`)
+
 export default api
 

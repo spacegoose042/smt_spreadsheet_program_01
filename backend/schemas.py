@@ -290,3 +290,31 @@ class ShiftBreakCreate(BaseModel):
     end_time: time
     is_paid: bool = False
 
+
+# Status Management Schemas
+class StatusCreate(BaseModel):
+    name: str
+    color: str = "#6c757d"
+    is_active: bool = True
+    display_order: int = 0
+
+
+class StatusUpdate(BaseModel):
+    name: Optional[str] = None
+    color: Optional[str] = None
+    is_active: Optional[bool] = None
+    display_order: Optional[int] = None
+
+
+class StatusResponse(BaseModel):
+    id: int
+    name: str
+    color: str
+    is_active: bool
+    display_order: int
+    is_system: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+

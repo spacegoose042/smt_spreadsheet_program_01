@@ -12,6 +12,7 @@ class UserRole(str, enum.Enum):
     MANAGER = "manager"
 
 
+# Legacy enum - keeping for migration compatibility
 class WorkOrderStatus(str, enum.Enum):
     CLEAR_TO_BUILD = "Clear to Build"
     CLEAR_TO_BUILD_NEW = "Clear to Build *"
@@ -19,6 +20,25 @@ class WorkOrderStatus(str, enum.Enum):
     SECOND_SIDE_RUNNING = "2nd Side Running"
     ON_HOLD = "On Hold"
     PROGRAM_STENCIL = "Program/Stencil"
+
+
+class Status(Base):
+    """
+    Configurable work order statuses.
+    Admins can add/edit/delete statuses as needed.
+    """
+    __tablename__ = "statuses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False, index=True)
+    color = Column(String, default="#6c757d")  # Badge color (hex)
+    is_active = Column(Boolean, default=True)
+    display_order = Column(Integer, default=0)  # For sorting in dropdowns
+    is_system = Column(Boolean, default=False)  # System statuses can't be deleted
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    work_orders = relationship("WorkOrder", back_populates="status_obj")
 
 
 class Priority(str, enum.Enum):
@@ -88,7 +108,8 @@ class WorkOrder(Base):
     quantity = Column(Integer, nullable=False)
     
     # Status and Priority
-    status = Column(SQLEnum(WorkOrderStatus), nullable=False)
+    status = Column(SQLEnum(WorkOrderStatus), nullable=True)  # Legacy - will be migrated
+    status_id = Column(Integer, ForeignKey("statuses.id"), nullable=True)  # New FK to Status table
     priority = Column(SQLEnum(Priority), default=Priority.FACTORY_DEFAULT)
     is_locked = Column(Boolean, default=False)  # "Locked if Highlighted"
     is_new_rev_assembly = Column(Boolean, default=False)  # Replaces asterisk
@@ -130,6 +151,7 @@ class WorkOrder(Base):
     
     # Relationships
     line = relationship("SMTLine", back_populates="work_orders")
+    status_obj = relationship("Status", back_populates="work_orders")
     completed_record = relationship("CompletedWorkOrder", back_populates="work_order", uselist=False)
 
 

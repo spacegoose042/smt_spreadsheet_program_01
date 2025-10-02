@@ -9,7 +9,7 @@ from typing import List, Optional
 from datetime import date, timedelta
 
 from database import engine, get_db, Base
-from models import WorkOrder, SMTLine, CompletedWorkOrder, WorkOrderStatus, Priority, User, UserRole, CapacityOverride, Shift, ShiftBreak, LineConfiguration
+from models import WorkOrder, SMTLine, CompletedWorkOrder, WorkOrderStatus, Priority, User, UserRole, CapacityOverride, Shift, ShiftBreak, LineConfiguration, Status
 import schemas
 import scheduler as sched
 import time_scheduler as time_sched
@@ -941,6 +941,118 @@ def create_shift_break(
     db.refresh(shift_break)
     
     return shift_break
+
+
+# ============================================================================
+# STATUS MANAGEMENT ENDPOINTS
+# ============================================================================
+
+@app.get("/api/statuses")
+def get_statuses(
+    include_inactive: bool = False,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """Get all statuses"""
+    query = db.query(Status)
+    
+    if not include_inactive:
+        query = query.filter(Status.is_active == True)
+    
+    statuses = query.order_by(Status.display_order, Status.name).all()
+    return statuses
+
+
+@app.post("/api/statuses", dependencies=[Depends(auth.require_admin)])
+def create_status(
+    status_data: schemas.StatusCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """Create a new status (Admin only)"""
+    # Check if status with this name already exists
+    existing = db.query(Status).filter(Status.name == status_data.name).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Status '{status_data.name}' already exists")
+    
+    status = Status(
+        name=status_data.name,
+        color=status_data.color,
+        is_active=status_data.is_active,
+        display_order=status_data.display_order,
+        is_system=False  # User-created statuses are not system statuses
+    )
+    
+    db.add(status)
+    db.commit()
+    db.refresh(status)
+    
+    return status
+
+
+@app.put("/api/statuses/{status_id}", dependencies=[Depends(auth.require_admin)])
+def update_status(
+    status_id: int,
+    status_update: schemas.StatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """Update a status (Admin only)"""
+    status = db.query(Status).filter(Status.id == status_id).first()
+    if not status:
+        raise HTTPException(status_code=404, detail="Status not found")
+    
+    # Update fields
+    if status_update.name is not None:
+        # Check for name collision
+        existing = db.query(Status).filter(
+            Status.name == status_update.name,
+            Status.id != status_id
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail=f"Status '{status_update.name}' already exists")
+        status.name = status_update.name
+    
+    if status_update.color is not None:
+        status.color = status_update.color
+    if status_update.is_active is not None:
+        status.is_active = status_update.is_active
+    if status_update.display_order is not None:
+        status.display_order = status_update.display_order
+    
+    db.commit()
+    db.refresh(status)
+    
+    return status
+
+
+@app.delete("/api/statuses/{status_id}", dependencies=[Depends(auth.require_admin)])
+def delete_status(
+    status_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """Delete a status (Admin only)"""
+    status = db.query(Status).filter(Status.id == status_id).first()
+    if not status:
+        raise HTTPException(status_code=404, detail="Status not found")
+    
+    # Prevent deleting system statuses
+    if status.is_system:
+        raise HTTPException(status_code=400, detail="Cannot delete system status")
+    
+    # Check if any work orders are using this status
+    wo_count = db.query(WorkOrder).filter(WorkOrder.status_id == status_id).count()
+    if wo_count > 0:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Cannot delete status '{status.name}' - {wo_count} work order(s) are using it"
+        )
+    
+    db.delete(status)
+    db.commit()
+    
+    return {"message": "Status deleted successfully"}
 
 
 if __name__ == "__main__":
