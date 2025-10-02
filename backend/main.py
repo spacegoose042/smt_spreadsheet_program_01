@@ -801,6 +801,18 @@ def create_shift(
     if not line:
         raise HTTPException(status_code=404, detail="Line not found")
     
+    # Check if a shift with this name already exists on this line
+    existing_shift = db.query(Shift).filter(
+        Shift.line_id == shift_data.line_id,
+        Shift.name == shift_data.name
+    ).first()
+    
+    if existing_shift:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"A shift named '{shift_data.name}' already exists on {line.name}. Please use a different name or delete the existing shift first."
+        )
+    
     # Create shift
     shift = Shift(
         line_id=shift_data.line_id,

@@ -156,12 +156,23 @@ export default function ShiftConfiguration() {
     }
 
     try {
+      const successes = []
+      const failures = []
+      
       // Create shift on each selected line
       for (const lineId of selectedLines) {
-        await createShift({
-          ...newShift,
-          line_id: lineId
-        })
+        try {
+          await createShift({
+            ...newShift,
+            line_id: lineId
+          })
+          const lineName = lines.find(l => l.id === lineId)?.name || `Line ${lineId}`
+          successes.push(lineName)
+        } catch (err) {
+          const lineName = lines.find(l => l.id === lineId)?.name || `Line ${lineId}`
+          const errorMsg = err.response?.data?.detail || 'Unknown error'
+          failures.push(`${lineName}: ${errorMsg}`)
+        }
       }
       
       queryClient.invalidateQueries(['capacity-calendar'])
@@ -176,7 +187,15 @@ export default function ShiftConfiguration() {
         active_days: '1,2,3,4,5',
         is_active: true
       })
-      alert(`Successfully created shift on ${selectedLines.length} line(s)!`)
+      
+      // Show results
+      if (successes.length > 0 && failures.length === 0) {
+        alert(`✅ Successfully created shift on ${successes.length} line(s)!`)
+      } else if (successes.length > 0 && failures.length > 0) {
+        alert(`⚠️ Partial success:\n\n✅ Created on: ${successes.join(', ')}\n\n❌ Failed:\n${failures.join('\n')}`)
+      } else {
+        alert(`❌ Failed to create shift:\n\n${failures.join('\n')}`)
+      }
     } catch (error) {
       console.error('Error creating shift:', error)
       alert('Failed to create shift. Please try again.')
