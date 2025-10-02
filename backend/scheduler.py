@@ -321,13 +321,17 @@ def calculate_job_dates(session, line_id: int, line_hours_per_day: float = 8.0) 
     
     for job in jobs:
         # If job is locked, keep its existing dates and use its end date as the baseline
-        if job.is_locked and job.calculated_start_date and job.calculated_end_date:
+        if job.is_locked and job.calculated_start_datetime and job.calculated_end_datetime:
+            # Convert datetimes to dates
+            locked_start_date = job.calculated_start_datetime.date() if isinstance(job.calculated_start_datetime, datetime) else job.calculated_start_datetime
+            locked_end_date = job.calculated_end_datetime.date() if isinstance(job.calculated_end_datetime, datetime) else job.calculated_end_datetime
+            
             results[job.id] = {
-                'start_date': job.calculated_start_date,
-                'end_date': job.calculated_end_date
+                'start_date': locked_start_date,
+                'end_date': locked_end_date
             }
             # Next job starts after this locked job
-            current_date = job.calculated_end_date + timedelta(days=1)
+            current_date = locked_end_date + timedelta(days=1)
             while is_weekend(current_date) or get_capacity_for_date(session, line_id, current_date, line_hours_per_day) == 0:
                 current_date += timedelta(days=1)
             continue
