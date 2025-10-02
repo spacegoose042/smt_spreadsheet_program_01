@@ -174,9 +174,12 @@ def delete_user(
     return {"status": "success"}
 
 
-@app.get("/api/recalculate-all")
-def recalculate_all_work_orders(db: Session = Depends(get_db)):
-    """Recalculate all work order dates (use after schedule logic changes)"""
+@app.get("/api/recalculate-all", dependencies=[Depends(auth.require_scheduler_or_admin)])
+def recalculate_all_work_orders(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """Recalculate all work order dates (Scheduler/Admin only)"""
     work_orders = db.query(WorkOrder).filter(WorkOrder.is_complete == False).all()
     
     updated_count = 0
@@ -213,9 +216,13 @@ def get_line(line_id: int, db: Session = Depends(get_db)):
     return line
 
 
-@app.post("/api/lines", response_model=schemas.SMTLineResponse, status_code=status.HTTP_201_CREATED)
-def create_line(line: schemas.SMTLineCreate, db: Session = Depends(get_db)):
-    """Create a new SMT line"""
+@app.post("/api/lines", response_model=schemas.SMTLineResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(auth.require_admin)])
+def create_line(
+    line: schemas.SMTLineCreate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """Create a new SMT line (Admin only)"""
     db_line = SMTLine(**line.model_dump())
     db.add(db_line)
     db.commit()
@@ -223,13 +230,14 @@ def create_line(line: schemas.SMTLineCreate, db: Session = Depends(get_db)):
     return db_line
 
 
-@app.put("/api/lines/{line_id}", response_model=schemas.SMTLineResponse)
+@app.put("/api/lines/{line_id}", response_model=schemas.SMTLineResponse, dependencies=[Depends(auth.require_admin)])
 def update_line(
     line_id: int,
     line_update: schemas.SMTLineUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
 ):
-    """Update an SMT line"""
+    """Update an SMT line (Admin only)"""
     db_line = db.query(SMTLine).filter(SMTLine.id == line_id).first()
     if not db_line:
         raise HTTPException(status_code=404, detail="Line not found")
@@ -305,9 +313,13 @@ def get_work_order(wo_id: int, db: Session = Depends(get_db)):
     return wo
 
 
-@app.post("/api/work-orders", response_model=schemas.WorkOrderResponse, status_code=status.HTTP_201_CREATED)
-def create_work_order(wo: schemas.WorkOrderCreate, db: Session = Depends(get_db)):
-    """Create a new work order"""
+@app.post("/api/work-orders", response_model=schemas.WorkOrderResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(auth.require_scheduler_or_admin)])
+def create_work_order(
+    wo: schemas.WorkOrderCreate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """Create a new work order (Scheduler/Admin only)"""
     # Create work order
     db_wo = WorkOrder(**wo.model_dump())
     
@@ -351,13 +363,14 @@ def create_work_order(wo: schemas.WorkOrderCreate, db: Session = Depends(get_db)
     return response
 
 
-@app.put("/api/work-orders/{wo_id}", response_model=schemas.WorkOrderResponse)
+@app.put("/api/work-orders/{wo_id}", response_model=schemas.WorkOrderResponse, dependencies=[Depends(auth.require_scheduler_or_admin)])
 def update_work_order(
     wo_id: int,
     wo_update: schemas.WorkOrderUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
 ):
-    """Update a work order"""
+    """Update a work order (Scheduler/Admin only)"""
     db_wo = db.query(WorkOrder).filter(WorkOrder.id == wo_id).first()
     if not db_wo:
         raise HTTPException(status_code=404, detail="Work order not found")
@@ -407,9 +420,13 @@ def update_work_order(
     return db_wo
 
 
-@app.delete("/api/work-orders/{wo_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_work_order(wo_id: int, db: Session = Depends(get_db)):
-    """Delete a work order"""
+@app.delete("/api/work-orders/{wo_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(auth.require_scheduler_or_admin)])
+def delete_work_order(
+    wo_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """Delete a work order (Scheduler/Admin only)"""
     db_wo = db.query(WorkOrder).filter(WorkOrder.id == wo_id).first()
     if not db_wo:
         raise HTTPException(status_code=404, detail="Work order not found")
@@ -419,13 +436,14 @@ def delete_work_order(wo_id: int, db: Session = Depends(get_db)):
     return None
 
 
-@app.post("/api/work-orders/{wo_id}/complete", response_model=schemas.CompletedWorkOrderResponse)
+@app.post("/api/work-orders/{wo_id}/complete", response_model=schemas.CompletedWorkOrderResponse, dependencies=[Depends(auth.require_operator_or_above)])
 def complete_work_order(
     wo_id: int,
     completion_data: schemas.CompletedWorkOrderCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
 ):
-    """Mark a work order as complete"""
+    """Mark a work order as complete (Operator/Scheduler/Admin)"""
     db_wo = db.query(WorkOrder).filter(WorkOrder.id == wo_id).first()
     if not db_wo:
         raise HTTPException(status_code=404, detail="Work order not found")
@@ -563,13 +581,14 @@ def get_completed_work_orders(
     return completed
 
 
-@app.put("/api/completed/{completed_id}", response_model=schemas.CompletedWorkOrderResponse)
+@app.put("/api/completed/{completed_id}", response_model=schemas.CompletedWorkOrderResponse, dependencies=[Depends(auth.require_scheduler_or_admin)])
 def update_completed_work_order(
     completed_id: int,
     update_data: schemas.CompletedWorkOrderUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
 ):
-    """Update a completed work order record"""
+    """Update a completed work order record (Scheduler/Admin only)"""
     completed = db.query(CompletedWorkOrder).filter(CompletedWorkOrder.id == completed_id).first()
     if not completed:
         raise HTTPException(status_code=404, detail="Completed work order not found")
@@ -590,12 +609,13 @@ def update_completed_work_order(
     return completed
 
 
-@app.post("/api/completed/{completed_id}/uncomplete", response_model=schemas.WorkOrderResponse)
+@app.post("/api/completed/{completed_id}/uncomplete", response_model=schemas.WorkOrderResponse, dependencies=[Depends(auth.require_scheduler_or_admin)])
 def uncomplete_work_order(
     completed_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
 ):
-    """Move a completed work order back to active status"""
+    """Move a completed work order back to active status (Scheduler/Admin only)"""
     completed = db.query(CompletedWorkOrder).filter(CompletedWorkOrder.id == completed_id).first()
     if not completed:
         raise HTTPException(status_code=404, detail="Completed work order not found")

@@ -110,6 +110,18 @@ def require_scheduler_or_admin(current_user: User = Depends(get_current_active_u
     return current_user
 
 
+def require_operator_or_above(current_user: User = Depends(get_current_active_user)) -> User:
+    """Require operator, scheduler, or admin role (not manager view-only)"""
+    from fastapi import HTTPException, status as http_status
+    
+    if current_user.role not in [UserRole.ADMIN, UserRole.SCHEDULER, UserRole.OPERATOR]:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail="Operator, scheduler, or admin access required"
+        )
+    return current_user
+
+
 def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
     """Authenticate a user by username and password"""
     user = db.query(User).filter(User.username == username).first()
