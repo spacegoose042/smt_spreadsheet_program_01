@@ -199,7 +199,7 @@ export default function ShiftConfiguration() {
   }
 
   function handleDeleteShift(shift) {
-    if (confirm(`Delete "${shift.name}"? This will remove it from ${line?.name || 'this line'}.`)) {
+    if (confirm(`Remove "${shift.name}" from ${line?.name || 'this line'}?\n\nThis will only remove it from this line. The shift will remain on other lines where it's configured.`)) {
       deleteShiftMutation.mutate(shift.id)
     }
   }
@@ -273,9 +273,9 @@ export default function ShiftConfiguration() {
                       <button 
                         className="delete-shift-btn"
                         onClick={() => handleDeleteShift(shift)}
-                        title="Delete shift"
+                        title="Remove shift from this line"
                       >
-                        🗑️
+                        ✖️
                       </button>
                     </div>
                   </div>
