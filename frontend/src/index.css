@@ -105,6 +105,11 @@ code {
   color: white;
 }
 
+.btn-warning {
+  background: var(--warning);
+  color: #333;
+}
+
 .btn-sm {
   padding: 0.2rem 0.5rem;
   font-size: 0.75rem;

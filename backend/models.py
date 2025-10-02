@@ -229,3 +229,33 @@ class LineConfiguration(Base):
     # Relationships
     line = relationship("SMTLine", back_populates="configuration")
 
+
+class CapacityOverride(Base):
+    """
+    Override capacity for specific dates/date ranges.
+    Allows flexible scheduling like overtime, short days, or different shifts.
+    """
+    __tablename__ = "capacity_overrides"
+
+    id = Column(Integer, primary_key=True, index=True)
+    line_id = Column(Integer, ForeignKey("smt_lines.id"), nullable=False)
+    
+    # Date range this override applies to
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)  # Same as start_date for single day
+    
+    # Override configuration
+    total_hours = Column(Float, nullable=False)  # Total working hours for the day
+    shift_config = Column(String)  # JSON string with shift details (start/end times, breaks)
+    
+    # Description
+    reason = Column(String)  # e.g., "Overtime to finish Subsite order", "Half day"
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by_user_id = Column(Integer, ForeignKey("users.id"))
+    
+    # Relationships
+    line = relationship("SMTLine")
+    created_by = relationship("User")
+

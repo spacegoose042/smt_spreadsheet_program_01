@@ -417,6 +417,56 @@ def get_completed_work_orders(
     return completed
 
 
+@app.put("/api/completed/{completed_id}", response_model=schemas.CompletedWorkOrderResponse)
+def update_completed_work_order(
+    completed_id: int,
+    update_data: schemas.CompletedWorkOrderUpdate,
+    db: Session = Depends(get_db)
+):
+    """Update a completed work order record"""
+    completed = db.query(CompletedWorkOrder).filter(CompletedWorkOrder.id == completed_id).first()
+    if not completed:
+        raise HTTPException(status_code=404, detail="Completed work order not found")
+    
+    # Update fields
+    for key, value in update_data.model_dump(exclude_unset=True).items():
+        setattr(completed, key, value)
+    
+    # Recalculate variance
+    if completed.actual_time_clocked_minutes and completed.estimated_time_minutes:
+        completed.time_variance_minutes = completed.actual_time_clocked_minutes - completed.estimated_time_minutes
+    
+    db.commit()
+    db.refresh(completed)
+    return completed
+
+
+@app.post("/api/completed/{completed_id}/uncomplete", response_model=schemas.WorkOrderResponse)
+def uncomplete_work_order(
+    completed_id: int,
+    db: Session = Depends(get_db)
+):
+    """Move a completed work order back to active status"""
+    completed = db.query(CompletedWorkOrder).filter(CompletedWorkOrder.id == completed_id).first()
+    if not completed:
+        raise HTTPException(status_code=404, detail="Completed work order not found")
+    
+    # Get the work order
+    work_order = db.query(WorkOrder).filter(WorkOrder.id == completed.work_order_id).first()
+    if not work_order:
+        raise HTTPException(status_code=404, detail="Work order not found")
+    
+    # Mark as incomplete
+    work_order.is_complete = False
+    
+    # Delete the completion record
+    db.delete(completed)
+    db.commit()
+    db.refresh(work_order)
+    
+    return work_order
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -32,6 +32,8 @@ export const completeWorkOrder = (id, data) => api.post(`/api/work-orders/${id}/
 // Completed
 export const getCompletedWorkOrders = (limit = 50) => 
   api.get('/api/completed', { params: { limit } })
+export const updateCompletedWorkOrder = (id, data) => api.put(`/api/completed/${id}`, data)
+export const uncompleteWorkOrder = (id) => api.post(`/api/completed/${id}/uncomplete`)
 
 export default api
 

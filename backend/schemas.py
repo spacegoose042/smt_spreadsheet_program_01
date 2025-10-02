@@ -145,6 +145,12 @@ class CompletedWorkOrderCreate(BaseModel):
     actual_time_clocked_minutes: float
 
 
+class CompletedWorkOrderUpdate(BaseModel):
+    actual_start_date: Optional[date] = None
+    actual_finish_date: Optional[date] = None
+    actual_time_clocked_minutes: Optional[float] = None
+
+
 class CompletedWorkOrderResponse(BaseModel):
     id: int
     work_order_id: int
