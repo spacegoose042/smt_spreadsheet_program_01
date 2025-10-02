@@ -93,6 +93,7 @@ export default function Login() {
               onChange={(e) => setUsername(e.target.value)}
               required
               autoFocus
+              autoComplete="username"
               placeholder="Enter your username"
             />
           </div>
@@ -108,6 +109,7 @@ export default function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              autoComplete="current-password"
               placeholder="Enter your password"
             />
           </div>
