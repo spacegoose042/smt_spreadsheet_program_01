@@ -23,6 +23,9 @@ def upgrade() -> None:
     conn = op.get_bind()
     inspector = inspect(conn)
     
+    # Add 'admin' value to userrole enum first
+    op.execute("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'admin'")
+    
     # Add assigned_line_id to users if it doesn't exist
     existing_columns = [c['name'] for c in inspector.get_columns('users')]
     
