@@ -1,6 +1,25 @@
 import { useState } from 'react'
 import { createCapacityOverride } from '../api'
 
+// Helper function defined outside component
+function formatDate(date) {
+  return date.toISOString().split('T')[0]
+}
+
+function getMonday(date) {
+  const d = new Date(date)
+  const day = d.getDay()
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+  return new Date(d.setDate(diff))
+}
+
+function getFriday(date) {
+  const monday = getMonday(date)
+  const friday = new Date(monday)
+  friday.setDate(friday.getDate() + 4)
+  return friday
+}
+
 export default function OverrideModal({ date, lineId, defaultHours, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     start_date: formatDate(date),
@@ -10,20 +29,6 @@ export default function OverrideModal({ date, lineId, defaultHours, onClose, onS
   })
   const [applyToWeek, setApplyToWeek] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  
-  function getMonday(date) {
-    const d = new Date(date)
-    const day = d.getDay()
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1)
-    return new Date(d.setDate(diff))
-  }
-  
-  function getFriday(date) {
-    const monday = getMonday(date)
-    const friday = new Date(monday)
-    friday.setDate(friday.getDate() + 4)
-    return friday
-  }
   
   // Update date range when "Apply to Whole Week" is toggled
   function handleWeekToggle(checked) {
