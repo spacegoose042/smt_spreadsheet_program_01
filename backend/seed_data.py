@@ -163,15 +163,36 @@ def main():
         print(f"Note: {e}")
         print("Continuing with seed...")
     
-    # Add admin to userrole enum if it doesn't exist
+    # Add admin and manager to userrole enum if they don't exist
     try:
         from sqlalchemy import text
-        with engine.connect() as conn:
-            conn.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'admin'"))
-            conn.commit()
-        print("✓ Added admin role to enum")
+        with engine.begin() as conn:
+            # Check if admin value exists
+            result = conn.execute(text(
+                "SELECT EXISTS (SELECT 1 FROM pg_type t JOIN pg_enum e ON t.oid = e.enumtypid WHERE t.typname = 'userrole' AND e.enumlabel = 'admin')"
+            ))
+            admin_exists = result.scalar()
+            
+            if not admin_exists:
+                conn.execute(text("ALTER TYPE userrole ADD VALUE 'admin'"))
+                print("✓ Added 'admin' to userrole enum")
+            else:
+                print("✓ 'admin' already exists in userrole enum")
+                
+            # Check if manager value exists
+            result = conn.execute(text(
+                "SELECT EXISTS (SELECT 1 FROM pg_type t JOIN pg_enum e ON t.oid = e.enumtypid WHERE t.typname = 'userrole' AND e.enumlabel = 'manager')"
+            ))
+            manager_exists = result.scalar()
+            
+            if not manager_exists:
+                conn.execute(text("ALTER TYPE userrole ADD VALUE 'manager'"))
+                print("✓ Added 'manager' to userrole enum")
+            else:
+                print("✓ 'manager' already exists in userrole enum")
     except Exception as e:
-        print(f"Note: {e}")
+        print(f"Error adding enum values: {e}")
+        raise
     
     # Seed data
     db = SessionLocal()
