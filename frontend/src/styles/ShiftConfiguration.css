@@ -1,0 +1,257 @@
+.shift-config-container {
+  padding: 1rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.shift-config-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.shift-config-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.line-summary {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 4px;
+  margin-bottom: 1.5rem;
+}
+
+.line-summary h2 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.25rem;
+}
+
+.line-summary p {
+  margin: 0;
+  color: #6c757d;
+}
+
+.shifts-list h3 {
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+}
+
+.no-shifts {
+  text-align: center;
+  padding: 3rem 1rem;
+  background: #f8f9fa;
+  border-radius: 4px;
+}
+
+.no-shifts p {
+  margin: 0.5rem 0;
+  font-size: 1rem;
+}
+
+.no-shifts .hint {
+  color: #6c757d;
+  font-size: 0.875rem;
+}
+
+.shifts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.shift-card {
+  background: white;
+  border: 2px solid #dee2e6;
+  border-radius: 8px;
+  padding: 1rem;
+  transition: box-shadow 0.2s;
+}
+
+.shift-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.shift-card.inactive {
+  opacity: 0.6;
+  background: #f8f9fa;
+}
+
+.shift-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.shift-card-header h4 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.status-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge.active {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-badge.inactive {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.shift-details {
+  margin-bottom: 1rem;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #f1f3f5;
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-row .label {
+  font-weight: 600;
+  color: #495057;
+}
+
+.detail-row .value {
+  color: #212529;
+}
+
+.shift-breaks {
+  background: #f8f9fa;
+  padding: 0.75rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+.shift-breaks strong {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #495057;
+}
+
+.break-item {
+  padding: 0.25rem 0;
+  color: #6c757d;
+}
+
+.shift-edit-form {
+  margin-top: 1rem;
+}
+
+.shift-edit-form .form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.shift-edit-form .form-group {
+  margin-bottom: 0.75rem;
+}
+
+.shift-edit-form .form-group label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #495057;
+}
+
+.checkbox-label {
+  display: flex !important;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #dee2e6;
+}
+
+.help-section {
+  background: #e7f3ff;
+  border: 1px solid #b3d9ff;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-top: 2rem;
+}
+
+.help-section h3 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: #0056b3;
+}
+
+.help-section ul {
+  margin: 0 0 1rem 1.5rem;
+  padding: 0;
+}
+
+.help-section li {
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+}
+
+.help-section strong {
+  color: #004085;
+}
+
+.help-note {
+  background: #fff;
+  border-left: 4px solid #0056b3;
+  padding: 1rem;
+  margin-top: 1rem;
+  border-radius: 4px;
+}
+
+.help-note strong {
+  color: #0056b3;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .shifts-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .shift-edit-form .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .shift-config-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+

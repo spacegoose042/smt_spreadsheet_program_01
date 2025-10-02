@@ -163,9 +163,9 @@ export default function CapacityCalendar() {
         overrideData.total_hours = defaultHours + 2
         overrideData.reason = 'Overtime (+2 hours)'
         break
-      case 'single-shift':
-        overrideData.total_hours = 8
-        overrideData.reason = 'Single shift only'
+      case 'add-4hrs':
+        overrideData.total_hours = defaultHours + 4
+        overrideData.reason = 'Extended shift (+4 hours)'
         break
       case 'half-day':
         overrideData.total_hours = defaultHours / 2
@@ -337,10 +337,10 @@ export default function CapacityCalendar() {
             {contextMenu.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
           </div>
           <button onClick={() => handleQuickAction('overtime', contextMenu.date)}>
-            ⏰ Add Overtime (+2hrs)
+            ⏰ Overtime (+2hrs)
           </button>
-          <button onClick={() => handleQuickAction('single-shift', contextMenu.date)}>
-            🔄 Single Shift Only
+          <button onClick={() => handleQuickAction('add-4hrs', contextMenu.date)}>
+            ⏱️ Extended Shift (+4hrs)
           </button>
           <button onClick={() => handleQuickAction('half-day', contextMenu.date)}>
             🕐 Half Day
