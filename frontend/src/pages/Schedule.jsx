@@ -328,6 +328,21 @@ export default function Schedule() {
             Add Work Order
           </button>
         </div>
+        
+        {/* Drag and drop hint */}
+        {isDraggable && (
+          <div style={{ 
+            marginTop: '0.75rem', 
+            padding: '0.5rem 0.75rem', 
+            background: '#e7f3ff', 
+            borderLeft: '3px solid var(--primary)',
+            borderRadius: '4px',
+            fontSize: '0.875rem',
+            color: '#004085'
+          }}>
+            💡 <strong>Drag &amp; Drop enabled:</strong> Drag work order rows to reorder them on this line. Locked jobs cannot be moved.
+          </div>
+        )}
       </div>
 
       {/* Work Orders Table */}
