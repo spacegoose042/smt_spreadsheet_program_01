@@ -35,8 +35,15 @@
   color: #6c757d;
 }
 
-.shifts-list h3 {
+.shifts-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 1rem;
+}
+
+.shifts-list-header h3 {
+  margin: 0;
   font-size: 1.1rem;
 }
 

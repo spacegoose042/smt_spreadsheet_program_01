@@ -786,6 +786,39 @@ def delete_capacity_override(
     return {"message": "Override deleted successfully"}
 
 
+@app.post("/api/capacity/shifts", dependencies=[Depends(auth.require_scheduler_or_admin)])
+def create_shift(
+    shift_data: schemas.ShiftCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Create a new shift template.
+    Requires scheduler or admin role.
+    """
+    # Verify line exists
+    line = db.query(SMTLine).filter(SMTLine.id == shift_data.line_id).first()
+    if not line:
+        raise HTTPException(status_code=404, detail="Line not found")
+    
+    # Create shift
+    shift = Shift(
+        line_id=shift_data.line_id,
+        name=shift_data.name,
+        shift_number=shift_data.shift_number,
+        start_time=shift_data.start_time,
+        end_time=shift_data.end_time,
+        active_days=shift_data.active_days,
+        is_active=shift_data.is_active
+    )
+    
+    db.add(shift)
+    db.commit()
+    db.refresh(shift)
+    
+    return shift
+
+
 @app.put("/api/capacity/shifts/{shift_id}", dependencies=[Depends(auth.require_scheduler_or_admin)])
 def update_shift(
     shift_id: int,

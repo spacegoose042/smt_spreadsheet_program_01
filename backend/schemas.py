@@ -267,6 +267,16 @@ class CapacityOverrideResponse(BaseModel):
         from_attributes = True
 
 
+class ShiftCreate(BaseModel):
+    line_id: int
+    name: str
+    shift_number: int = 1
+    start_time: time
+    end_time: time
+    active_days: str = "1,2,3,4,5"  # Mon-Fri by default
+    is_active: bool = True
+
+
 class ShiftUpdate(BaseModel):
     start_time: Optional[time] = None
     end_time: Optional[time] = None

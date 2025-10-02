@@ -1,12 +1,21 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getLines, getCapacityCalendar, updateShift } from '../api'
+import { getLines, getCapacityCalendar, createShift, updateShift } from '../api'
 import '../styles/ShiftConfiguration.css'
 
 export default function ShiftConfiguration() {
   const queryClient = useQueryClient()
   const [selectedLineId, setSelectedLineId] = useState(null)
   const [editingShift, setEditingShift] = useState(null)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [newShift, setNewShift] = useState({
+    name: 'Day Shift',
+    shift_number: 1,
+    start_time: '07:30',
+    end_time: '16:30',
+    active_days: '1,2,3,4,5',
+    is_active: true
+  })
 
   // Fetch lines
   const { data: linesData } = useQuery({
@@ -26,6 +35,23 @@ export default function ShiftConfiguration() {
     queryKey: ['capacity-calendar', selectedLineId],
     queryFn: () => getCapacityCalendar(selectedLineId).then(res => res.data),
     enabled: !!selectedLineId
+  })
+
+  // Create shift mutation
+  const createShiftMutation = useMutation({
+    mutationFn: createShift,
+    onSuccess: () => {
+      queryClient.invalidateQueries(['capacity-calendar'])
+      setShowCreateModal(false)
+      setNewShift({
+        name: 'Day Shift',
+        shift_number: 1,
+        start_time: '07:30',
+        end_time: '16:30',
+        active_days: '1,2,3,4,5',
+        is_active: true
+      })
+    }
   })
 
   // Update shift mutation
@@ -77,6 +103,13 @@ export default function ShiftConfiguration() {
     })
   }
 
+  function handleCreateShift() {
+    createShiftMutation.mutate({
+      ...newShift,
+      line_id: selectedLineId
+    })
+  }
+
   function handleSaveShift() {
     if (!editingShift) return
 
@@ -121,12 +154,25 @@ export default function ShiftConfiguration() {
       )}
 
       <div className="shifts-list">
-        <h3>Default Shift Templates</h3>
+        <div className="shifts-list-header">
+          <h3>Default Shift Templates</h3>
+          <button 
+            className="btn btn-primary"
+            onClick={() => setShowCreateModal(true)}
+          >
+            + Create Shift
+          </button>
+        </div>
         
         {shifts.length === 0 ? (
           <div className="no-shifts">
             <p>No shifts configured for this line.</p>
-            <p className="hint">Contact an administrator to set up default shifts.</p>
+            <button 
+              className="btn btn-primary"
+              onClick={() => setShowCreateModal(true)}
+            >
+              + Create First Shift
+            </button>
           </div>
         ) : (
           <div className="shifts-grid">
@@ -250,10 +296,102 @@ export default function ShiftConfiguration() {
         </ul>
         
         <div className="help-note">
-          <strong>Note:</strong> Currently, you can only edit shift times and active status. 
-          To change which days a shift runs or to add/remove shifts, contact your system administrator.
+          <strong>Note:</strong> Use the "Create Shift" button to add shifts for each line. 
+          You can configure multiple shifts per line (e.g., Day Shift, Evening Shift).
         </div>
       </div>
+
+      {/* Create Shift Modal */}
+      {showCreateModal && (
+        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Create New Shift</h2>
+              <button className="close-btn" onClick={() => setShowCreateModal(false)}>×</button>
+            </div>
+
+            <form onSubmit={(e) => { e.preventDefault(); handleCreateShift(); }}>
+              <div className="form-group">
+                <label>Shift Name</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={newShift.name}
+                  onChange={(e) => setNewShift({ ...newShift, name: e.target.value })}
+                  placeholder="e.g., Day Shift, Evening Shift"
+                  required
+                />
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Start Time</label>
+                  <input
+                    type="time"
+                    className="form-input"
+                    value={newShift.start_time}
+                    onChange={(e) => setNewShift({ ...newShift, start_time: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>End Time</label>
+                  <input
+                    type="time"
+                    className="form-input"
+                    value={newShift.end_time}
+                    onChange={(e) => setNewShift({ ...newShift, end_time: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Active Days</label>
+                <select
+                  className="form-select"
+                  value={newShift.active_days}
+                  onChange={(e) => setNewShift({ ...newShift, active_days: e.target.value })}
+                >
+                  <option value="1,2,3,4,5">Monday - Friday</option>
+                  <option value="1,2,3,4,5,6">Monday - Saturday</option>
+                  <option value="1,2,3,4,5,6,7">All Week</option>
+                  <option value="6,7">Weekends Only</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={newShift.is_active}
+                    onChange={(e) => setNewShift({ ...newShift, is_active: e.target.checked })}
+                  />
+                  Active
+                </label>
+              </div>
+
+              <div className="modal-footer">
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  onClick={() => setShowCreateModal(false)}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="btn btn-primary"
+                  disabled={createShiftMutation.isPending}
+                >
+                  {createShiftMutation.isPending ? 'Creating...' : 'Create Shift'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

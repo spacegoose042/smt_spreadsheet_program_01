@@ -56,6 +56,7 @@ export const getCapacityCalendar = (lineId, startDate = null, weeks = 8) =>
 export const createCapacityOverride = (data) => api.post('/api/capacity/overrides', data)
 export const updateCapacityOverride = (id, data) => api.put(`/api/capacity/overrides/${id}`, data)
 export const deleteCapacityOverride = (id) => api.delete(`/api/capacity/overrides/${id}`)
+export const createShift = (data) => api.post('/api/capacity/shifts', data)
 export const updateShift = (id, data) => api.put(`/api/capacity/shifts/${id}`, data)
 
 export default api
