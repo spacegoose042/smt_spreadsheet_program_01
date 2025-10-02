@@ -273,7 +273,7 @@ export default function CapacityCalendar() {
   }
 
   const calendarDates = generateCalendarDates()
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
   return (
     <div className="capacity-calendar-container">
