@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
-import { Home, Calendar, Settings, CheckCircle, List, LayoutGrid, LogOut, User as UserIcon, Users } from 'lucide-react'
+import { Home, Calendar, Settings, CheckCircle, List, LayoutGrid, LogOut, User as UserIcon, Users, Clock } from 'lucide-react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
@@ -9,6 +9,7 @@ import LineView from './pages/LineView'
 import Completed from './pages/Completed'
 import SettingsPage from './pages/SettingsPage'
 import UserManagement from './pages/UserManagement'
+import CapacityCalendar from './pages/CapacityCalendar'
 import './App.css'
 
 function ProtectedRoute({ children, requireAuth = true }) {
@@ -60,6 +61,10 @@ function Navigation() {
             <CheckCircle size={16} />
             Completed
           </Link>
+          <Link to="/capacity" className={isActive('/capacity') ? 'active' : ''}>
+            <Clock size={16} />
+            Capacity
+          </Link>
           {isAdmin && (
             <Link to="/users" className={isActive('/users') ? 'active' : ''}>
               <Users size={16} />
@@ -105,6 +110,7 @@ function AppContent() {
           <Route path="/lines" element={<ProtectedRoute><LineView /></ProtectedRoute>} />
           <Route path="/lines/:lineId" element={<ProtectedRoute><LineView /></ProtectedRoute>} />
           <Route path="/completed" element={<ProtectedRoute><Completed /></ProtectedRoute>} />
+          <Route path="/capacity" element={<ProtectedRoute><CapacityCalendar /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
         </Routes>

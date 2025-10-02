@@ -50,5 +50,13 @@ export const createUser = (data) => api.post('/api/users', data)
 export const updateUser = (id, data) => api.put(`/api/users/${id}`, data)
 export const deleteUser = (id) => api.delete(`/api/users/${id}`)
 
+// Capacity Calendar
+export const getCapacityCalendar = (lineId, startDate = null, weeks = 8) =>
+  api.get(`/api/capacity/calendar/${lineId}`, { params: { start_date: startDate, weeks } })
+export const createCapacityOverride = (data) => api.post('/api/capacity/overrides', data)
+export const updateCapacityOverride = (id, data) => api.put(`/api/capacity/overrides/${id}`, data)
+export const deleteCapacityOverride = (id) => api.delete(`/api/capacity/overrides/${id}`)
+export const updateShift = (id, data) => api.put(`/api/capacity/shifts/${id}`, data)
+
 export default api
 

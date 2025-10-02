@@ -233,3 +233,42 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     username: Optional[str] = None
 
+
+# Capacity Management Schemas
+class CapacityOverrideCreate(BaseModel):
+    line_id: int
+    start_date: date
+    end_date: date
+    total_hours: float
+    shift_config: Optional[str] = None  # JSON string with shift details
+    reason: Optional[str] = None
+
+
+class CapacityOverrideUpdate(BaseModel):
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    total_hours: Optional[float] = None
+    shift_config: Optional[str] = None
+    reason: Optional[str] = None
+
+
+class CapacityOverrideResponse(BaseModel):
+    id: int
+    line_id: int
+    start_date: date
+    end_date: date
+    total_hours: float
+    shift_config: Optional[str] = None
+    reason: Optional[str] = None
+    created_at: datetime
+    created_by_user_id: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ShiftUpdate(BaseModel):
+    start_time: Optional[time] = None
+    end_time: Optional[time] = None
+    is_active: Optional[bool] = None
+

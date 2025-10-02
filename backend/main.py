@@ -9,7 +9,7 @@ from typing import List, Optional
 from datetime import date, timedelta
 
 from database import engine, get_db, Base
-from models import WorkOrder, SMTLine, CompletedWorkOrder, WorkOrderStatus, Priority, User, UserRole
+from models import WorkOrder, SMTLine, CompletedWorkOrder, WorkOrderStatus, Priority, User, UserRole, CapacityOverride, Shift, LineConfiguration
 import schemas
 import scheduler as sched
 import time_scheduler as time_sched
@@ -602,6 +602,216 @@ def uncomplete_work_order(
     db.refresh(work_order)
     
     return work_order
+
+
+# ============================================================================
+# CAPACITY CALENDAR ENDPOINTS
+# ============================================================================
+
+@app.get("/api/capacity/calendar/{line_id}")
+def get_capacity_calendar(
+    line_id: int,
+    start_date: Optional[date] = None,
+    weeks: int = 8,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Get capacity calendar for a line showing default shifts and overrides.
+    Returns 8 weeks by default.
+    """
+    # Verify line exists
+    line = db.query(SMTLine).filter(SMTLine.id == line_id).first()
+    if not line:
+        raise HTTPException(status_code=404, detail="Line not found")
+    
+    # Default to current week's Monday
+    if not start_date:
+        today = date.today()
+        start_date = today - timedelta(days=today.weekday())
+    
+    end_date = start_date + timedelta(weeks=weeks)
+    
+    # Get default shifts for this line
+    shifts = db.query(Shift).filter(
+        Shift.line_id == line_id,
+        Shift.is_active == True
+    ).all()
+    
+    # Get line configuration
+    config = db.query(LineConfiguration).filter(
+        LineConfiguration.line_id == line_id
+    ).first()
+    
+    # Get all overrides in the date range
+    overrides = db.query(CapacityOverride).filter(
+        CapacityOverride.line_id == line_id,
+        CapacityOverride.start_date <= end_date,
+        CapacityOverride.end_date >= start_date
+    ).all()
+    
+    return {
+        "line": {
+            "id": line.id,
+            "name": line.name,
+            "hours_per_day": line.hours_per_day,
+            "hours_per_week": line.hours_per_week
+        },
+        "start_date": start_date,
+        "end_date": end_date,
+        "default_shifts": [
+            {
+                "id": s.id,
+                "day_of_week": s.day_of_week,
+                "start_time": s.start_time.isoformat() if s.start_time else None,
+                "end_time": s.end_time.isoformat() if s.end_time else None,
+                "is_active": s.is_active,
+                "breaks": [
+                    {
+                        "id": b.id,
+                        "name": b.name,
+                        "start_time": b.start_time.isoformat() if b.start_time else None,
+                        "end_time": b.end_time.isoformat() if b.end_time else None,
+                        "is_paid": b.is_paid
+                    }
+                    for b in s.breaks
+                ]
+            }
+            for s in shifts
+        ],
+        "configuration": {
+            "buffer_time_minutes": config.buffer_time_minutes if config else 15,
+            "time_rounding_minutes": config.time_rounding_minutes if config else 15,
+            "timezone": config.timezone if config else "America/Chicago"
+        },
+        "overrides": [
+            {
+                "id": o.id,
+                "start_date": o.start_date,
+                "end_date": o.end_date,
+                "total_hours": o.total_hours,
+                "shift_config": o.shift_config,
+                "reason": o.reason,
+                "created_at": o.created_at
+            }
+            for o in overrides
+        ]
+    }
+
+
+@app.post("/api/capacity/overrides", dependencies=[Depends(auth.require_scheduler)])
+def create_capacity_override(
+    override: schemas.CapacityOverrideCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Create a capacity override for specific date(s).
+    Requires scheduler or admin role.
+    """
+    # Verify line exists
+    line = db.query(SMTLine).filter(SMTLine.id == override.line_id).first()
+    if not line:
+        raise HTTPException(status_code=404, detail="Line not found")
+    
+    # Create override
+    db_override = CapacityOverride(
+        line_id=override.line_id,
+        start_date=override.start_date,
+        end_date=override.end_date,
+        total_hours=override.total_hours,
+        shift_config=override.shift_config,
+        reason=override.reason,
+        created_by_user_id=current_user.id
+    )
+    
+    db.add(db_override)
+    db.commit()
+    db.refresh(db_override)
+    
+    return db_override
+
+
+@app.put("/api/capacity/overrides/{override_id}", dependencies=[Depends(auth.require_scheduler)])
+def update_capacity_override(
+    override_id: int,
+    override: schemas.CapacityOverrideUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Update a capacity override.
+    Requires scheduler or admin role.
+    """
+    db_override = db.query(CapacityOverride).filter(CapacityOverride.id == override_id).first()
+    if not db_override:
+        raise HTTPException(status_code=404, detail="Override not found")
+    
+    # Update fields
+    if override.start_date is not None:
+        db_override.start_date = override.start_date
+    if override.end_date is not None:
+        db_override.end_date = override.end_date
+    if override.total_hours is not None:
+        db_override.total_hours = override.total_hours
+    if override.shift_config is not None:
+        db_override.shift_config = override.shift_config
+    if override.reason is not None:
+        db_override.reason = override.reason
+    
+    db.commit()
+    db.refresh(db_override)
+    
+    return db_override
+
+
+@app.delete("/api/capacity/overrides/{override_id}", dependencies=[Depends(auth.require_scheduler)])
+def delete_capacity_override(
+    override_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Delete a capacity override.
+    Requires scheduler or admin role.
+    """
+    db_override = db.query(CapacityOverride).filter(CapacityOverride.id == override_id).first()
+    if not db_override:
+        raise HTTPException(status_code=404, detail="Override not found")
+    
+    db.delete(db_override)
+    db.commit()
+    
+    return {"message": "Override deleted successfully"}
+
+
+@app.put("/api/capacity/shifts/{shift_id}", dependencies=[Depends(auth.require_scheduler)])
+def update_shift(
+    shift_id: int,
+    shift_update: schemas.ShiftUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Update a default shift template.
+    Requires scheduler or admin role.
+    """
+    shift = db.query(Shift).filter(Shift.id == shift_id).first()
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    
+    # Update fields
+    if shift_update.start_time is not None:
+        shift.start_time = shift_update.start_time
+    if shift_update.end_time is not None:
+        shift.end_time = shift_update.end_time
+    if shift_update.is_active is not None:
+        shift.is_active = shift_update.is_active
+    
+    db.commit()
+    db.refresh(shift)
+    
+    return shift
 
 
 if __name__ == "__main__":
