@@ -1,9 +1,71 @@
 """
 Core scheduling logic for calculating minimum start dates and managing work orders
 """
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, time as time_type
 from typing import Optional
-from models import WorkOrder, SMTLine, THKitStatus
+from models import WorkOrder, SMTLine, THKitStatus, CapacityOverride, Shift
+
+
+def get_capacity_for_date(session, line_id: int, check_date: date, default_hours_per_day: float = 8.0) -> float:
+    """
+    Get the effective capacity (hours) for a specific date on a line.
+    Checks for capacity overrides first, then falls back to default shifts or line settings.
+    
+    Returns:
+        Hours of capacity available on this date (0 if closed/maintenance)
+    """
+    # Check for capacity override first
+    override = session.query(CapacityOverride).filter(
+        CapacityOverride.line_id == line_id,
+        CapacityOverride.start_date <= check_date,
+        CapacityOverride.end_date >= check_date
+    ).first()
+    
+    if override:
+        return override.total_hours
+    
+    # No override - check default shifts
+    shifts = session.query(Shift).filter(Shift.line_id == line_id).all()
+    
+    if not shifts:
+        # Fall back to line default
+        return default_hours_per_day
+    
+    # Calculate hours from shifts active on this day
+    day_of_week = check_date.weekday()
+    day_number = 7 if day_of_week == 6 else day_of_week + 1  # Convert to 1=Mon, 7=Sun
+    
+    total_hours = 0
+    for shift in shifts:
+        if not shift.is_active or not shift.active_days:
+            continue
+        
+        active_days = [int(d) for d in shift.active_days.split(',')]
+        if day_number not in active_days:
+            continue
+        
+        # Calculate shift hours
+        if shift.start_time and shift.end_time:
+            start_dt = datetime.combine(check_date, shift.start_time)
+            end_dt = datetime.combine(check_date, shift.end_time)
+            
+            hours = (end_dt - start_dt).total_seconds() / 3600
+            
+            # Handle overnight shifts
+            if hours < 0:
+                hours += 24
+            
+            # Subtract unpaid breaks
+            for break_item in shift.breaks:
+                if not break_item.is_paid:
+                    break_start = datetime.combine(check_date, break_item.start_time)
+                    break_end = datetime.combine(check_date, break_item.end_time)
+                    break_hours = (break_end - break_start).total_seconds() / 3600
+                    hours -= break_hours
+            
+            total_hours += hours
+    
+    return total_hours if total_hours > 0 else default_hours_per_day
 
 
 def is_weekend(check_date: date) -> bool:
@@ -229,6 +291,7 @@ def calculate_job_dates(session, line_id: int, line_hours_per_day: float = 8.0) 
     - Each subsequent job starts when the previous one ends
     - End date accounts for build time, setup time, line capacity, and weekends
     - Line 1 (1-EURO 264) takes twice as long (2x multiplier)
+    - Respects capacity overrides and varying shift configurations
     
     Returns:
         dict mapping work_order_id to {'start_date': date, 'end_date': date}
@@ -252,25 +315,41 @@ def calculate_job_dates(session, line_id: int, line_hours_per_day: float = 8.0) 
     results = {}
     current_date = date_type.today()
     
-    # Ensure we start on a business day
-    while is_weekend(current_date):
+    # Ensure we start on a business day with capacity
+    while is_weekend(current_date) or get_capacity_for_date(session, line_id, current_date, line_hours_per_day) == 0:
         current_date += timedelta(days=1)
     
     for job in jobs:
-        # Start date is either the current_date or today
+        # Start date
         start_date = current_date
         
-        # Ensure start date is not a weekend
-        while is_weekend(start_date):
+        # Ensure start date is not a weekend or zero-capacity day
+        while is_weekend(start_date) or get_capacity_for_date(session, line_id, start_date, line_hours_per_day) == 0:
             start_date += timedelta(days=1)
         
         # Calculate total time needed (with Line 1 multiplier if applicable)
-        total_minutes = (job.time_minutes + (job.setup_time_hours * 60)) * time_multiplier
-        minutes_per_day = line_hours_per_day * 60
-        days_needed = total_minutes / minutes_per_day
+        total_minutes_needed = (job.time_minutes + (job.setup_time_hours * 60)) * time_multiplier
         
-        # Calculate end date by adding business days (rounds up fractional days)
-        end_date = add_business_days(start_date, days_needed)
+        # Walk through days, accumulating capacity until job is complete
+        minutes_remaining = total_minutes_needed
+        end_date = start_date
+        
+        while minutes_remaining > 0:
+            # Get capacity for this day
+            day_capacity_hours = get_capacity_for_date(session, line_id, end_date, line_hours_per_day)
+            
+            # Skip weekends and zero-capacity days
+            if is_weekend(end_date) or day_capacity_hours == 0:
+                end_date += timedelta(days=1)
+                continue
+            
+            # Use this day's capacity
+            day_capacity_minutes = day_capacity_hours * 60
+            minutes_remaining -= day_capacity_minutes
+            
+            if minutes_remaining > 0:
+                # Need more days
+                end_date += timedelta(days=1)
         
         results[job.id] = {
             'start_date': start_date,
@@ -278,8 +357,9 @@ def calculate_job_dates(session, line_id: int, line_hours_per_day: float = 8.0) 
         }
         
         # Next job starts the next business day after this one ends
-        # Add 1 business day using the add_business_days function
-        current_date = add_business_days(end_date, 1)
+        current_date = end_date + timedelta(days=1)
+        while is_weekend(current_date) or get_capacity_for_date(session, line_id, current_date, line_hours_per_day) == 0:
+            current_date += timedelta(days=1)
     
     return results
 
