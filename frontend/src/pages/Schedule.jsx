@@ -221,7 +221,7 @@ export default function Schedule() {
       {/* Line Completion Summary */}
       {dashboard?.data && (
         <div className="card" style={{ 
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
+          background: 'linear-gradient(135deg, #1a7a3e 0%, #d4af37 100%)', 
           color: 'white',
           marginBottom: '1rem',
           padding: '1rem'

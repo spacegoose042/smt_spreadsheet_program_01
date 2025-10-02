@@ -43,22 +43,24 @@ export default function Login() {
         width: '90%'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div style={{
-            width: '60px',
-            height: '60px',
-            background: 'linear-gradient(135deg, #1a7a3e 0%, #0f5128 100%)',
-            borderRadius: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 1rem'
-          }}>
-            <LogIn size={32} color="white" />
+          <div style={{ margin: '0 auto 1.5rem', maxWidth: '280px' }}>
+            <img 
+              src="/sandy-logo.png" 
+              alt="S and Y Industries" 
+              style={{ width: '100%', height: 'auto' }}
+              onError={(e) => {
+                // Fallback if logo not found
+                e.target.style.display = 'none'
+                e.target.nextSibling.style.display = 'block'
+              }}
+            />
+            <div style={{ display: 'none' }}>
+              <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--sandy-green)' }}>
+                S and Y Industries
+              </h1>
+            </div>
           </div>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--sandy-green)' }}>
-            S and Y Industries
-          </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: 600 }}>
             SMT Production Scheduler
           </p>
         </div>
