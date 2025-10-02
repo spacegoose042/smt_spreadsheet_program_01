@@ -2,6 +2,7 @@
 Script to seed the database with initial data (lines, sample work orders)
 """
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from database import SessionLocal, engine
 from models import Base, SMTLine, User, UserRole, Shift, ShiftBreak, LineConfiguration
 from passlib.context import CryptContext
@@ -113,6 +114,15 @@ def seed_lines(db: Session):
 
 def seed_users(db: Session):
     """Create default users"""
+    # First, delete all existing users to avoid enum mismatch issues
+    try:
+        db.execute(text("DELETE FROM users"))
+        db.commit()
+        print("✓ Cleared existing users")
+    except Exception as e:
+        print(f"Note: {e}")
+        db.rollback()
+    
     users = [
         User(
             username="admin",
@@ -145,9 +155,7 @@ def seed_users(db: Session):
     ]
     
     for user in users:
-        existing = db.query(User).filter(User.username == user.username).first()
-        if not existing:
-            db.add(user)
+        db.add(user)
     
     db.commit()
     print("✓ Seeded users (default password: password123)")
@@ -165,7 +173,6 @@ def main():
     
     # Add admin and manager to userrole enum if they don't exist
     try:
-        from sqlalchemy import text
         with engine.begin() as conn:
             # Check if admin value exists
             result = conn.execute(text(
