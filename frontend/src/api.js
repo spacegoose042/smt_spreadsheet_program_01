@@ -9,6 +9,15 @@ const api = axios.create({
   },
 })
 
+// Add auth token to requests
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
 // Dashboard & Analytics
 export const getDashboard = () => api.get('/api/dashboard')
 export const getTrolleyStatus = () => api.get('/api/trolley-status')
@@ -34,6 +43,12 @@ export const getCompletedWorkOrders = (limit = 50) =>
   api.get('/api/completed', { params: { limit } })
 export const updateCompletedWorkOrder = (id, data) => api.put(`/api/completed/${id}`, data)
 export const uncompleteWorkOrder = (id) => api.post(`/api/completed/${id}/uncomplete`)
+
+// Users (Admin only)
+export const getUsers = () => api.get('/api/users')
+export const createUser = (data) => api.post('/api/users', data)
+export const updateUser = (id, data) => api.put(`/api/users/${id}`, data)
+export const deleteUser = (id) => api.delete(`/api/users/${id}`)
 
 export default api
 

@@ -16,11 +16,22 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+    assigned_line_id: Optional[int] = None
+
+
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    email: Optional[EmailStr] = None
+    role: Optional[UserRole] = None
+    is_active: Optional[bool] = None
+    assigned_line_id: Optional[int] = None
+    password: Optional[str] = None
 
 
 class UserResponse(UserBase):
     id: int
     is_active: bool
+    assigned_line_id: Optional[int] = None
     created_at: datetime
 
     class Config:

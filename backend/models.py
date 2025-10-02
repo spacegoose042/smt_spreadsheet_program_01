@@ -6,6 +6,7 @@ from database import Base
 
 
 class UserRole(str, enum.Enum):
+    ADMIN = "admin"
     SCHEDULER = "scheduler"
     OPERATOR = "operator"
     MANAGER = "manager"
@@ -49,7 +50,11 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     role = Column(SQLEnum(UserRole), nullable=False)
     is_active = Column(Boolean, default=True)
+    assigned_line_id = Column(Integer, ForeignKey("smt_lines.id"))  # For operators
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    assigned_line = relationship("SMTLine")
 
 
 class SMTLine(Base):

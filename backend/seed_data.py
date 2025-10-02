@@ -115,6 +115,13 @@ def seed_users(db: Session):
     """Create default users"""
     users = [
         User(
+            username="admin",
+            email="admin@example.com",
+            hashed_password=pwd_context.hash("admin123"),
+            role=UserRole.ADMIN,
+            is_active=True
+        ),
+        User(
             username="scheduler",
             email="scheduler@example.com",
             hashed_password=pwd_context.hash("password123"),
@@ -164,9 +171,10 @@ def main():
         seed_shifts_and_config(db)
         print("\n✅ Database seeded successfully!")
         print("\nDefault users:")
-        print("  scheduler / password123")
-        print("  operator / password123")
-        print("  manager / password123")
+        print("  admin / admin123 (Admin - full system access)")
+        print("  scheduler / password123 (Scheduler - full scheduling)")
+        print("  operator / password123 (Operator - view & complete)")
+        print("  manager / password123 (Manager - view only)")
         print("\nDefault shift: 7:30 AM - 4:30 PM (Mon-Fri)")
         print("Lunch break: 11:30 AM - 12:30 PM")
     finally:
