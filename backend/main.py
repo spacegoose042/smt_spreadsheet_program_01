@@ -848,6 +848,26 @@ def update_shift(
     return shift
 
 
+@app.delete("/api/capacity/shifts/{shift_id}", dependencies=[Depends(auth.require_scheduler_or_admin)])
+def delete_shift(
+    shift_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Delete a shift template.
+    Requires scheduler or admin role.
+    """
+    shift = db.query(Shift).filter(Shift.id == shift_id).first()
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    
+    db.delete(shift)
+    db.commit()
+    
+    return {"message": "Shift deleted successfully"}
+
+
 @app.post("/api/capacity/shifts/breaks", dependencies=[Depends(auth.require_scheduler_or_admin)])
 def create_shift_break(
     break_data: schemas.ShiftBreakCreate,

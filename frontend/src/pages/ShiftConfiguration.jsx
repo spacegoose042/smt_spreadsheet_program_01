@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getLines, getCapacityCalendar, createShift, updateShift, createShiftBreak } from '../api'
+import { getLines, getCapacityCalendar, createShift, updateShift, deleteShift, createShiftBreak } from '../api'
 import '../styles/ShiftConfiguration.css'
 
 export default function ShiftConfiguration() {
@@ -60,6 +60,14 @@ export default function ShiftConfiguration() {
     onSuccess: () => {
       queryClient.invalidateQueries(['capacity-calendar'])
       setEditingShift(null)
+    }
+  })
+
+  // Delete shift mutation
+  const deleteShiftMutation = useMutation({
+    mutationFn: deleteShift,
+    onSuccess: () => {
+      queryClient.invalidateQueries(['capacity-calendar'])
     }
   })
 
@@ -190,6 +198,12 @@ export default function ShiftConfiguration() {
     })
   }
 
+  function handleDeleteShift(shift) {
+    if (confirm(`Delete "${shift.name}"? This will remove it from ${line?.name || 'this line'}.`)) {
+      deleteShiftMutation.mutate(shift.id)
+    }
+  }
+
   if (isLoading) {
     return <div className="loading">Loading shift configuration...</div>
   }
@@ -252,9 +266,18 @@ export default function ShiftConfiguration() {
                 <div key={shift.id} className={`shift-card ${!shift.is_active ? 'inactive' : ''}`}>
                   <div className="shift-card-header">
                     <h4>{shift.name}</h4>
-                    <span className={`status-badge ${shift.is_active ? 'active' : 'inactive'}`}>
-                      {shift.is_active ? 'Active' : 'Inactive'}
-                    </span>
+                    <div className="shift-header-actions">
+                      <span className={`status-badge ${shift.is_active ? 'active' : 'inactive'}`}>
+                        {shift.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                      <button 
+                        className="delete-shift-btn"
+                        onClick={() => handleDeleteShift(shift)}
+                        title="Delete shift"
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </div>
 
                   {isEditing ? (

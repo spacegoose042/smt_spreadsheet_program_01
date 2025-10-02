@@ -102,6 +102,26 @@
   font-size: 1.1rem;
 }
 
+.shift-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.delete-shift-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.25rem;
+  padding: 0.25rem;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.delete-shift-btn:hover {
+  opacity: 1;
+}
+
 .status-badge {
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
