@@ -78,7 +78,7 @@ def run_migration():
             
             print("✓ Added status_id to work_orders and migrated data")
         
-        # Do the same for completed_work_orders
+        # Add status_id to completed_work_orders (but don't migrate - no existing status column)
         result = conn.execute(text("""
             SELECT EXISTS (
                 SELECT FROM information_schema.columns 
@@ -93,14 +93,6 @@ def run_migration():
             print("Adding status_id column to completed_work_orders...")
             conn.execute(text("ALTER TABLE completed_work_orders ADD COLUMN status_id INTEGER"))
             conn.execute(text("ALTER TABLE completed_work_orders ADD CONSTRAINT fk_completed_work_orders_status FOREIGN KEY (status_id) REFERENCES statuses(id)"))
-            
-            conn.execute(text("""
-                UPDATE completed_work_orders cwo
-                SET status_id = s.id
-                FROM statuses s
-                WHERE cwo.status::text = s.name
-            """))
-            
             print("✓ Added status_id to completed_work_orders")
     
     print("✅ Status migration complete!")
