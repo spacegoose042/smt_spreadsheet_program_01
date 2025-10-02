@@ -48,7 +48,7 @@ class User(Base):
     username = Column(String, unique=True, index=True, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
-    role = Column(SQLEnum(UserRole), nullable=False)
+    role = Column(SQLEnum(UserRole, values_callable=lambda x: [e.value for e in x]), nullable=False)
     is_active = Column(Boolean, default=True)
     assigned_line_id = Column(Integer, ForeignKey("smt_lines.id"))  # For operators
     created_at = Column(DateTime, default=datetime.utcnow)
