@@ -252,6 +252,45 @@
   color: #0056b3;
 }
 
+/* Lines Checklist */
+.lines-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.line-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: white;
+  border: 2px solid #dee2e6;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.line-checkbox:hover {
+  border-color: #007bff;
+  background: #f0f8ff;
+}
+
+.line-checkbox input[type="checkbox"] {
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+}
+
+.line-checkbox span {
+  font-weight: 500;
+}
+
 /* Modal Styles */
 .modal-overlay {
   position: fixed;

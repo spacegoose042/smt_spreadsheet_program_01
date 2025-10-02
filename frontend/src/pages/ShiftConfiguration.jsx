@@ -9,7 +9,10 @@ export default function ShiftConfiguration() {
   const [editingShift, setEditingShift] = useState(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showBreakModal, setShowBreakModal] = useState(false)
+  const [showCopyModal, setShowCopyModal] = useState(false)
   const [selectedShiftForBreak, setSelectedShiftForBreak] = useState(null)
+  const [selectedShiftForCopy, setSelectedShiftForCopy] = useState(null)
+  const [targetLines, setTargetLines] = useState([])
   const [newShift, setNewShift] = useState({
     name: 'Day Shift',
     shift_number: 1,
@@ -162,6 +165,63 @@ export default function ShiftConfiguration() {
       ...newBreak,
       shift_id: selectedShiftForBreak.id
     })
+  }
+
+  function handleCopyShift(shift) {
+    setSelectedShiftForCopy(shift)
+    setTargetLines([])
+    setShowCopyModal(true)
+  }
+
+  async function handleCopyToLines() {
+    if (!selectedShiftForCopy || targetLines.length === 0) return
+
+    try {
+      // Create the shift on each target line
+      for (const lineId of targetLines) {
+        const newShiftData = {
+          line_id: lineId,
+          name: selectedShiftForCopy.name,
+          shift_number: selectedShiftForCopy.shift_number,
+          start_time: selectedShiftForCopy.start_time,
+          end_time: selectedShiftForCopy.end_time,
+          active_days: selectedShiftForCopy.active_days,
+          is_active: selectedShiftForCopy.is_active
+        }
+        
+        const createdShift = await createShift(newShiftData).then(res => res.data)
+        
+        // Copy breaks if any
+        if (selectedShiftForCopy.breaks && selectedShiftForCopy.breaks.length > 0) {
+          for (const breakItem of selectedShiftForCopy.breaks) {
+            await createShiftBreak({
+              shift_id: createdShift.id,
+              name: breakItem.name,
+              start_time: breakItem.start_time,
+              end_time: breakItem.end_time,
+              is_paid: breakItem.is_paid
+            })
+          }
+        }
+      }
+
+      queryClient.invalidateQueries(['capacity-calendar'])
+      setShowCopyModal(false)
+      setSelectedShiftForCopy(null)
+      setTargetLines([])
+      alert(`Successfully copied shift to ${targetLines.length} line(s)!`)
+    } catch (error) {
+      console.error('Error copying shift:', error)
+      alert('Failed to copy shift. Please try again.')
+    }
+  }
+
+  function toggleLineSelection(lineId) {
+    setTargetLines(prev => 
+      prev.includes(lineId) 
+        ? prev.filter(id => id !== lineId)
+        : [...prev, lineId]
+    )
   }
 
   if (isLoading) {
@@ -317,13 +377,19 @@ export default function ShiftConfiguration() {
                           className="btn btn-secondary btn-sm"
                           onClick={() => handleEditShift(shift)}
                         >
-                          ✏️ Edit Times
+                          ✏️ Edit
                         </button>
                         <button 
                           className="btn btn-secondary btn-sm"
                           onClick={() => handleAddBreak(shift)}
                         >
-                          + Add Break
+                          + Break
+                        </button>
+                        <button 
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => handleCopyShift(shift)}
+                        >
+                          📋 Copy
                         </button>
                       </div>
                     </>
@@ -438,6 +504,57 @@ export default function ShiftConfiguration() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Copy Shift Modal */}
+      {showCopyModal && selectedShiftForCopy && (
+        <div className="modal-overlay" onClick={() => setShowCopyModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Copy "{selectedShiftForCopy.name}" to Other Lines</h2>
+              <button className="close-btn" onClick={() => setShowCopyModal(false)}>×</button>
+            </div>
+
+            <div style={{ padding: '1.5rem' }}>
+              <p style={{ marginBottom: '1rem', color: '#6c757d' }}>
+                Select which lines you want to copy this shift to. The shift and all its breaks will be duplicated.
+              </p>
+
+              <div className="lines-checklist">
+                {lines
+                  .filter(l => l.id !== selectedLineId) // Don't show current line
+                  .map(line => (
+                    <label key={line.id} className="line-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={targetLines.includes(line.id)}
+                        onChange={() => toggleLineSelection(line.id)}
+                      />
+                      <span>{line.name}</span>
+                    </label>
+                  ))}
+              </div>
+
+              <div className="modal-footer">
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  onClick={() => setShowCopyModal(false)}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="button" 
+                  className="btn btn-primary"
+                  onClick={handleCopyToLines}
+                  disabled={targetLines.length === 0}
+                >
+                  Copy to {targetLines.length} Line{targetLines.length !== 1 ? 's' : ''}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
