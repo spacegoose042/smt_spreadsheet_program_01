@@ -85,7 +85,7 @@ class WorkOrderBase(BaseModel):
 class WorkOrderCreate(WorkOrderBase):
     line_id: Optional[int] = None
     line_position: Optional[int] = None
-    wo_start_date: Optional[date] = None
+    wo_start_datetime: Optional[datetime] = None
 
 
 class WorkOrderUpdate(BaseModel):
@@ -107,13 +107,12 @@ class WorkOrderUpdate(BaseModel):
     th_kit_status: Optional[THKitStatus] = None
     run_together_group: Optional[str] = None
     notes: Optional[str] = None
-    wo_start_date: Optional[date] = None
+    wo_start_datetime: Optional[datetime] = None
 
 
 class WorkOrderResponse(WorkOrderBase):
     id: int
     actual_ship_date: Optional[date] = None
-    wo_start_date: Optional[date] = None
     min_start_date: Optional[date] = None
     setup_time_hours: float
     line_id: Optional[int] = None
