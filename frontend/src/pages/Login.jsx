@@ -32,7 +32,7 @@ export default function Login() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+      background: 'linear-gradient(135deg, #1a7a3e 0%, #0f5128 100%)'
     }}>
       <div style={{
         background: 'white',
@@ -46,7 +46,7 @@ export default function Login() {
           <div style={{
             width: '60px',
             height: '60px',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: 'linear-gradient(135deg, #1a7a3e 0%, #0f5128 100%)',
             borderRadius: '12px',
             display: 'flex',
             alignItems: 'center',
@@ -55,11 +55,11 @@ export default function Login() {
           }}>
             <LogIn size={32} color="white" />
           </div>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-            SMT Scheduler
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--sandy-green)' }}>
+            S and Y Industries
           </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-            Production Management System
+            SMT Production Scheduler
           </p>
         </div>
 
@@ -123,7 +123,7 @@ export default function Login() {
               marginTop: '1.5rem',
               padding: '0.75rem',
               fontSize: '1rem',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+              background: 'var(--primary)'
             }}
           >
             {loading ? 'Signing In...' : 'Sign In'}
@@ -132,20 +132,11 @@ export default function Login() {
 
         <div style={{
           marginTop: '2rem',
-          padding: '1rem',
-          background: 'var(--bg-secondary)',
-          borderRadius: '6px',
+          textAlign: 'center',
           fontSize: '0.75rem',
           color: 'var(--text-secondary)'
         }}>
-          <div style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Default Accounts:</div>
-          <div>admin / admin123</div>
-          <div>scheduler / password123</div>
-          <div>operator / password123</div>
-          <div>manager / password123</div>
-          <div style={{ marginTop: '0.5rem', color: 'var(--danger)' }}>
-            ⚠️ Change passwords after first login!
-          </div>
+          S and Y Industries Production Scheduler
         </div>
       </div>
     </div>
