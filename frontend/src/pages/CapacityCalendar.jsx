@@ -4,10 +4,18 @@ import { getLines, getCapacityCalendar, createCapacityOverride, deleteCapacityOv
 import OverrideModal from '../components/OverrideModal'
 import '../styles/CapacityCalendar.css'
 
+// Helper function to get Sunday of current week
+function getSunday(date) {
+  const d = new Date(date)
+  const day = d.getDay()
+  const diff = d.getDate() - day // Sunday is day 0, so subtract current day
+  return new Date(d.setDate(diff))
+}
+
 export default function CapacityCalendar() {
   const queryClient = useQueryClient()
   const [selectedLineId, setSelectedLineId] = useState(null)
-  const [startDate, setStartDate] = useState(getMonday(new Date()))
+  const [startDate, setStartDate] = useState(getSunday(new Date()))
   const [contextMenu, setContextMenu] = useState(null)
   const [showOverrideModal, setShowOverrideModal] = useState(false)
   const [selectedDate, setSelectedDate] = useState(null)
@@ -43,13 +51,6 @@ export default function CapacityCalendar() {
   })
 
   // Helper functions
-  function getMonday(date) {
-    const d = new Date(date)
-    const day = d.getDay()
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1)
-    return new Date(d.setDate(diff))
-  }
-
   function formatDate(date) {
     return date.toISOString().split('T')[0]
   }
@@ -273,7 +274,7 @@ export default function CapacityCalendar() {
   }
 
   const calendarDates = generateCalendarDates()
-  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
   return (
     <div className="capacity-calendar-container">
@@ -300,7 +301,7 @@ export default function CapacityCalendar() {
             </button>
             <button 
               className="btn btn-secondary"
-              onClick={() => setStartDate(getMonday(new Date()))}
+              onClick={() => setStartDate(getSunday(new Date()))}
             >
               Today
             </button>

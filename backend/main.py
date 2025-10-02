@@ -666,10 +666,12 @@ def get_capacity_calendar(
     if not line:
         raise HTTPException(status_code=404, detail="Line not found")
     
-    # Default to current week's Monday
+    # Default to current week's Sunday
     if not start_date:
         today = date.today()
-        start_date = today - timedelta(days=today.weekday())
+        # weekday() returns 0=Monday, 6=Sunday; we want to go back to Sunday
+        days_since_sunday = (today.weekday() + 1) % 7
+        start_date = today - timedelta(days=days_since_sunday)
     
     end_date = start_date + timedelta(weeks=weeks)
     
