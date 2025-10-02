@@ -699,7 +699,7 @@ def get_capacity_calendar(
     }
 
 
-@app.post("/api/capacity/overrides", dependencies=[Depends(auth.require_scheduler)])
+@app.post("/api/capacity/overrides", dependencies=[Depends(auth.require_scheduler_or_admin)])
 def create_capacity_override(
     override: schemas.CapacityOverrideCreate,
     db: Session = Depends(get_db),
@@ -732,7 +732,7 @@ def create_capacity_override(
     return db_override
 
 
-@app.put("/api/capacity/overrides/{override_id}", dependencies=[Depends(auth.require_scheduler)])
+@app.put("/api/capacity/overrides/{override_id}", dependencies=[Depends(auth.require_scheduler_or_admin)])
 def update_capacity_override(
     override_id: int,
     override: schemas.CapacityOverrideUpdate,
@@ -765,7 +765,7 @@ def update_capacity_override(
     return db_override
 
 
-@app.delete("/api/capacity/overrides/{override_id}", dependencies=[Depends(auth.require_scheduler)])
+@app.delete("/api/capacity/overrides/{override_id}", dependencies=[Depends(auth.require_scheduler_or_admin)])
 def delete_capacity_override(
     override_id: int,
     db: Session = Depends(get_db),
@@ -785,7 +785,7 @@ def delete_capacity_override(
     return {"message": "Override deleted successfully"}
 
 
-@app.put("/api/capacity/shifts/{shift_id}", dependencies=[Depends(auth.require_scheduler)])
+@app.put("/api/capacity/shifts/{shift_id}", dependencies=[Depends(auth.require_scheduler_or_admin)])
 def update_shift(
     shift_id: int,
     shift_update: schemas.ShiftUpdate,
