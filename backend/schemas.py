@@ -2,7 +2,7 @@
 Pydantic schemas for request/response validation
 """
 from pydantic import BaseModel, EmailStr, Field
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Optional
 from models import UserRole, WorkOrderStatus, Priority, SideType, THKitStatus
 
