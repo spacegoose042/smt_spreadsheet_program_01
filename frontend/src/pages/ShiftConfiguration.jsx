@@ -39,6 +39,20 @@ export default function ShiftConfiguration() {
     setSelectedLineId(lines[0].id)
   }
 
+  // Fetch shifts for ALL lines (for summary)
+  const allLineShifts = useQuery({
+    queryKey: ['all-line-shifts'],
+    queryFn: async () => {
+      const results = {}
+      for (const line of lines) {
+        const data = await getCapacityCalendar(line.id).then(res => res.data)
+        results[line.id] = data.default_shifts || []
+      }
+      return results
+    },
+    enabled: lines.length > 0
+  })
+
   // Fetch shifts for selected line
   const { data: calendarData, isLoading } = useQuery({
     queryKey: ['capacity-calendar', selectedLineId],
@@ -59,6 +73,7 @@ export default function ShiftConfiguration() {
     mutationFn: ({ id, data }) => updateShift(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries(['capacity-calendar'])
+      queryClient.invalidateQueries(['all-line-shifts'])
       setEditingShift(null)
     }
   })
@@ -68,6 +83,7 @@ export default function ShiftConfiguration() {
     mutationFn: deleteShift,
     onSuccess: () => {
       queryClient.invalidateQueries(['capacity-calendar'])
+      queryClient.invalidateQueries(['all-line-shifts'])
     }
   })
 
@@ -76,6 +92,7 @@ export default function ShiftConfiguration() {
     mutationFn: createShiftBreak,
     onSuccess: () => {
       queryClient.invalidateQueries(['capacity-calendar'])
+      queryClient.invalidateQueries(['all-line-shifts'])
       setShowBreakModal(false)
       setSelectedShiftForBreak(null)
       setNewBreak({
@@ -148,6 +165,7 @@ export default function ShiftConfiguration() {
       }
       
       queryClient.invalidateQueries(['capacity-calendar'])
+      queryClient.invalidateQueries(['all-line-shifts'])
       setShowCreateModal(false)
       setSelectedLines([])
       setNewShift({
@@ -226,6 +244,48 @@ export default function ShiftConfiguration() {
           ))}
         </select>
       </div>
+
+      {/* Summary of all lines */}
+      {!allLineShifts.isLoading && allLineShifts.data && (
+        <div className="lines-summary">
+          <h3>📊 Shifts Overview - All Lines</h3>
+          <div className="summary-grid">
+            {lines.map(line => {
+              const lineShifts = allLineShifts.data[line.id] || []
+              const totalHours = lineShifts.reduce((sum, s) => {
+                if (!s.is_active) return sum
+                return sum + calculateShiftHours(s)
+              }, 0)
+
+              return (
+                <div 
+                  key={line.id} 
+                  className={`summary-card ${selectedLineId === line.id ? 'selected' : ''}`}
+                  onClick={() => setSelectedLineId(line.id)}
+                >
+                  <div className="summary-card-header">
+                    <strong>{line.name}</strong>
+                    <span className="total-hours">{totalHours}h/day</span>
+                  </div>
+                  <div className="summary-shifts">
+                    {lineShifts.length === 0 ? (
+                      <span className="no-shifts-text">No shifts configured</span>
+                    ) : (
+                      lineShifts
+                        .filter(s => s.is_active)
+                        .map(s => (
+                          <div key={s.id} className="summary-shift-item">
+                            {s.name} ({calculateShiftHours(s).toFixed(1)}h)
+                          </div>
+                        ))
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {line && (
         <div className="line-summary">
