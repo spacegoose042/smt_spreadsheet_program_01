@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getLines, getCapacityCalendar, createShift, updateShift } from '../api'
+import { getLines, getCapacityCalendar, createShift, updateShift, createShiftBreak } from '../api'
 import '../styles/ShiftConfiguration.css'
 
 export default function ShiftConfiguration() {
@@ -8,6 +8,8 @@ export default function ShiftConfiguration() {
   const [selectedLineId, setSelectedLineId] = useState(null)
   const [editingShift, setEditingShift] = useState(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showBreakModal, setShowBreakModal] = useState(false)
+  const [selectedShiftForBreak, setSelectedShiftForBreak] = useState(null)
   const [newShift, setNewShift] = useState({
     name: 'Day Shift',
     shift_number: 1,
@@ -15,6 +17,12 @@ export default function ShiftConfiguration() {
     end_time: '16:30',
     active_days: '1,2,3,4,5',
     is_active: true
+  })
+  const [newBreak, setNewBreak] = useState({
+    name: 'Lunch',
+    start_time: '11:30',
+    end_time: '12:30',
+    is_paid: false
   })
 
   // Fetch lines
@@ -60,6 +68,22 @@ export default function ShiftConfiguration() {
     onSuccess: () => {
       queryClient.invalidateQueries(['capacity-calendar'])
       setEditingShift(null)
+    }
+  })
+
+  // Create break mutation
+  const createBreakMutation = useMutation({
+    mutationFn: createShiftBreak,
+    onSuccess: () => {
+      queryClient.invalidateQueries(['capacity-calendar'])
+      setShowBreakModal(false)
+      setSelectedShiftForBreak(null)
+      setNewBreak({
+        name: 'Lunch',
+        start_time: '11:30',
+        end_time: '12:30',
+        is_paid: false
+      })
     }
   })
 
@@ -125,6 +149,18 @@ export default function ShiftConfiguration() {
         end_time: editingShift.end_time,
         is_active: editingShift.is_active
       }
+    })
+  }
+
+  function handleAddBreak(shift) {
+    setSelectedShiftForBreak(shift)
+    setShowBreakModal(true)
+  }
+
+  function handleCreateBreak() {
+    createBreakMutation.mutate({
+      ...newBreak,
+      shift_id: selectedShiftForBreak.id
     })
   }
 
@@ -276,12 +312,20 @@ export default function ShiftConfiguration() {
                         </div>
                       )}
 
-                      <button 
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => handleEditShift(shift)}
-                      >
-                        ✏️ Edit Times
-                      </button>
+                      <div className="shift-actions">
+                        <button 
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => handleEditShift(shift)}
+                        >
+                          ✏️ Edit Times
+                        </button>
+                        <button 
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => handleAddBreak(shift)}
+                        >
+                          + Add Break
+                        </button>
+                      </div>
                     </>
                   )}
                 </div>
@@ -391,6 +435,85 @@ export default function ShiftConfiguration() {
                   disabled={createShiftMutation.isPending}
                 >
                   {createShiftMutation.isPending ? 'Creating...' : 'Create Shift'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Break Modal */}
+      {showBreakModal && selectedShiftForBreak && (
+        <div className="modal-overlay" onClick={() => setShowBreakModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Add Break to {selectedShiftForBreak.name}</h2>
+              <button className="close-btn" onClick={() => setShowBreakModal(false)}>×</button>
+            </div>
+
+            <form onSubmit={(e) => { e.preventDefault(); handleCreateBreak(); }}>
+              <div className="form-group">
+                <label>Break Name</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={newBreak.name}
+                  onChange={(e) => setNewBreak({ ...newBreak, name: e.target.value })}
+                  placeholder="e.g., Lunch, Morning Break"
+                  required
+                />
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Start Time</label>
+                  <input
+                    type="time"
+                    className="form-input"
+                    value={newBreak.start_time}
+                    onChange={(e) => setNewBreak({ ...newBreak, start_time: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>End Time</label>
+                  <input
+                    type="time"
+                    className="form-input"
+                    value={newBreak.end_time}
+                    onChange={(e) => setNewBreak({ ...newBreak, end_time: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={newBreak.is_paid}
+                    onChange={(e) => setNewBreak({ ...newBreak, is_paid: e.target.checked })}
+                  />
+                  Paid Break
+                </label>
+                <small className="form-hint">Unpaid breaks are subtracted from total shift hours</small>
+              </div>
+
+              <div className="modal-footer">
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  onClick={() => setShowBreakModal(false)}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="btn btn-primary"
+                  disabled={createBreakMutation.isPending}
+                >
+                  {createBreakMutation.isPending ? 'Adding...' : 'Add Break'}
                 </button>
               </div>
             </form>

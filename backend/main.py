@@ -9,7 +9,7 @@ from typing import List, Optional
 from datetime import date, timedelta
 
 from database import engine, get_db, Base
-from models import WorkOrder, SMTLine, CompletedWorkOrder, WorkOrderStatus, Priority, User, UserRole, CapacityOverride, Shift, LineConfiguration
+from models import WorkOrder, SMTLine, CompletedWorkOrder, WorkOrderStatus, Priority, User, UserRole, CapacityOverride, Shift, ShiftBreak, LineConfiguration
 import schemas
 import scheduler as sched
 import time_scheduler as time_sched
@@ -846,6 +846,37 @@ def update_shift(
     db.refresh(shift)
     
     return shift
+
+
+@app.post("/api/capacity/shifts/breaks", dependencies=[Depends(auth.require_scheduler_or_admin)])
+def create_shift_break(
+    break_data: schemas.ShiftBreakCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Add a break to a shift.
+    Requires scheduler or admin role.
+    """
+    # Verify shift exists
+    shift = db.query(Shift).filter(Shift.id == break_data.shift_id).first()
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    
+    # Create break
+    shift_break = ShiftBreak(
+        shift_id=break_data.shift_id,
+        name=break_data.name,
+        start_time=break_data.start_time,
+        end_time=break_data.end_time,
+        is_paid=break_data.is_paid
+    )
+    
+    db.add(shift_break)
+    db.commit()
+    db.refresh(shift_break)
+    
+    return shift_break
 
 
 if __name__ == "__main__":

@@ -282,3 +282,11 @@ class ShiftUpdate(BaseModel):
     end_time: Optional[time] = None
     is_active: Optional[bool] = None
 
+
+class ShiftBreakCreate(BaseModel):
+    shift_id: int
+    name: str
+    start_time: time
+    end_time: time
+    is_paid: bool = False
+

@@ -163,6 +163,12 @@
   color: #6c757d;
 }
 
+.shift-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
 .shift-edit-form {
   margin-top: 1rem;
 }

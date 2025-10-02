@@ -58,6 +58,7 @@ export const updateCapacityOverride = (id, data) => api.put(`/api/capacity/overr
 export const deleteCapacityOverride = (id) => api.delete(`/api/capacity/overrides/${id}`)
 export const createShift = (data) => api.post('/api/capacity/shifts', data)
 export const updateShift = (id, data) => api.put(`/api/capacity/shifts/${id}`, data)
+export const createShiftBreak = (data) => api.post('/api/capacity/shifts/breaks', data)
 
 export default api
 
