@@ -70,6 +70,11 @@ export default function ShiftConfiguration() {
     const end = parseTime(shift.end_time)
     let hours = (end - start) / (1000 * 60 * 60)
 
+    // If end time is before start time, shift crosses midnight
+    if (hours < 0) {
+      hours += 24
+    }
+
     // Subtract unpaid breaks
     shift.breaks?.forEach(b => {
       if (!b.is_paid) {
