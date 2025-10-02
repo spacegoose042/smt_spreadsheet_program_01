@@ -8,10 +8,39 @@ export default function OverrideModal({ date, lineId, defaultHours, onClose, onS
     total_hours: defaultHours,
     reason: ''
   })
+  const [applyToWeek, setApplyToWeek] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-
-  function formatDate(date) {
-    return date.toISOString().split('T')[0]
+  
+  function getMonday(date) {
+    const d = new Date(date)
+    const day = d.getDay()
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+    return new Date(d.setDate(diff))
+  }
+  
+  function getFriday(date) {
+    const monday = getMonday(date)
+    const friday = new Date(monday)
+    friday.setDate(friday.getDate() + 4)
+    return friday
+  }
+  
+  // Update date range when "Apply to Whole Week" is toggled
+  function handleWeekToggle(checked) {
+    setApplyToWeek(checked)
+    if (checked) {
+      setFormData({
+        ...formData,
+        start_date: formatDate(getMonday(date)),
+        end_date: formatDate(getFriday(date))
+      })
+    } else {
+      setFormData({
+        ...formData,
+        start_date: formatDate(date),
+        end_date: formatDate(date)
+      })
+    }
   }
 
   async function handleSubmit(e) {
@@ -41,6 +70,18 @@ export default function OverrideModal({ date, lineId, defaultHours, onClose, onS
         </div>
 
         <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={applyToWeek}
+                onChange={(e) => handleWeekToggle(e.target.checked)}
+                style={{ cursor: 'pointer' }}
+              />
+              <span>Apply to whole week (Mon-Fri)</span>
+            </label>
+          </div>
+
           <div className="form-row">
             <div className="form-group">
               <label>Start Date</label>
@@ -49,6 +90,7 @@ export default function OverrideModal({ date, lineId, defaultHours, onClose, onS
                 className="form-input"
                 value={formData.start_date}
                 onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                disabled={applyToWeek}
                 required
               />
             </div>
@@ -60,6 +102,7 @@ export default function OverrideModal({ date, lineId, defaultHours, onClose, onS
                 className="form-input"
                 value={formData.end_date}
                 onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                disabled={applyToWeek}
                 required
               />
             </div>

@@ -148,6 +148,49 @@ export default function CapacityCalendar() {
     })
   }
 
+  // Get hours for a specific number of shifts
+  function getHoursForShiftCount(date, shiftCount) {
+    if (!calendarData?.default_shifts) return 0
+    
+    const dayOfWeek = date.getDay()
+    const dayNumber = dayOfWeek === 0 ? 7 : dayOfWeek
+    
+    // Get all shifts that could run on this day, sorted by shift_number
+    const availableShifts = calendarData.default_shifts
+      .filter(s => {
+        if (!s.active_days) return false
+        const activeDays = s.active_days.split(',').map(d => parseInt(d))
+        return activeDays.includes(dayNumber)
+      })
+      .sort((a, b) => a.shift_number - b.shift_number)
+    
+    // Take only the first N shifts based on shift count
+    const shiftsToRun = availableShifts.slice(0, shiftCount)
+    
+    let totalHours = 0
+    shiftsToRun.forEach(shift => {
+      if (shift.start_time && shift.end_time) {
+        const start = parseTime(shift.start_time)
+        const end = parseTime(shift.end_time)
+        let hours = (end - start) / (1000 * 60 * 60)
+        
+        if (hours < 0) hours += 24
+        
+        shift.breaks?.forEach(b => {
+          if (!b.is_paid) {
+            const breakStart = parseTime(b.start_time)
+            const breakEnd = parseTime(b.end_time)
+            hours -= (breakEnd - breakStart) / (1000 * 60 * 60)
+          }
+        })
+        
+        totalHours += hours
+      }
+    })
+    
+    return totalHours
+  }
+
   // Handle context menu actions
   function handleQuickAction(action, date) {
     setSelectedDate(date)
@@ -160,17 +203,29 @@ export default function CapacityCalendar() {
       start_date: formatDate(date),
       end_date: formatDate(date),
       total_hours: defaultHours,
-      reason: ''
+      reason: '',
+      shift_config: null
     }
     
     switch (action) {
+      case '1-shift':
+        overrideData.total_hours = getHoursForShiftCount(date, 1)
+        overrideData.reason = '1 shift only'
+        overrideData.shift_config = JSON.stringify({ shift_count: 1 })
+        break
+      case '2-shifts':
+        overrideData.total_hours = getHoursForShiftCount(date, 2)
+        overrideData.reason = '2 shifts'
+        overrideData.shift_config = JSON.stringify({ shift_count: 2 })
+        break
+      case '3-shifts':
+        overrideData.total_hours = getHoursForShiftCount(date, 3)
+        overrideData.reason = '3 shifts'
+        overrideData.shift_config = JSON.stringify({ shift_count: 3 })
+        break
       case 'overtime':
         overrideData.total_hours = defaultHours + 2
         overrideData.reason = 'Overtime (+2 hours)'
-        break
-      case 'add-4hrs':
-        overrideData.total_hours = defaultHours + 4
-        overrideData.reason = 'Extended shift (+4 hours)'
         break
       case 'half-day':
         overrideData.total_hours = defaultHours / 2
@@ -341,11 +396,18 @@ export default function CapacityCalendar() {
           <div className="context-menu-header">
             {contextMenu.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
           </div>
+          <button onClick={() => handleQuickAction('1-shift', contextMenu.date)}>
+            1️⃣ Run 1 Shift Only
+          </button>
+          <button onClick={() => handleQuickAction('2-shifts', contextMenu.date)}>
+            2️⃣ Run 2 Shifts
+          </button>
+          <button onClick={() => handleQuickAction('3-shifts', contextMenu.date)}>
+            3️⃣ Run 3 Shifts
+          </button>
+          <hr />
           <button onClick={() => handleQuickAction('overtime', contextMenu.date)}>
             ⏰ Overtime (+2hrs)
-          </button>
-          <button onClick={() => handleQuickAction('add-4hrs', contextMenu.date)}>
-            ⏱️ Extended Shift (+4hrs)
           </button>
           <button onClick={() => handleQuickAction('half-day', contextMenu.date)}>
             🕐 Half Day
