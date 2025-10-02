@@ -35,6 +35,8 @@ export default function Schedule() {
   const [completingWO, setCompletingWO] = useState(null)
   const [filterLine, setFilterLine] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
+  const [draggedWO, setDraggedWO] = useState(null)
+  const [dragOverWO, setDragOverWO] = useState(null)
   
   const queryClient = useQueryClient()
 
@@ -136,6 +138,54 @@ export default function Schedule() {
 
   const handleComplete = (data) => {
     completeMutation.mutate({ id: completingWO.id, data })
+  }
+
+  // Drag and drop handlers (only when filtered to single line)
+  const isDraggable = filterLine && filterLine !== 'unscheduled' && filterLine !== ''
+
+  const handleDragStart = (e, wo) => {
+    if (!isDraggable || wo.is_locked) {
+      e.preventDefault()
+      return
+    }
+    setDraggedWO(wo)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e, wo) => {
+    if (!isDraggable) return
+    e.preventDefault()
+    setDragOverWO(wo)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedWO(null)
+    setDragOverWO(null)
+  }
+
+  const handleDrop = async (e, targetWO) => {
+    e.preventDefault()
+    
+    if (!draggedWO || !targetWO || draggedWO.id === targetWO.id) {
+      setDraggedWO(null)
+      setDragOverWO(null)
+      return
+    }
+
+    // Update the dragged work order's position to match the target
+    try {
+      await updateWorkOrder(draggedWO.id, {
+        line_position: targetWO.line_position
+      })
+      queryClient.invalidateQueries(['workOrders'])
+      queryClient.invalidateQueries(['dashboard'])
+    } catch (error) {
+      console.error('Error reordering:', error)
+      alert(error.response?.data?.detail || 'Failed to reorder work order')
+    }
+    
+    setDraggedWO(null)
+    setDragOverWO(null)
   }
 
   if (completingWO) {
@@ -316,10 +366,20 @@ export default function Schedule() {
                   return (a.line_position || 999) - (b.line_position || 999)
                 })
                 .map((wo) => (
-                <tr key={wo.id} style={{ 
-                  background: wo.is_locked ? '#fff3cd' : 'transparent',
-                  opacity: wo.run_together_group ? 0.95 : 1
-                }}>
+                <tr 
+                  key={wo.id} 
+                  draggable={isDraggable && !wo.is_locked}
+                  onDragStart={(e) => handleDragStart(e, wo)}
+                  onDragOver={(e) => handleDragOver(e, wo)}
+                  onDragEnd={handleDragEnd}
+                  onDrop={(e) => handleDrop(e, wo)}
+                  style={{ 
+                    background: wo.is_locked ? '#fff3cd' : dragOverWO?.id === wo.id ? '#e3f2fd' : 'transparent',
+                    opacity: draggedWO?.id === wo.id ? 0.5 : (wo.run_together_group ? 0.95 : 1),
+                    cursor: isDraggable && !wo.is_locked ? 'move' : 'default',
+                    transition: 'all 0.2s'
+                  }}
+                >
                   <td>{wo.line_position || '-'}</td>
                   <td>{wo.customer}</td>
                   <td>
