@@ -171,32 +171,23 @@ def main():
         print(f"Note: {e}")
         print("Continuing with seed...")
     
-    # Add admin and manager to userrole enum if they don't exist
+    # Add all role values to userrole enum if they don't exist
     try:
         with engine.begin() as conn:
-            # Check if admin value exists
-            result = conn.execute(text(
-                "SELECT EXISTS (SELECT 1 FROM pg_type t JOIN pg_enum e ON t.oid = e.enumtypid WHERE t.typname = 'userrole' AND e.enumlabel = 'admin')"
-            ))
-            admin_exists = result.scalar()
+            roles_to_add = ['admin', 'scheduler', 'operator', 'manager']
             
-            if not admin_exists:
-                conn.execute(text("ALTER TYPE userrole ADD VALUE 'admin'"))
-                print("✓ Added 'admin' to userrole enum")
-            else:
-                print("✓ 'admin' already exists in userrole enum")
+            for role in roles_to_add:
+                # Check if role value exists
+                result = conn.execute(text(
+                    f"SELECT EXISTS (SELECT 1 FROM pg_type t JOIN pg_enum e ON t.oid = e.enumtypid WHERE t.typname = 'userrole' AND e.enumlabel = '{role}')"
+                ))
+                role_exists = result.scalar()
                 
-            # Check if manager value exists
-            result = conn.execute(text(
-                "SELECT EXISTS (SELECT 1 FROM pg_type t JOIN pg_enum e ON t.oid = e.enumtypid WHERE t.typname = 'userrole' AND e.enumlabel = 'manager')"
-            ))
-            manager_exists = result.scalar()
-            
-            if not manager_exists:
-                conn.execute(text("ALTER TYPE userrole ADD VALUE 'manager'"))
-                print("✓ Added 'manager' to userrole enum")
-            else:
-                print("✓ 'manager' already exists in userrole enum")
+                if not role_exists:
+                    conn.execute(text(f"ALTER TYPE userrole ADD VALUE '{role}'"))
+                    print(f"✓ Added '{role}' to userrole enum")
+                else:
+                    print(f"✓ '{role}' already exists in userrole enum")
     except Exception as e:
         print(f"Error adding enum values: {e}")
         raise
