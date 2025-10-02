@@ -12,7 +12,13 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def seed_shifts_and_config(db: Session):
-    """Create default shifts and configurations for all lines"""
+    """Create default shifts and configurations for all lines (only if none exist)"""
+    # Check if shifts already exist
+    existing_shifts = db.query(Shift).count()
+    if existing_shifts > 0:
+        print(f"✓ Shifts already configured ({existing_shifts} shifts) - skipping seed")
+        return
+    
     lines = db.query(SMTLine).all()
     
     for line in lines:
@@ -113,15 +119,12 @@ def seed_lines(db: Session):
 
 
 def seed_users(db: Session):
-    """Create default users"""
-    # First, delete all existing users to avoid enum mismatch issues
-    try:
-        db.execute(text("DELETE FROM users"))
-        db.commit()
-        print("✓ Cleared existing users")
-    except Exception as e:
-        print(f"Note: {e}")
-        db.rollback()
+    """Create default users (only if no users exist)"""
+    # Check if users already exist
+    existing_users = db.query(User).count()
+    if existing_users > 0:
+        print(f"✓ Users already exist ({existing_users} users) - skipping seed")
+        return
     
     users = [
         User(
