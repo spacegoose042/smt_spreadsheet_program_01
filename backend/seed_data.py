@@ -4,7 +4,7 @@ Script to seed the database with initial data (lines, sample work orders)
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from database import SessionLocal, engine
-from models import Base, SMTLine, User, UserRole, Shift, ShiftBreak, LineConfiguration
+from models import Base, SMTLine, User, UserRole, Shift, ShiftBreak, LineConfiguration, IssueType
 from passlib.context import CryptContext
 from datetime import time
 
@@ -164,6 +164,38 @@ def seed_users(db: Session):
     print("✓ Seeded users (default password: password123)")
 
 
+def seed_issue_types(db: Session):
+    """Create default issue types (only if none exist)"""
+    # Check if issue types already exist
+    existing = db.query(IssueType).count()
+    if existing > 0:
+        print(f"✓ Issue types already exist ({existing} types) - skipping seed")
+        return
+    
+    default_issue_types = [
+        {"name": "Packaging - Tape & Reel Needed", "color": "#f39c12", "category": "Packaging", "display_order": 1},
+        {"name": "Missing Parts", "color": "#e74c3c", "category": "Parts", "display_order": 2},
+        {"name": "Program Issue", "color": "#9b59b6", "category": "Program", "display_order": 3},
+        {"name": "Stencil Issue", "color": "#3498db", "category": "Stencil", "display_order": 4},
+        {"name": "Quality Issue", "color": "#e67e22", "category": "Quality", "display_order": 5},
+        {"name": "Other", "color": "#95a5a6", "category": "Other", "display_order": 6},
+    ]
+    
+    for it_data in default_issue_types:
+        issue_type = IssueType(
+            name=it_data["name"],
+            color=it_data["color"],
+            category=it_data["category"],
+            display_order=it_data["display_order"],
+            is_active=True,
+            is_system=True  # Default types are system types
+        )
+        db.add(issue_type)
+    
+    db.commit()
+    print("✓ Seeded default issue types")
+
+
 def main():
     """Run all seeding functions"""
     # Create tables (this will create new tables and columns)
@@ -201,6 +233,7 @@ def main():
         seed_lines(db)
         seed_users(db)
         seed_shifts_and_config(db)
+        seed_issue_types(db)
         print("\n✅ Database seeded successfully!")
         print("\nDefault users:")
         print("  admin / admin123 (Admin - full system access)")

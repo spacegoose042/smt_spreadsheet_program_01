@@ -70,5 +70,18 @@ export const createStatus = (data) => api.post('/api/statuses', data)
 export const updateStatus = (id, data) => api.put(`/api/statuses/${id}`, data)
 export const deleteStatus = (id) => api.delete(`/api/statuses/${id}`)
 
+// Issue Types (Admin only)
+export const getIssueTypes = (includeInactive = false) =>
+  api.get('/api/issue-types', { params: { include_inactive: includeInactive } })
+export const createIssueType = (data) => api.post('/api/issue-types', data)
+export const updateIssueType = (id, data) => api.put(`/api/issue-types/${id}`, data)
+export const deleteIssueType = (id) => api.delete(`/api/issue-types/${id}`)
+
+// Issues (All users)
+export const getIssues = (params = {}) => api.get('/api/issues', { params })
+export const createIssue = (data) => api.post('/api/issues', data)
+export const updateIssue = (id, data) => api.put(`/api/issues/${id}`, data)
+export const deleteIssue = (id) => api.delete(`/api/issues/${id}`)
+
 export default api
 

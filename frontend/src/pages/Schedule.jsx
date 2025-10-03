@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getWorkOrders, getLines, createWorkOrder, updateWorkOrder, deleteWorkOrder, completeWorkOrder, getDashboard, getStatuses } from '../api'
-import { Plus, Edit2, Trash2, Lock, Unlock, CheckCircle, Calendar } from 'lucide-react'
+import { Plus, Edit2, Trash2, Lock, Unlock, CheckCircle, Calendar, AlertTriangle } from 'lucide-react'
 import { format } from 'date-fns'
 import WorkOrderForm from '../components/WorkOrderForm'
 import CompleteJobModal from '../components/CompleteJobModal'
+import ReportIssueModal from '../components/ReportIssueModal'
 
 function PriorityBadge({ priority }) {
   const colors = {
@@ -52,6 +53,7 @@ export default function Schedule() {
   const [showForm, setShowForm] = useState(false)
   const [editingWO, setEditingWO] = useState(null)
   const [completingWO, setCompletingWO] = useState(null)
+  const [reportingIssueWO, setReportingIssueWO] = useState(null)
   const [filterLine, setFilterLine] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [draggedWO, setDraggedWO] = useState(null)
@@ -222,6 +224,18 @@ export default function Schedule() {
           onComplete={handleComplete}
           onCancel={() => setCompletingWO(null)}
           isSubmitting={completeMutation.isPending}
+        />
+      </>
+    )
+  }
+
+  // Render Report Issue Modal
+  if (reportingIssueWO) {
+    return (
+      <>
+        <ReportIssueModal
+          workOrder={reportingIssueWO}
+          onClose={() => setReportingIssueWO(null)}
         />
       </>
     )
@@ -466,6 +480,13 @@ export default function Schedule() {
                         title="Mark as Complete"
                       >
                         <CheckCircle size={14} />
+                      </button>
+                      <button 
+                        className="btn btn-sm btn-warning" 
+                        onClick={() => setReportingIssueWO(wo)}
+                        title="Report Issue"
+                      >
+                        <AlertTriangle size={14} />
                       </button>
                       <button 
                         className="btn btn-sm btn-secondary" 
