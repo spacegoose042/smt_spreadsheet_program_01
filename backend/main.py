@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 
 from database import engine, get_db, Base
 from models import WorkOrder, SMTLine, CompletedWorkOrder, WorkOrderStatus, Priority, User, UserRole, CapacityOverride, Shift, ShiftBreak, LineConfiguration, Status, IssueType, Issue, IssueSeverity, IssueStatus, ResolutionType
