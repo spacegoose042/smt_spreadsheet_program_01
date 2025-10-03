@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
-import { Home, Calendar, Settings, CheckCircle, List, LayoutGrid, LogOut, User as UserIcon, Users, Clock, Timer, Tag } from 'lucide-react'
+import { Home, Calendar, Settings, CheckCircle, List, LayoutGrid, LogOut, User as UserIcon, Users, Clock, Timer, Tag, ChevronDown } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
@@ -31,8 +32,22 @@ function ProtectedRoute({ children, requireAuth = true }) {
 function Navigation() {
   const location = useLocation()
   const { user, logout, isAdmin } = useAuth()
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const settingsRef = useRef(null)
   
   const isActive = (path) => location.pathname === path
+  const isSettingsActive = ['/capacity', '/shifts', '/users', '/statuses', '/settings'].includes(location.pathname)
+  
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (settingsRef.current && !settingsRef.current.contains(event.target)) {
+        setSettingsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
   
   if (!user) return null
   
@@ -63,30 +78,72 @@ function Navigation() {
             <CheckCircle size={18} />
             Completed
           </Link>
-          <Link to="/capacity" className={isActive('/capacity') ? 'active' : ''}>
-            <Clock size={18} />
-            Capacity
-          </Link>
-          <Link to="/shifts" className={isActive('/shifts') ? 'active' : ''}>
-            <Timer size={18} />
-            Shifts
-          </Link>
-          {isAdmin && (
-            <>
-              <Link to="/users" className={isActive('/users') ? 'active' : ''}>
-                <Users size={18} />
-                Users
-              </Link>
-              <Link to="/statuses" className={isActive('/statuses') ? 'active' : ''}>
-                <Tag size={18} />
-                Statuses
-              </Link>
-            </>
-          )}
-          <Link to="/settings" className={isActive('/settings') ? 'active' : ''}>
-            <Settings size={18} />
-            Settings
-          </Link>
+          
+          {/* Settings Dropdown */}
+          <div className="nav-dropdown" ref={settingsRef}>
+            <button
+              className={`nav-dropdown-trigger ${isSettingsActive ? 'active' : ''}`}
+              onClick={() => setSettingsOpen(!settingsOpen)}
+            >
+              <Settings size={18} />
+              Settings
+              <ChevronDown size={16} style={{ 
+                transform: settingsOpen ? 'rotate(180deg)' : 'rotate(0)',
+                transition: 'transform 0.2s'
+              }} />
+            </button>
+            
+            {settingsOpen && (
+              <div className="nav-dropdown-menu">
+                <Link 
+                  to="/capacity" 
+                  className={isActive('/capacity') ? 'active' : ''}
+                  onClick={() => setSettingsOpen(false)}
+                >
+                  <Clock size={16} />
+                  Capacity Calendar
+                </Link>
+                <Link 
+                  to="/shifts" 
+                  className={isActive('/shifts') ? 'active' : ''}
+                  onClick={() => setSettingsOpen(false)}
+                >
+                  <Timer size={16} />
+                  Shift Configuration
+                </Link>
+                {isAdmin && (
+                  <>
+                    <div className="nav-dropdown-divider" />
+                    <Link 
+                      to="/users" 
+                      className={isActive('/users') ? 'active' : ''}
+                      onClick={() => setSettingsOpen(false)}
+                    >
+                      <Users size={16} />
+                      User Management
+                    </Link>
+                    <Link 
+                      to="/statuses" 
+                      className={isActive('/statuses') ? 'active' : ''}
+                      onClick={() => setSettingsOpen(false)}
+                    >
+                      <Tag size={16} />
+                      Status Management
+                    </Link>
+                    <div className="nav-dropdown-divider" />
+                  </>
+                )}
+                <Link 
+                  to="/settings" 
+                  className={isActive('/settings') ? 'active' : ''}
+                  onClick={() => setSettingsOpen(false)}
+                >
+                  <Settings size={16} />
+                  General Settings
+                </Link>
+              </div>
+            )}
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <div style={{ 
