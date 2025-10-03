@@ -9,7 +9,7 @@ from typing import List, Optional
 from datetime import date, timedelta
 
 from database import engine, get_db, Base
-from models import WorkOrder, SMTLine, CompletedWorkOrder, WorkOrderStatus, Priority, User, UserRole, CapacityOverride, Shift, ShiftBreak, LineConfiguration, Status
+from models import WorkOrder, SMTLine, CompletedWorkOrder, WorkOrderStatus, Priority, User, UserRole, CapacityOverride, Shift, ShiftBreak, LineConfiguration, Status, IssueType, Issue, IssueSeverity, IssueStatus
 import schemas
 import scheduler as sched
 import time_scheduler as time_sched
@@ -1128,6 +1128,248 @@ def delete_status(
     db.commit()
     
     return {"message": "Status deleted successfully"}
+
+
+# ========== Issue Types ==========
+
+@app.get("/api/issue-types")
+def get_issue_types(
+    include_inactive: bool = False,
+    db: Session = Depends(get_db)
+):
+    """Get all issue types"""
+    query = db.query(IssueType)
+    if not include_inactive:
+        query = query.filter(IssueType.is_active == True)
+    
+    issue_types = query.order_by(IssueType.display_order, IssueType.name).all()
+    return issue_types
+
+
+@app.post("/api/issue-types", dependencies=[Depends(auth.require_admin)])
+def create_issue_type(
+    issue_type_data: schemas.IssueTypeCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """Create a new issue type (Admin only)"""
+    # Check if issue type with this name already exists
+    existing = db.query(IssueType).filter(IssueType.name == issue_type_data.name).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Issue type '{issue_type_data.name}' already exists")
+    
+    issue_type = IssueType(
+        name=issue_type_data.name,
+        color=issue_type_data.color,
+        category=issue_type_data.category,
+        is_active=issue_type_data.is_active,
+        display_order=issue_type_data.display_order,
+        is_system=False
+    )
+    
+    db.add(issue_type)
+    db.commit()
+    db.refresh(issue_type)
+    
+    return issue_type
+
+
+@app.put("/api/issue-types/{issue_type_id}", dependencies=[Depends(auth.require_admin)])
+def update_issue_type(
+    issue_type_id: int,
+    issue_type_data: schemas.IssueTypeUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """Update an issue type (Admin only)"""
+    issue_type = db.query(IssueType).filter(IssueType.id == issue_type_id).first()
+    if not issue_type:
+        raise HTTPException(status_code=404, detail="Issue type not found")
+    
+    # Check if name is being changed and already exists
+    if issue_type_data.name and issue_type_data.name != issue_type.name:
+        existing = db.query(IssueType).filter(IssueType.name == issue_type_data.name).first()
+        if existing:
+            raise HTTPException(status_code=400, detail=f"Issue type '{issue_type_data.name}' already exists")
+    
+    # Update fields
+    update_data = issue_type_data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(issue_type, key, value)
+    
+    db.commit()
+    db.refresh(issue_type)
+    
+    return issue_type
+
+
+@app.delete("/api/issue-types/{issue_type_id}", dependencies=[Depends(auth.require_admin)])
+def delete_issue_type(
+    issue_type_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """Delete an issue type (Admin only)"""
+    issue_type = db.query(IssueType).filter(IssueType.id == issue_type_id).first()
+    if not issue_type:
+        raise HTTPException(status_code=404, detail="Issue type not found")
+    
+    # Prevent deleting system issue types
+    if issue_type.is_system:
+        raise HTTPException(status_code=400, detail="Cannot delete system issue type")
+    
+    # Check if any issues are using this type
+    issue_count = db.query(Issue).filter(Issue.issue_type_id == issue_type_id).count()
+    if issue_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot delete issue type '{issue_type.name}' - {issue_count} issue(s) are using it"
+        )
+    
+    db.delete(issue_type)
+    db.commit()
+    
+    return {"message": "Issue type deleted successfully"}
+
+
+# ========== Issues ==========
+
+@app.get("/api/issues")
+def get_issues(
+    work_order_id: Optional[int] = None,
+    status: Optional[IssueStatus] = None,
+    db: Session = Depends(get_db)
+):
+    """Get issues, optionally filtered by work order or status"""
+    query = db.query(Issue)
+    
+    if work_order_id:
+        query = query.filter(Issue.work_order_id == work_order_id)
+    if status:
+        query = query.filter(Issue.status == status)
+    
+    issues = query.order_by(Issue.reported_at.desc()).all()
+    
+    # Add computed fields
+    result = []
+    for issue in issues:
+        issue_dict = schemas.IssueResponse.model_validate(issue).model_dump()
+        if issue.issue_type_obj:
+            issue_dict['issue_type_name'] = issue.issue_type_obj.name
+            issue_dict['issue_type_color'] = issue.issue_type_obj.color
+        if issue.reported_by:
+            issue_dict['reported_by_username'] = issue.reported_by.username
+        if issue.resolved_by:
+            issue_dict['resolved_by_username'] = issue.resolved_by.username
+        result.append(schemas.IssueResponse(**issue_dict))
+    
+    return result
+
+
+@app.post("/api/issues", status_code=status.HTTP_201_CREATED)
+def create_issue(
+    issue_data: schemas.IssueCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """Create a new issue (All authenticated users)"""
+    # Verify work order exists
+    wo = db.query(WorkOrder).filter(WorkOrder.id == issue_data.work_order_id).first()
+    if not wo:
+        raise HTTPException(status_code=404, detail="Work order not found")
+    
+    # Verify issue type exists
+    issue_type = db.query(IssueType).filter(IssueType.id == issue_data.issue_type_id).first()
+    if not issue_type:
+        raise HTTPException(status_code=404, detail="Issue type not found")
+    
+    issue = Issue(
+        work_order_id=issue_data.work_order_id,
+        issue_type_id=issue_data.issue_type_id,
+        severity=issue_data.severity,
+        description=issue_data.description,
+        reported_by_id=current_user.id,
+        status=IssueStatus.OPEN
+    )
+    
+    db.add(issue)
+    db.commit()
+    db.refresh(issue)
+    
+    # Add computed fields
+    issue_dict = schemas.IssueResponse.model_validate(issue).model_dump()
+    if issue.issue_type_obj:
+        issue_dict['issue_type_name'] = issue.issue_type_obj.name
+        issue_dict['issue_type_color'] = issue.issue_type_obj.color
+    if issue.reported_by:
+        issue_dict['reported_by_username'] = issue.reported_by.username
+    
+    return schemas.IssueResponse(**issue_dict)
+
+
+@app.put("/api/issues/{issue_id}")
+def update_issue(
+    issue_id: int,
+    issue_data: schemas.IssueUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """Update an issue"""
+    issue = db.query(Issue).filter(Issue.id == issue_id).first()
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+    
+    # Update fields
+    update_data = issue_data.model_dump(exclude_unset=True)
+    
+    # If marking as resolved, set resolved_by and resolved_at
+    if 'status' in update_data and update_data['status'] == IssueStatus.RESOLVED:
+        if not issue.resolved_at:  # Only set if not already resolved
+            issue.resolved_by_id = current_user.id
+            issue.resolved_at = datetime.utcnow()
+    elif 'status' in update_data and update_data['status'] != IssueStatus.RESOLVED:
+        # If changing from resolved to something else, clear resolution info
+        issue.resolved_by_id = None
+        issue.resolved_at = None
+    
+    for key, value in update_data.items():
+        setattr(issue, key, value)
+    
+    db.commit()
+    db.refresh(issue)
+    
+    # Add computed fields
+    issue_dict = schemas.IssueResponse.model_validate(issue).model_dump()
+    if issue.issue_type_obj:
+        issue_dict['issue_type_name'] = issue.issue_type_obj.name
+        issue_dict['issue_type_color'] = issue.issue_type_obj.color
+    if issue.reported_by:
+        issue_dict['reported_by_username'] = issue.reported_by.username
+    if issue.resolved_by:
+        issue_dict['resolved_by_username'] = issue.resolved_by.username
+    
+    return schemas.IssueResponse(**issue_dict)
+
+
+@app.delete("/api/issues/{issue_id}")
+def delete_issue(
+    issue_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """Delete an issue (Admin or issue reporter)"""
+    issue = db.query(Issue).filter(Issue.id == issue_id).first()
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+    
+    # Only admin or the person who reported it can delete
+    if current_user.role != UserRole.ADMIN and issue.reported_by_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this issue")
+    
+    db.delete(issue)
+    db.commit()
+    
+    return {"message": "Issue deleted successfully"}
 
 
 if __name__ == "__main__":

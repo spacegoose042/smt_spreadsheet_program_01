@@ -41,6 +41,65 @@ class Status(Base):
     work_orders = relationship("WorkOrder", back_populates="status_obj")
 
 
+class IssueType(Base):
+    """
+    Configurable issue types for work orders.
+    Admins can add/edit/delete issue types as needed.
+    """
+    __tablename__ = "issue_types"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False, index=True)
+    color = Column(String, default="#dc3545")  # Badge color (hex)
+    category = Column(String, nullable=True)  # Optional grouping (Packaging, Parts, etc.)
+    is_active = Column(Boolean, default=True)
+    display_order = Column(Integer, default=0)
+    is_system = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    issues = relationship("Issue", back_populates="issue_type_obj")
+
+
+class IssueSeverity(str, enum.Enum):
+    MINOR = "Minor"
+    MAJOR = "Major"
+    BLOCKER = "Blocker"
+
+
+class IssueStatus(str, enum.Enum):
+    OPEN = "Open"
+    IN_PROGRESS = "In Progress"
+    RESOLVED = "Resolved"
+
+
+class Issue(Base):
+    """
+    Issues logged against work orders.
+    Tracks problems that need resolution.
+    """
+    __tablename__ = "issues"
+
+    id = Column(Integer, primary_key=True, index=True)
+    work_order_id = Column(Integer, ForeignKey("work_orders.id"), nullable=False, index=True)
+    issue_type_id = Column(Integer, ForeignKey("issue_types.id"), nullable=False)
+    severity = Column(SQLEnum(IssueSeverity), default=IssueSeverity.MINOR)
+    status = Column(SQLEnum(IssueStatus), default=IssueStatus.OPEN)
+    description = Column(String, nullable=False)
+    
+    # Tracking
+    reported_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    reported_at = Column(DateTime, default=datetime.utcnow)
+    resolved_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+    
+    # Relationships
+    work_order = relationship("WorkOrder", back_populates="issues")
+    issue_type_obj = relationship("IssueType", back_populates="issues")
+    reported_by = relationship("User", foreign_keys=[reported_by_id])
+    resolved_by = relationship("User", foreign_keys=[resolved_by_id])
+
+
 class Priority(str, enum.Enum):
     CRITICAL_MASS = "Critical Mass"
     OVERCLOCKED = "Overclocked"
@@ -153,6 +212,7 @@ class WorkOrder(Base):
     line = relationship("SMTLine", back_populates="work_orders")
     status_obj = relationship("Status", back_populates="work_orders")
     completed_record = relationship("CompletedWorkOrder", back_populates="work_order", uselist=False)
+    issues = relationship("Issue", back_populates="work_order", cascade="all, delete-orphan")
 
 
 class CompletedWorkOrder(Base):
