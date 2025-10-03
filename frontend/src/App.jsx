@@ -44,64 +44,71 @@ function Navigation() {
         </div>
         <div className="nav-links">
           <Link to="/" className={isActive('/') ? 'active' : ''}>
-            <Home size={16} />
+            <Home size={18} />
             Dashboard
           </Link>
           <Link to="/schedule" className={isActive('/schedule') ? 'active' : ''}>
-            <Calendar size={16} />
+            <Calendar size={18} />
             Schedule
           </Link>
           <Link to="/visual" className={isActive('/visual') ? 'active' : ''}>
-            <LayoutGrid size={16} />
+            <LayoutGrid size={18} />
             Visual
           </Link>
           <Link to="/lines" className={isActive('/lines') ? 'active' : ''}>
-            <List size={16} />
+            <List size={18} />
             Lines
           </Link>
           <Link to="/completed" className={isActive('/completed') ? 'active' : ''}>
-            <CheckCircle size={16} />
+            <CheckCircle size={18} />
             Completed
           </Link>
           <Link to="/capacity" className={isActive('/capacity') ? 'active' : ''}>
-            <Clock size={16} />
+            <Clock size={18} />
             Capacity
           </Link>
           <Link to="/shifts" className={isActive('/shifts') ? 'active' : ''}>
-            <Timer size={16} />
+            <Timer size={18} />
             Shifts
           </Link>
           {isAdmin && (
             <>
               <Link to="/users" className={isActive('/users') ? 'active' : ''}>
-                <Users size={16} />
+                <Users size={18} />
                 Users
               </Link>
               <Link to="/statuses" className={isActive('/statuses') ? 'active' : ''}>
-                <Tag size={16} />
+                <Tag size={18} />
                 Statuses
               </Link>
             </>
           )}
           <Link to="/settings" className={isActive('/settings') ? 'active' : ''}>
-            <Settings size={16} />
+            <Settings size={18} />
             Settings
           </Link>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <UserIcon size={12} />
-              <strong>{user.username}</strong>
+          <div style={{ 
+            fontSize: '0.875rem', 
+            color: 'var(--text-secondary)',
+            padding: '0.5rem 1rem',
+            background: 'var(--bg-secondary)',
+            borderRadius: '8px',
+            border: '1px solid var(--border)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <UserIcon size={16} />
+              <strong style={{ color: 'var(--text-primary)' }}>{user.username}</strong>
             </div>
-            <div style={{ fontSize: '0.7rem' }}>{user.role}</div>
+            <div style={{ fontSize: '0.75rem', marginTop: '0.125rem' }}>{user.role}</div>
           </div>
           <button
             onClick={logout}
             className="btn btn-sm btn-secondary"
             title="Logout"
           >
-            <LogOut size={14} />
+            <LogOut size={16} />
           </button>
         </div>
       </div>
