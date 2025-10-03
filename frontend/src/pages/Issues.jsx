@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getIssues, updateIssue, deleteIssue, getIssueTypes, getResolutionTypes } from '../api'
-import { AlertTriangle, CheckCircle, Clock, Filter, Trash2, User, X, Eye, RotateCcw } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Clock, Filter, Trash2, User, X, Eye, RotateCcw, Download } from 'lucide-react'
 import { format } from 'date-fns'
 import { useAuth } from '../context/AuthContext'
 
@@ -155,6 +155,61 @@ export default function Issues() {
     }
   }
 
+  const handleExportCSV = () => {
+    // Create CSV header
+    const headers = [
+      'WO Number',
+      'Assembly',
+      'Revision',
+      'Customer',
+      'Issue Type',
+      'Severity',
+      'Status',
+      'Description',
+      'Reported By',
+      'Reported Date',
+      'Resolution Type',
+      'Resolution Notes',
+      'Resolved By',
+      'Resolved Date'
+    ]
+
+    // Create CSV rows
+    const rows = filteredIssues.map(issue => [
+      issue.wo_number || '',
+      issue.assembly || '',
+      issue.revision || '',
+      issue.customer || '',
+      issue.issue_type_name || '',
+      issue.severity || '',
+      issue.status || '',
+      `"${(issue.description || '').replace(/"/g, '""')}"`, // Escape quotes
+      issue.reported_by_username || '',
+      format(new Date(issue.reported_at), 'yyyy-MM-dd HH:mm:ss'),
+      issue.resolution_type_name || '',
+      issue.resolution_notes ? `"${issue.resolution_notes.replace(/"/g, '""')}"` : '',
+      issue.resolved_by_username || '',
+      issue.resolved_at ? format(new Date(issue.resolved_at), 'yyyy-MM-dd HH:mm:ss') : ''
+    ])
+
+    // Combine header and rows
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.join(','))
+    ].join('\n')
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `issues_export_${format(new Date(), 'yyyy-MM-dd_HHmmss')}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   // Filter issues by type and assembly
   const filteredIssues = issues?.filter(issue => {
     if (filterIssueType && issue.issue_type_id !== parseInt(filterIssueType)) {
@@ -188,6 +243,14 @@ export default function Issues() {
           <h1 className="page-title">Issue Reports</h1>
           <p className="page-description">Track and resolve work order issues</p>
         </div>
+        <button 
+          className="btn btn-primary" 
+          onClick={handleExportCSV}
+          disabled={!filteredIssues || filteredIssues.length === 0}
+        >
+          <Download size={18} />
+          Export to CSV
+        </button>
       </div>
 
       {/* Statistics */}
