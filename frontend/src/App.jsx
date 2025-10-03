@@ -15,6 +15,7 @@ import ShiftConfiguration from './pages/ShiftConfiguration'
 import StatusManagement from './pages/StatusManagement'
 import ChangePassword from './pages/ChangePassword'
 import IssueTypeManagement from './pages/IssueTypeManagement'
+import Issues from './pages/Issues'
 import './App.css'
 
 function ProtectedRoute({ children, requireAuth = true }) {
@@ -89,6 +90,10 @@ function Navigation() {
           <Link to="/completed" className={isActive('/completed') ? 'active' : ''}>
             <CheckCircle size={18} />
             Completed
+          </Link>
+          <Link to="/issues" className={isActive('/issues') ? 'active' : ''}>
+            <AlertTriangle size={18} />
+            Issues
           </Link>
           
           {/* Settings Dropdown */}
@@ -214,6 +219,7 @@ function AppContent() {
           <Route path="/lines" element={<ProtectedRoute><LineView /></ProtectedRoute>} />
           <Route path="/lines/:lineId" element={<ProtectedRoute><LineView /></ProtectedRoute>} />
           <Route path="/completed" element={<ProtectedRoute><Completed /></ProtectedRoute>} />
+          <Route path="/issues" element={<ProtectedRoute><Issues /></ProtectedRoute>} />
           <Route path="/capacity" element={<ProtectedRoute><CapacityCalendar /></ProtectedRoute>} />
           <Route path="/shifts" element={<ProtectedRoute><ShiftConfiguration /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
