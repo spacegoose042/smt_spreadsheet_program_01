@@ -56,7 +56,17 @@ function Navigation() {
     <nav className="navbar">
       <div className="nav-container">
         <div className="nav-brand">
-          <h1>SMT Scheduler</h1>
+          <img 
+            src="/sandy-logo.png" 
+            alt="S&Y Industries" 
+            style={{ height: '40px', width: 'auto' }}
+            onError={(e) => {
+              // Fallback if logo doesn't load
+              e.target.style.display = 'none'
+              e.target.nextSibling.style.display = 'block'
+            }}
+          />
+          <h1 style={{ display: 'none' }}>SMT Scheduler</h1>
         </div>
         <div className="nav-links">
           <Link to="/" className={isActive('/') ? 'active' : ''}>
