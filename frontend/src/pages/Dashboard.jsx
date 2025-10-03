@@ -14,8 +14,13 @@ function PriorityBadge({ priority }) {
   return <span className={`badge ${colors[priority] || 'badge-secondary'}`}>{priority}</span>
 }
 
-function StatusBadge({ status }) {
-  const colors = {
+function StatusBadge({ status, statusName, statusColor }) {
+  // Use new status system if available, fallback to legacy
+  const name = statusName || (status ? status : 'Unknown')
+  const color = statusColor
+  
+  // Legacy fallback colors if no color provided
+  const legacyColors = {
     'Running': 'badge-success',
     '2nd Side Running': 'badge-success',
     'Clear to Build': 'badge-info',
@@ -23,7 +28,19 @@ function StatusBadge({ status }) {
     'On Hold': 'badge-warning',
     'Program/Stencil': 'badge-secondary'
   }
-  return <span className={`badge ${colors[status] || 'badge-secondary'}`}>{status}</span>
+  
+  if (color) {
+    return (
+      <span 
+        className="badge"
+        style={{ background: color, color: 'white', padding: '0.25rem 0.5rem' }}
+      >
+        {name}
+      </span>
+    )
+  }
+  
+  return <span className={`badge ${legacyColors[name] || 'badge-secondary'}`}>{name}</span>
 }
 
 export default function Dashboard() {
@@ -156,7 +173,7 @@ export default function Dashboard() {
                       WO: {line.work_orders[0].wo_number} • Qty: {line.work_orders[0].quantity}
                     </div>
                     <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
-                      <StatusBadge status={line.work_orders[0].status} />
+                      <StatusBadge status={line.work_orders[0].status} statusName={line.work_orders[0].status_name} statusColor={line.work_orders[0].status_color} />
                       <PriorityBadge priority={line.work_orders[0].priority} />
                     </div>
                   </div>
@@ -199,7 +216,7 @@ export default function Dashboard() {
                     <td><PriorityBadge priority={wo.priority} /></td>
                     <td>{wo.line?.name || 'Unassigned'}</td>
                     <td>{format(new Date(wo.actual_ship_date), 'MMM d, yyyy')}</td>
-                    <td><StatusBadge status={wo.status} /></td>
+                    <td><StatusBadge status={wo.status} statusName={wo.status_name} statusColor={wo.status_color} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -236,7 +253,7 @@ export default function Dashboard() {
                     <td>{format(new Date(wo.actual_ship_date), 'MMM d, yyyy')}</td>
                     <td>{format(new Date(wo.min_start_date), 'MMM d, yyyy')}</td>
                     <td>{wo.line?.name || 'Unassigned'}</td>
-                    <td><StatusBadge status={wo.status} /></td>
+                    <td><StatusBadge status={wo.status} statusName={wo.status_name} statusColor={wo.status_color} /></td>
                   </tr>
                 ))}
               </tbody>

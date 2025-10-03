@@ -6,8 +6,13 @@ import { format } from 'date-fns'
 import { Clock, Package, Calendar, CheckCircle } from 'lucide-react'
 import CompleteJobModal from '../components/CompleteJobModal'
 
-function StatusBadge({ status }) {
-  const colors = {
+function StatusBadge({ status, statusName, statusColor }) {
+  // Use new status system if available, fallback to legacy
+  const name = statusName || (status ? status : 'Unknown')
+  const color = statusColor
+  
+  // Legacy fallback colors if no color provided
+  const legacyColors = {
     'Running': 'badge-success',
     '2nd Side Running': 'badge-success',
     'Clear to Build': 'badge-info',
@@ -15,7 +20,19 @@ function StatusBadge({ status }) {
     'On Hold': 'badge-warning',
     'Program/Stencil': 'badge-secondary'
   }
-  return <span className={`badge ${colors[status] || 'badge-secondary'}`}>{status}</span>
+  
+  if (color) {
+    return (
+      <span 
+        className="badge"
+        style={{ background: color, color: 'white', padding: '0.25rem 0.5rem' }}
+      >
+        {name}
+      </span>
+    )
+  }
+  
+  return <span className={`badge ${legacyColors[name] || 'badge-secondary'}`}>{name}</span>
 }
 
 function PriorityBadge({ priority }) {
@@ -149,7 +166,7 @@ export default function LineView() {
                     </td>
                     <td><code>{wo.wo_number}</code></td>
                     <td>{wo.quantity}</td>
-                    <td><StatusBadge status={wo.status} /></td>
+                    <td><StatusBadge status={wo.status} statusName={wo.status_name} statusColor={wo.status_color} /></td>
                     <td><PriorityBadge priority={wo.priority} /></td>
                     <td style={{ fontWeight: 600, color: 'var(--primary)' }}>
                       {wo.calculated_start_datetime ? (
@@ -252,7 +269,7 @@ export default function LineView() {
                   <div style={{ background: 'var(--bg-secondary)', padding: '0.75rem', borderRadius: '4px' }}>
                     <strong>Next:</strong> {workOrders[0].customer} - {workOrders[0].assembly} ({workOrders[0].wo_number})
                     <div style={{ marginTop: '0.5rem' }}>
-                      <StatusBadge status={workOrders[0].status} />
+                      <StatusBadge status={workOrders[0].status} statusName={workOrders[0].status_name} statusColor={workOrders[0].status_color} />
                     </div>
                   </div>
                 </div>

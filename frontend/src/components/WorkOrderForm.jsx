@@ -46,6 +46,28 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
     }
   }, [initialData])
 
+  // Map status_name to status_id when editing (if using new system)
+  useEffect(() => {
+    if (initialData?.status_name && statuses.length > 0 && !formData.status_id) {
+      const matchingStatus = statuses.find(s => s.name === initialData.status_name)
+      if (matchingStatus) {
+        setFormData(prev => ({
+          ...prev,
+          status_id: matchingStatus.id
+        }))
+      }
+    } else if (!initialData && statuses.length > 0 && !formData.status_id) {
+      // Set default status to "Clear to Build" for new work orders
+      const defaultStatus = statuses.find(s => s.name === 'Clear to Build')
+      if (defaultStatus) {
+        setFormData(prev => ({
+          ...prev,
+          status_id: defaultStatus.id
+        }))
+      }
+    }
+  }, [initialData, statuses])
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
     setFormData(prev => {

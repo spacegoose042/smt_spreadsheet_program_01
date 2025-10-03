@@ -319,7 +319,17 @@ def get_work_order(wo_id: int, db: Session = Depends(get_db)):
     wo = db.query(WorkOrder).filter(WorkOrder.id == wo_id).first()
     if not wo:
         raise HTTPException(status_code=404, detail="Work order not found")
-    return wo
+    
+    # Add status details
+    wo_dict = schemas.WorkOrderResponse.model_validate(wo).model_dump()
+    if wo.status_obj:
+        wo_dict['status_name'] = wo.status_obj.name
+        wo_dict['status_color'] = wo.status_obj.color
+    elif wo.status:
+        wo_dict['status_name'] = wo.status.value
+        wo_dict['status_color'] = None
+    
+    return schemas.WorkOrderResponse(**wo_dict)
 
 
 @app.post("/api/work-orders", response_model=schemas.WorkOrderResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(auth.require_scheduler_or_admin)])
@@ -363,13 +373,21 @@ def create_work_order(
     db.commit()
     db.refresh(db_wo)
     
+    # Add status details
+    wo_dict = schemas.WorkOrderResponse.model_validate(db_wo).model_dump()
+    if db_wo.status_obj:
+        wo_dict['status_name'] = db_wo.status_obj.name
+        wo_dict['status_color'] = db_wo.status_obj.color
+    elif db_wo.status:
+        wo_dict['status_name'] = db_wo.status.value
+        wo_dict['status_color'] = None
+    
     # Return with trolley warning if needed
-    response = schemas.WorkOrderResponse.model_validate(db_wo)
     if trolley_check["warning"] or trolley_check["exceeds"]:
         # Note: In a real app, you might want to return this as a separate warning field
         pass
     
-    return response
+    return schemas.WorkOrderResponse(**wo_dict)
 
 
 @app.put("/api/work-orders/{wo_id}", response_model=schemas.WorkOrderResponse, dependencies=[Depends(auth.require_scheduler_or_admin)])
@@ -426,7 +444,17 @@ def update_work_order(
     
     db.commit()
     db.refresh(db_wo)
-    return db_wo
+    
+    # Add status details
+    wo_dict = schemas.WorkOrderResponse.model_validate(db_wo).model_dump()
+    if db_wo.status_obj:
+        wo_dict['status_name'] = db_wo.status_obj.name
+        wo_dict['status_color'] = db_wo.status_obj.color
+    elif db_wo.status:
+        wo_dict['status_name'] = db_wo.status.value
+        wo_dict['status_color'] = None
+    
+    return schemas.WorkOrderResponse(**wo_dict)
 
 
 @app.delete("/api/work-orders/{wo_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(auth.require_scheduler_or_admin)])
