@@ -174,6 +174,42 @@ def delete_user(
     return {"status": "success"}
 
 
+@app.post("/api/users/change-password")
+def change_own_password(
+    password_data: schemas.PasswordChange,
+    current_user: User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Change current user's password"""
+    # Verify current password
+    if not auth.verify_password(password_data.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    
+    # Update to new password
+    current_user.hashed_password = auth.get_password_hash(password_data.new_password)
+    db.commit()
+    
+    return {"status": "success", "message": "Password changed successfully"}
+
+
+@app.post("/api/users/{user_id}/reset-password")
+def admin_reset_password(
+    user_id: int,
+    password_data: schemas.AdminPasswordReset,
+    current_user: User = Depends(auth.require_admin),
+    db: Session = Depends(get_db)
+):
+    """Admin: Reset a user's password"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user.hashed_password = auth.get_password_hash(password_data.new_password)
+    db.commit()
+    
+    return {"status": "success", "message": f"Password reset for user {user.username}"}
+
+
 @app.get("/api/recalculate-all", dependencies=[Depends(auth.require_scheduler_or_admin)])
 def recalculate_all_work_orders(
     db: Session = Depends(get_db),

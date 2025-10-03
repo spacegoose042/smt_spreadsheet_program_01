@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
-import { Plus, Edit2, Trash2, X, Save } from 'lucide-react'
+import { Plus, Edit2, Trash2, X, Save, Key } from 'lucide-react'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -67,6 +67,30 @@ export default function UserManagement() {
       queryClient.invalidateQueries(['users'])
     },
   })
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: async ({ userId, newPassword }) => {
+      const token = localStorage.getItem('token')
+      return axios.post(`${API_BASE_URL}/api/users/${userId}/reset-password`, 
+        { new_password: newPassword }, 
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+    },
+    onSuccess: () => {
+      alert('Password reset successfully!')
+    },
+  })
+
+  const handleResetPassword = (user) => {
+    const newPassword = prompt(`Enter new password for ${user.username}:\n\n(Minimum 6 characters)`)
+    if (newPassword && newPassword.length >= 6) {
+      if (confirm(`Reset password for ${user.username}?`)) {
+        resetPasswordMutation.mutate({ userId: user.id, newPassword })
+      }
+    } else if (newPassword) {
+      alert('Password must be at least 6 characters')
+    }
+  }
 
   const resetForm = () => {
     setFormData({ username: '', email: '', password: '', role: 'operator' })
@@ -216,10 +240,13 @@ export default function UserManagement() {
                 <td>{new Date(user.created_at).toLocaleDateString()}</td>
                 <td>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button className="btn btn-sm btn-secondary" onClick={() => handleEdit(user)}>
+                    <button className="btn btn-sm btn-secondary" onClick={() => handleEdit(user)} title="Edit User">
                       <Edit2 size={14} />
                     </button>
-                    <button className="btn btn-sm btn-danger" onClick={() => handleDelete(user)}>
+                    <button className="btn btn-sm btn-warning" onClick={() => handleResetPassword(user)} title="Reset Password">
+                      <Key size={14} />
+                    </button>
+                    <button className="btn btn-sm btn-danger" onClick={() => handleDelete(user)} title="Delete User">
                       <Trash2 size={14} />
                     </button>
                   </div>

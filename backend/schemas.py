@@ -28,6 +28,15 @@ class UserUpdate(BaseModel):
     password: Optional[str] = None
 
 
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=6)
+
+
+class AdminPasswordReset(BaseModel):
+    new_password: str = Field(..., min_length=6)
+
+
 class UserResponse(UserBase):
     id: int
     is_active: bool
