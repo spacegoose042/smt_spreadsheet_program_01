@@ -1264,6 +1264,11 @@ def get_issues(
             issue_dict['reported_by_username'] = issue.reported_by.username
         if issue.resolved_by:
             issue_dict['resolved_by_username'] = issue.resolved_by.username
+        if issue.work_order:
+            issue_dict['wo_number'] = issue.work_order.wo_number
+            issue_dict['assembly'] = issue.work_order.assembly
+            issue_dict['revision'] = issue.work_order.revision
+            issue_dict['customer'] = issue.work_order.customer
         result.append(schemas.IssueResponse(**issue_dict))
     
     return result
@@ -1309,6 +1314,11 @@ def create_issue(
         issue_dict['resolution_type_color'] = issue.resolution_type_obj.color
     if issue.reported_by:
         issue_dict['reported_by_username'] = issue.reported_by.username
+    if issue.work_order:
+        issue_dict['wo_number'] = issue.work_order.wo_number
+        issue_dict['assembly'] = issue.work_order.assembly
+        issue_dict['revision'] = issue.work_order.revision
+        issue_dict['customer'] = issue.work_order.customer
     
     return schemas.IssueResponse(**issue_dict)
 
@@ -1356,6 +1366,11 @@ def update_issue(
         issue_dict['reported_by_username'] = issue.reported_by.username
     if issue.resolved_by:
         issue_dict['resolved_by_username'] = issue.resolved_by.username
+    if issue.work_order:
+        issue_dict['wo_number'] = issue.work_order.wo_number
+        issue_dict['assembly'] = issue.work_order.assembly
+        issue_dict['revision'] = issue.work_order.revision
+        issue_dict['customer'] = issue.work_order.customer
     
     return schemas.IssueResponse(**issue_dict)
 

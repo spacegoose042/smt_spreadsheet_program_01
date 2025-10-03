@@ -403,6 +403,12 @@ class IssueResponse(BaseModel):
     resolution_type_color: Optional[str] = None
     reported_by_username: Optional[str] = None
     resolved_by_username: Optional[str] = None
+    
+    # Work order details
+    wo_number: Optional[str] = None
+    assembly: Optional[str] = None
+    revision: Optional[str] = None
+    customer: Optional[str] = None
 
     class Config:
         from_attributes = True

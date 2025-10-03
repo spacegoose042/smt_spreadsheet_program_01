@@ -245,12 +245,16 @@ export default function Issues() {
             {filteredIssues.length > 0 ? (
               filteredIssues.map(issue => (
                 <tr key={issue.id}>
-                  <td><code>{issue.work_order_id}</code></td>
+                  <td><code>{issue.wo_number || issue.work_order_id}</code></td>
                   <td>
-                    {/* We'd need to join work order data - for now showing ID */}
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                      WO #{issue.work_order_id}
-                    </span>
+                    <div>
+                      <strong>{issue.assembly || '—'} {issue.revision || ''}</strong>
+                      {issue.customer && (
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                          {issue.customer}
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td>
                     <IssueBadge 
