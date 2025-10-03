@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getIssues, updateIssue, deleteIssue, getIssueTypes, getResolutionTypes } from '../api'
-import { AlertTriangle, CheckCircle, Clock, Filter, Trash2, User, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Clock, Filter, Trash2, User, X, Eye, RotateCcw } from 'lucide-react'
 import { format } from 'date-fns'
 import { useAuth } from '../context/AuthContext'
 
@@ -67,10 +67,14 @@ export default function Issues() {
   const [filterIssueType, setFilterIssueType] = useState('')
   const [filterAssembly, setFilterAssembly] = useState('')
   const [resolvingIssue, setResolvingIssue] = useState(null)
+  const [viewingIssue, setViewingIssue] = useState(null)
   const [resolutionData, setResolutionData] = useState({
     resolution_type_id: '',
     resolution_notes: ''
   })
+
+  // Check if user can reopen issues (not operator)
+  const canReopen = user && user.role !== 'operator'
 
   const { data: issues, isLoading } = useQuery({
     queryKey: ['issues', filterStatus],
@@ -130,6 +134,19 @@ export default function Issues() {
       }
     })
     setResolvingIssue(null)
+  }
+
+  const handleReopen = (issue) => {
+    if (confirm(`Reopen this issue?\n\nThis will change the status from Resolved to Open.`)) {
+      updateMutation.mutate({
+        id: issue.id,
+        data: {
+          status: 'Open',
+          resolution_type_id: null,
+          resolution_notes: null
+        }
+      })
+    }
   }
 
   const handleDelete = (issue) => {
@@ -332,7 +349,14 @@ export default function Issues() {
                     </div>
                   </td>
                   <td>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <button
+                        className="btn btn-sm btn-secondary"
+                        onClick={() => setViewingIssue(issue)}
+                        title="View Details"
+                      >
+                        <Eye size={14} />
+                      </button>
                       {issue.status !== 'Resolved' && (
                         <button
                           className="btn btn-sm btn-success"
@@ -349,6 +373,15 @@ export default function Issues() {
                           title="Mark In Progress"
                         >
                           <Clock size={14} />
+                        </button>
+                      )}
+                      {issue.status === 'Resolved' && canReopen && (
+                        <button
+                          className="btn btn-sm btn-warning"
+                          onClick={() => handleReopen(issue)}
+                          title="Reopen Issue"
+                        >
+                          <RotateCcw size={14} />
                         </button>
                       )}
                       {(isAdmin || issue.reported_by_id === user?.id) && (
@@ -481,6 +514,162 @@ export default function Issues() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* View Details Modal */}
+      {viewingIssue && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '12px',
+            padding: '2rem',
+            maxWidth: '700px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflow: 'auto',
+            boxShadow: 'var(--shadow-xl)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Issue Details</h2>
+              <button
+                onClick={() => setViewingIssue(null)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '0.5rem',
+                  color: 'var(--text-secondary)'
+                }}
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Issue Info */}
+            <div style={{ 
+              background: 'var(--bg-secondary)', 
+              padding: '1.5rem', 
+              borderRadius: '8px',
+              marginBottom: '1.5rem'
+            }}>
+              <div style={{ marginBottom: '1rem' }}>
+                <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.75rem' }}>Work Order</h3>
+                <div><strong>WO Number:</strong> <code>{viewingIssue.wo_number}</code></div>
+                <div><strong>Assembly:</strong> {viewingIssue.assembly} {viewingIssue.revision}</div>
+                <div><strong>Customer:</strong> {viewingIssue.customer}</div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '1rem' }}>
+                <IssueBadge issueType={viewingIssue.issue_type_name} color={viewingIssue.issue_type_color} />
+                <SeverityBadge severity={viewingIssue.severity} />
+                <StatusBadge status={viewingIssue.status} />
+              </div>
+            </div>
+
+            {/* Issue Description */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.75rem' }}>Issue Description</h3>
+              <div style={{ 
+                padding: '1rem',
+                background: 'white',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                whiteSpace: 'pre-wrap',
+                lineHeight: '1.6'
+              }}>
+                {viewingIssue.description}
+              </div>
+            </div>
+
+            {/* Resolution (if resolved) */}
+            {viewingIssue.status === 'Resolved' && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.75rem' }}>Resolution</h3>
+                <div style={{ 
+                  padding: '1.5rem',
+                  background: 'linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%)',
+                  border: '1px solid #b1dfbb',
+                  borderRadius: '8px'
+                }}>
+                  {viewingIssue.resolution_type_name && (
+                    <div style={{ marginBottom: '1rem' }}>
+                      <span 
+                        className="badge"
+                        style={{ background: viewingIssue.resolution_type_color, color: 'white' }}
+                      >
+                        {viewingIssue.resolution_type_name}
+                      </span>
+                    </div>
+                  )}
+                  {viewingIssue.resolution_notes && (
+                    <div style={{ 
+                      whiteSpace: 'pre-wrap',
+                      lineHeight: '1.6',
+                      marginBottom: '1rem',
+                      color: '#155724'
+                    }}>
+                      {viewingIssue.resolution_notes}
+                    </div>
+                  )}
+                  {viewingIssue.resolved_by_username && (
+                    <div style={{ fontSize: '0.875rem', color: '#155724', marginTop: '1rem' }}>
+                      <strong>Resolved by:</strong> {viewingIssue.resolved_by_username} on {format(new Date(viewingIssue.resolved_at), 'MMM d, yyyy h:mm a')}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Tracking */}
+            <div style={{ 
+              padding: '1rem',
+              background: 'var(--bg-secondary)',
+              borderRadius: '8px',
+              fontSize: '0.875rem'
+            }}>
+              <div style={{ marginBottom: '0.5rem' }}>
+                <strong>Reported by:</strong> {viewingIssue.reported_by_username} on {format(new Date(viewingIssue.reported_at), 'MMM d, yyyy h:mm a')}
+              </div>
+              <div>
+                <strong>Issue ID:</strong> #{viewingIssue.id}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+              {viewingIssue.status === 'Resolved' && canReopen && (
+                <button
+                  className="btn btn-warning"
+                  onClick={() => {
+                    handleReopen(viewingIssue)
+                    setViewingIssue(null)
+                  }}
+                >
+                  <RotateCcw size={18} />
+                  Reopen Issue
+                </button>
+              )}
+              <button
+                className="btn btn-secondary"
+                onClick={() => setViewingIssue(null)}
+                style={{ marginLeft: 'auto' }}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
