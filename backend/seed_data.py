@@ -241,6 +241,45 @@ def main():
         print(f"Note: {e}")
         print("Continuing with seed...")
     
+    # Add new columns to existing tables if they don't exist
+    try:
+        with engine.begin() as conn:
+            # Check and add resolution_type_id to issues table
+            result = conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.columns 
+                    WHERE table_name = 'issues' AND column_name = 'resolution_type_id'
+                )
+            """))
+            column_exists = result.scalar()
+            
+            if not column_exists:
+                print("Adding resolution_type_id column to issues...")
+                conn.execute(text("ALTER TABLE issues ADD COLUMN resolution_type_id INTEGER"))
+                conn.execute(text("ALTER TABLE issues ADD CONSTRAINT fk_issues_resolution_type FOREIGN KEY (resolution_type_id) REFERENCES resolution_types(id)"))
+                print("✓ Added resolution_type_id to issues")
+            else:
+                print("✓ resolution_type_id column already exists in issues")
+            
+            # Check and add resolution_notes to issues table
+            result = conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.columns 
+                    WHERE table_name = 'issues' AND column_name = 'resolution_notes'
+                )
+            """))
+            column_exists = result.scalar()
+            
+            if not column_exists:
+                print("Adding resolution_notes column to issues...")
+                conn.execute(text("ALTER TABLE issues ADD COLUMN resolution_notes VARCHAR"))
+                print("✓ Added resolution_notes to issues")
+            else:
+                print("✓ resolution_notes column already exists in issues")
+    except Exception as e:
+        print(f"Note: Column check/add: {e}")
+        print("Continuing with seed...")
+    
     # Add all role values to userrole enum if they don't exist
     try:
         with engine.begin() as conn:
