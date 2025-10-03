@@ -61,6 +61,26 @@ class IssueType(Base):
     issues = relationship("Issue", back_populates="issue_type_obj")
 
 
+class ResolutionType(Base):
+    """
+    Configurable resolution types for issues.
+    Tracks how issues were resolved.
+    """
+    __tablename__ = "resolution_types"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False, index=True)
+    color = Column(String, default="#28a745")  # Badge color (hex)
+    category = Column(String, nullable=True)  # Optional grouping
+    is_active = Column(Boolean, default=True)
+    display_order = Column(Integer, default=0)
+    is_system = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    issues = relationship("Issue", back_populates="resolution_type_obj")
+
+
 class IssueSeverity(str, enum.Enum):
     MINOR = "Minor"
     MAJOR = "Major"
@@ -93,9 +113,14 @@ class Issue(Base):
     resolved_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     resolved_at = Column(DateTime, nullable=True)
     
+    # Resolution details
+    resolution_type_id = Column(Integer, ForeignKey("resolution_types.id"), nullable=True)
+    resolution_notes = Column(String, nullable=True)
+    
     # Relationships
     work_order = relationship("WorkOrder", back_populates="issues")
     issue_type_obj = relationship("IssueType", back_populates="issues")
+    resolution_type_obj = relationship("ResolutionType", back_populates="issues")
     reported_by = relationship("User", foreign_keys=[reported_by_id])
     resolved_by = relationship("User", foreign_keys=[resolved_by_id])
 

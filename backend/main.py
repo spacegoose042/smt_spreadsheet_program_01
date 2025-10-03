@@ -9,7 +9,7 @@ from typing import List, Optional
 from datetime import date, timedelta
 
 from database import engine, get_db, Base
-from models import WorkOrder, SMTLine, CompletedWorkOrder, WorkOrderStatus, Priority, User, UserRole, CapacityOverride, Shift, ShiftBreak, LineConfiguration, Status, IssueType, Issue, IssueSeverity, IssueStatus
+from models import WorkOrder, SMTLine, CompletedWorkOrder, WorkOrderStatus, Priority, User, UserRole, CapacityOverride, Shift, ShiftBreak, LineConfiguration, Status, IssueType, Issue, IssueSeverity, IssueStatus, ResolutionType
 import schemas
 import scheduler as sched
 import time_scheduler as time_sched
@@ -1257,6 +1257,9 @@ def get_issues(
         if issue.issue_type_obj:
             issue_dict['issue_type_name'] = issue.issue_type_obj.name
             issue_dict['issue_type_color'] = issue.issue_type_obj.color
+        if issue.resolution_type_obj:
+            issue_dict['resolution_type_name'] = issue.resolution_type_obj.name
+            issue_dict['resolution_type_color'] = issue.resolution_type_obj.color
         if issue.reported_by:
             issue_dict['reported_by_username'] = issue.reported_by.username
         if issue.resolved_by:
@@ -1301,6 +1304,9 @@ def create_issue(
     if issue.issue_type_obj:
         issue_dict['issue_type_name'] = issue.issue_type_obj.name
         issue_dict['issue_type_color'] = issue.issue_type_obj.color
+    if issue.resolution_type_obj:
+        issue_dict['resolution_type_name'] = issue.resolution_type_obj.name
+        issue_dict['resolution_type_color'] = issue.resolution_type_obj.color
     if issue.reported_by:
         issue_dict['reported_by_username'] = issue.reported_by.username
     
@@ -1343,6 +1349,9 @@ def update_issue(
     if issue.issue_type_obj:
         issue_dict['issue_type_name'] = issue.issue_type_obj.name
         issue_dict['issue_type_color'] = issue.issue_type_obj.color
+    if issue.resolution_type_obj:
+        issue_dict['resolution_type_name'] = issue.resolution_type_obj.name
+        issue_dict['resolution_type_color'] = issue.resolution_type_obj.color
     if issue.reported_by:
         issue_dict['reported_by_username'] = issue.reported_by.username
     if issue.resolved_by:
@@ -1370,6 +1379,108 @@ def delete_issue(
     db.commit()
     
     return {"message": "Issue deleted successfully"}
+
+
+# ========== Resolution Types ==========
+
+@app.get("/api/resolution-types")
+def get_resolution_types(
+    include_inactive: bool = False,
+    db: Session = Depends(get_db)
+):
+    """Get all resolution types"""
+    query = db.query(ResolutionType)
+    if not include_inactive:
+        query = query.filter(ResolutionType.is_active == True)
+    
+    resolution_types = query.order_by(ResolutionType.display_order, ResolutionType.name).all()
+    return resolution_types
+
+
+@app.post("/api/resolution-types", dependencies=[Depends(auth.require_admin)])
+def create_resolution_type(
+    resolution_type_data: schemas.ResolutionTypeCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """Create a new resolution type (Admin only)"""
+    # Check if resolution type with this name already exists
+    existing = db.query(ResolutionType).filter(ResolutionType.name == resolution_type_data.name).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Resolution type '{resolution_type_data.name}' already exists")
+    
+    resolution_type = ResolutionType(
+        name=resolution_type_data.name,
+        color=resolution_type_data.color,
+        category=resolution_type_data.category,
+        is_active=resolution_type_data.is_active,
+        display_order=resolution_type_data.display_order,
+        is_system=False
+    )
+    
+    db.add(resolution_type)
+    db.commit()
+    db.refresh(resolution_type)
+    
+    return resolution_type
+
+
+@app.put("/api/resolution-types/{resolution_type_id}", dependencies=[Depends(auth.require_admin)])
+def update_resolution_type(
+    resolution_type_id: int,
+    resolution_type_data: schemas.ResolutionTypeUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """Update a resolution type (Admin only)"""
+    resolution_type = db.query(ResolutionType).filter(ResolutionType.id == resolution_type_id).first()
+    if not resolution_type:
+        raise HTTPException(status_code=404, detail="Resolution type not found")
+    
+    # Check if name is being changed and already exists
+    if resolution_type_data.name and resolution_type_data.name != resolution_type.name:
+        existing = db.query(ResolutionType).filter(ResolutionType.name == resolution_type_data.name).first()
+        if existing:
+            raise HTTPException(status_code=400, detail=f"Resolution type '{resolution_type_data.name}' already exists")
+    
+    # Update fields
+    update_data = resolution_type_data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(resolution_type, key, value)
+    
+    db.commit()
+    db.refresh(resolution_type)
+    
+    return resolution_type
+
+
+@app.delete("/api/resolution-types/{resolution_type_id}", dependencies=[Depends(auth.require_admin)])
+def delete_resolution_type(
+    resolution_type_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """Delete a resolution type (Admin only)"""
+    resolution_type = db.query(ResolutionType).filter(ResolutionType.id == resolution_type_id).first()
+    if not resolution_type:
+        raise HTTPException(status_code=404, detail="Resolution type not found")
+    
+    # Prevent deleting system resolution types
+    if resolution_type.is_system:
+        raise HTTPException(status_code=400, detail="Cannot delete system resolution type")
+    
+    # Check if any issues are using this type
+    issue_count = db.query(Issue).filter(Issue.resolution_type_id == resolution_type_id).count()
+    if issue_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot delete resolution type '{resolution_type.name}' - {issue_count} issue(s) are using it"
+        )
+    
+    db.delete(resolution_type)
+    db.commit()
+    
+    return {"message": "Resolution type deleted successfully"}
 
 
 if __name__ == "__main__":

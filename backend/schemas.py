@@ -378,6 +378,8 @@ class IssueUpdate(BaseModel):
     severity: Optional[IssueSeverity] = None
     status: Optional[IssueStatus] = None
     description: Optional[str] = None
+    resolution_type_id: Optional[int] = None
+    resolution_notes: Optional[str] = None
 
 
 class IssueResponse(BaseModel):
@@ -391,12 +393,47 @@ class IssueResponse(BaseModel):
     reported_at: datetime
     resolved_by_id: Optional[int]
     resolved_at: Optional[datetime]
+    resolution_type_id: Optional[int]
+    resolution_notes: Optional[str]
     
     # Computed fields for display
     issue_type_name: Optional[str] = None
     issue_type_color: Optional[str] = None
+    resolution_type_name: Optional[str] = None
+    resolution_type_color: Optional[str] = None
     reported_by_username: Optional[str] = None
     resolved_by_username: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+# Resolution Type Schemas
+class ResolutionTypeCreate(BaseModel):
+    name: str
+    color: str = "#28a745"
+    category: Optional[str] = None
+    is_active: bool = True
+    display_order: int = 0
+
+
+class ResolutionTypeUpdate(BaseModel):
+    name: Optional[str] = None
+    color: Optional[str] = None
+    category: Optional[str] = None
+    is_active: Optional[bool] = None
+    display_order: Optional[int] = None
+
+
+class ResolutionTypeResponse(BaseModel):
+    id: int
+    name: str
+    color: str
+    category: Optional[str]
+    is_active: bool
+    display_order: int
+    is_system: bool
+    created_at: datetime
 
     class Config:
         from_attributes = True

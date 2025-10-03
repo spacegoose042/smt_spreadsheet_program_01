@@ -83,5 +83,12 @@ export const createIssue = (data) => api.post('/api/issues', data)
 export const updateIssue = (id, data) => api.put(`/api/issues/${id}`, data)
 export const deleteIssue = (id) => api.delete(`/api/issues/${id}`)
 
+// Resolution Types (Admin only)
+export const getResolutionTypes = (includeInactive = false) =>
+  api.get('/api/resolution-types', { params: { include_inactive: includeInactive } })
+export const createResolutionType = (data) => api.post('/api/resolution-types', data)
+export const updateResolutionType = (id, data) => api.put(`/api/resolution-types/${id}`, data)
+export const deleteResolutionType = (id) => api.delete(`/api/resolution-types/${id}`)
+
 export default api
 

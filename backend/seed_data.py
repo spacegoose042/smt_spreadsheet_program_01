@@ -4,7 +4,7 @@ Script to seed the database with initial data (lines, sample work orders)
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from database import SessionLocal, engine
-from models import Base, SMTLine, User, UserRole, Shift, ShiftBreak, LineConfiguration, IssueType
+from models import Base, SMTLine, User, UserRole, Shift, ShiftBreak, LineConfiguration, IssueType, ResolutionType
 from passlib.context import CryptContext
 from datetime import time
 
@@ -196,6 +196,41 @@ def seed_issue_types(db: Session):
     print("✓ Seeded default issue types")
 
 
+def seed_resolution_types(db: Session):
+    """Create default resolution types (only if none exist)"""
+    # Check if resolution types already exist
+    existing = db.query(ResolutionType).count()
+    if existing > 0:
+        print(f"✓ Resolution types already exist ({existing} types) - skipping seed")
+        return
+    
+    default_resolution_types = [
+        {"name": "BOM Update Required", "color": "#e74c3c", "category": "Action Required", "display_order": 1},
+        {"name": "Ordered Tape & Reel Packaging", "color": "#f39c12", "category": "Packaging", "display_order": 2},
+        {"name": "Program Updated", "color": "#9b59b6", "category": "Program", "display_order": 3},
+        {"name": "Stencil Modified", "color": "#3498db", "category": "Stencil", "display_order": 4},
+        {"name": "Part Substitution Approved", "color": "#1abc9c", "category": "Parts", "display_order": 5},
+        {"name": "Vendor Contacted", "color": "#f1c40f", "category": "External", "display_order": 6},
+        {"name": "No Action Needed", "color": "#95a5a6", "category": "No Action", "display_order": 7},
+        {"name": "Workaround Found", "color": "#16a085", "category": "Resolved", "display_order": 8},
+        {"name": "Other", "color": "#7f8c8d", "category": "Other", "display_order": 9},
+    ]
+    
+    for rt_data in default_resolution_types:
+        resolution_type = ResolutionType(
+            name=rt_data["name"],
+            color=rt_data["color"],
+            category=rt_data["category"],
+            display_order=rt_data["display_order"],
+            is_active=True,
+            is_system=True  # Default types are system types
+        )
+        db.add(resolution_type)
+    
+    db.commit()
+    print("✓ Seeded default resolution types")
+
+
 def main():
     """Run all seeding functions"""
     # Create tables (this will create new tables and columns)
@@ -234,6 +269,7 @@ def main():
         seed_users(db)
         seed_shifts_and_config(db)
         seed_issue_types(db)
+        seed_resolution_types(db)
         print("\n✅ Database seeded successfully!")
         print("\nDefault users:")
         print("  admin / admin123 (Admin - full system access)")

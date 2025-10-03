@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getIssues, updateIssue, deleteIssue, getIssueTypes } from '../api'
-import { AlertTriangle, CheckCircle, Clock, Filter, Trash2, User } from 'lucide-react'
+import { getIssues, updateIssue, deleteIssue, getIssueTypes, getResolutionTypes } from '../api'
+import { AlertTriangle, CheckCircle, Clock, Filter, Trash2, User, X } from 'lucide-react'
 import { format } from 'date-fns'
 import { useAuth } from '../context/AuthContext'
 
@@ -65,6 +65,11 @@ export default function Issues() {
   const queryClient = useQueryClient()
   const [filterStatus, setFilterStatus] = useState('')
   const [filterIssueType, setFilterIssueType] = useState('')
+  const [resolvingIssue, setResolvingIssue] = useState(null)
+  const [resolutionData, setResolutionData] = useState({
+    resolution_type_id: '',
+    resolution_notes: ''
+  })
 
   const { data: issues, isLoading } = useQuery({
     queryKey: ['issues', filterStatus],
@@ -78,6 +83,11 @@ export default function Issues() {
   const { data: issueTypes } = useQuery({
     queryKey: ['issue-types'],
     queryFn: () => getIssueTypes(false).then(res => res.data)
+  })
+
+  const { data: resolutionTypes } = useQuery({
+    queryKey: ['resolution-types'],
+    queryFn: () => getResolutionTypes(false).then(res => res.data)
   })
 
   const updateMutation = useMutation({
@@ -95,10 +105,30 @@ export default function Issues() {
   })
 
   const handleStatusChange = (issue, newStatus) => {
+    if (newStatus === 'Resolved') {
+      // Open resolution modal
+      setResolvingIssue(issue)
+      setResolutionData({ resolution_type_id: '', resolution_notes: '' })
+    } else {
+      // Simple status update
+      updateMutation.mutate({
+        id: issue.id,
+        data: { status: newStatus }
+      })
+    }
+  }
+
+  const handleResolve = (e) => {
+    e.preventDefault()
     updateMutation.mutate({
-      id: issue.id,
-      data: { status: newStatus }
+      id: resolvingIssue.id,
+      data: {
+        status: 'Resolved',
+        resolution_type_id: parseInt(resolutionData.resolution_type_id),
+        resolution_notes: resolutionData.resolution_notes
+      }
     })
+    setResolvingIssue(null)
   }
 
   const handleDelete = (issue) => {
@@ -205,6 +235,7 @@ export default function Issues() {
               <th>Severity</th>
               <th>Status</th>
               <th>Description</th>
+              <th>Resolution</th>
               <th>Reported By</th>
               <th>Reported</th>
               <th>Actions</th>
@@ -237,6 +268,30 @@ export default function Issues() {
                     }}>
                       {issue.description}
                     </div>
+                  </td>
+                  <td>
+                    {issue.status === 'Resolved' && issue.resolution_type_name ? (
+                      <div>
+                        <span 
+                          className="badge"
+                          style={{ background: issue.resolution_type_color, color: 'white', marginBottom: '0.25rem' }}
+                        >
+                          {issue.resolution_type_name}
+                        </span>
+                        {issue.resolution_notes && (
+                          <div style={{ 
+                            fontSize: '0.75rem', 
+                            color: 'var(--text-secondary)',
+                            marginTop: '0.25rem',
+                            fontStyle: 'italic'
+                          }}>
+                            {issue.resolution_notes.substring(0, 50)}{issue.resolution_notes.length > 50 ? '...' : ''}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>—</span>
+                    )}
                   </td>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
@@ -285,7 +340,7 @@ export default function Issues() {
               ))
             ) : (
               <tr>
-                <td colSpan="9" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                <td colSpan="10" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
                   <CheckCircle size={48} style={{ margin: '0 auto 1rem', opacity: 0.3 }} />
                   <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>No issues found</p>
                   <p style={{ fontSize: '0.9rem', marginTop: '0.5rem' }}>
@@ -297,6 +352,112 @@ export default function Issues() {
           </tbody>
         </table>
       </div>
+
+      {/* Resolution Modal */}
+      {resolvingIssue && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '12px',
+            padding: '1.5rem',
+            maxWidth: '600px',
+            width: '100%',
+            boxShadow: 'var(--shadow-xl)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <CheckCircle size={24} style={{ color: 'var(--success)' }} />
+                Resolve Issue
+              </h2>
+              <button
+                onClick={() => setResolvingIssue(null)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '0.5rem',
+                  color: 'var(--text-secondary)'
+                }}
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div style={{ 
+              background: 'var(--bg-secondary)', 
+              padding: '1rem', 
+              borderRadius: '8px',
+              marginBottom: '1.5rem'
+            }}>
+              <div style={{ marginBottom: '0.5rem' }}>
+                <IssueBadge issueType={resolvingIssue.issue_type_name} color={resolvingIssue.issue_type_color} />
+                {' '}
+                <SeverityBadge severity={resolvingIssue.severity} />
+              </div>
+              <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                {resolvingIssue.description}
+              </div>
+            </div>
+
+            <form onSubmit={handleResolve}>
+              <div className="form-group">
+                <label className="form-label">Resolution Type *</label>
+                <select
+                  className="form-select"
+                  value={resolutionData.resolution_type_id}
+                  onChange={(e) => setResolutionData(prev => ({ ...prev, resolution_type_id: e.target.value }))}
+                  required
+                >
+                  <option value="">Select resolution type...</option>
+                  {resolutionTypes?.map(type => (
+                    <option key={type.id} value={type.id}>{type.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Resolution Notes</label>
+                <textarea
+                  className="form-input"
+                  value={resolutionData.resolution_notes}
+                  onChange={(e) => setResolutionData(prev => ({ ...prev, resolution_notes: e.target.value }))}
+                  rows={4}
+                  placeholder="Describe how this issue was resolved..."
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                <button
+                  type="submit"
+                  className="btn btn-success"
+                  disabled={updateMutation.isPending}
+                >
+                  <CheckCircle size={18} />
+                  {updateMutation.isPending ? 'Resolving...' : 'Mark as Resolved'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setResolvingIssue(null)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

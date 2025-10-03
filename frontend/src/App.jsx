@@ -15,6 +15,7 @@ import ShiftConfiguration from './pages/ShiftConfiguration'
 import StatusManagement from './pages/StatusManagement'
 import ChangePassword from './pages/ChangePassword'
 import IssueTypeManagement from './pages/IssueTypeManagement'
+import ResolutionTypeManagement from './pages/ResolutionTypeManagement'
 import Issues from './pages/Issues'
 import './App.css'
 
@@ -39,7 +40,7 @@ function Navigation() {
   const settingsRef = useRef(null)
   
   const isActive = (path) => location.pathname === path
-  const isSettingsActive = ['/capacity', '/shifts', '/users', '/statuses', '/issue-types', '/settings', '/change-password'].includes(location.pathname)
+  const isSettingsActive = ['/capacity', '/shifts', '/users', '/statuses', '/issue-types', '/resolution-types', '/settings', '/change-password'].includes(location.pathname)
   
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -155,6 +156,14 @@ function Navigation() {
                       <AlertTriangle size={16} />
                       Issue Types
                     </Link>
+                    <Link 
+                      to="/resolution-types" 
+                      className={isActive('/resolution-types') ? 'active' : ''}
+                      onClick={() => setSettingsOpen(false)}
+                    >
+                      <CheckCircle size={16} />
+                      Resolution Types
+                    </Link>
                     <div className="nav-dropdown-divider" />
                   </>
                 )}
@@ -225,6 +234,7 @@ function AppContent() {
           <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
           <Route path="/statuses" element={<ProtectedRoute><StatusManagement /></ProtectedRoute>} />
           <Route path="/issue-types" element={<ProtectedRoute><IssueTypeManagement /></ProtectedRoute>} />
+          <Route path="/resolution-types" element={<ProtectedRoute><ResolutionTypeManagement /></ProtectedRoute>} />
           <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
         </Routes>
