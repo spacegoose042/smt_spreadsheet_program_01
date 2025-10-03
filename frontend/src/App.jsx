@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
-import { Home, Calendar, Settings, CheckCircle, List, LayoutGrid, LogOut, User as UserIcon, Users, Clock, Timer, Tag, ChevronDown, Key, AlertTriangle } from 'lucide-react'
+import { Home, Calendar, Settings, CheckCircle, List, LayoutGrid, LogOut, User as UserIcon, Users, Clock, Timer, Tag, ChevronDown, Key, AlertTriangle, Database } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import Login from './pages/Login'
@@ -17,6 +17,7 @@ import ChangePassword from './pages/ChangePassword'
 import IssueTypeManagement from './pages/IssueTypeManagement'
 import ResolutionTypeManagement from './pages/ResolutionTypeManagement'
 import Issues from './pages/Issues'
+import CetecImport from './pages/CetecImport'
 import './App.css'
 
 function ProtectedRoute({ children, requireAuth = true }) {
@@ -40,7 +41,7 @@ function Navigation() {
   const settingsRef = useRef(null)
   
   const isActive = (path) => location.pathname === path
-  const isSettingsActive = ['/capacity', '/shifts', '/users', '/statuses', '/issue-types', '/resolution-types', '/settings', '/change-password'].includes(location.pathname)
+  const isSettingsActive = ['/capacity', '/shifts', '/users', '/statuses', '/issue-types', '/resolution-types', '/cetec-import', '/settings', '/change-password'].includes(location.pathname)
   
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -128,6 +129,14 @@ function Navigation() {
                 >
                   <Timer size={16} />
                   Shift Configuration
+                </Link>
+                <Link 
+                  to="/cetec-import" 
+                  className={isActive('/cetec-import') ? 'active' : ''}
+                  onClick={() => setSettingsOpen(false)}
+                >
+                  <Database size={16} />
+                  Cetec Import Test
                 </Link>
                 {isAdmin && (
                   <>
@@ -235,6 +244,7 @@ function AppContent() {
           <Route path="/statuses" element={<ProtectedRoute><StatusManagement /></ProtectedRoute>} />
           <Route path="/issue-types" element={<ProtectedRoute><IssueTypeManagement /></ProtectedRoute>} />
           <Route path="/resolution-types" element={<ProtectedRoute><ResolutionTypeManagement /></ProtectedRoute>} />
+          <Route path="/cetec-import" element={<ProtectedRoute><CetecImport /></ProtectedRoute>} />
           <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
         </Routes>
