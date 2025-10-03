@@ -65,6 +65,7 @@ export default function Issues() {
   const queryClient = useQueryClient()
   const [filterStatus, setFilterStatus] = useState('')
   const [filterIssueType, setFilterIssueType] = useState('')
+  const [filterAssembly, setFilterAssembly] = useState('')
   const [resolvingIssue, setResolvingIssue] = useState(null)
   const [resolutionData, setResolutionData] = useState({
     resolution_type_id: '',
@@ -137,11 +138,20 @@ export default function Issues() {
     }
   }
 
-  // Filter issues by type
+  // Filter issues by type and assembly
   const filteredIssues = issues?.filter(issue => {
-    if (!filterIssueType) return true
-    return issue.issue_type_id === parseInt(filterIssueType)
+    if (filterIssueType && issue.issue_type_id !== parseInt(filterIssueType)) {
+      return false
+    }
+    if (filterAssembly && issue.assembly !== filterAssembly) {
+      return false
+    }
+    return true
   }) || []
+
+  // Get unique assemblies for filter dropdown
+  const uniqueAssemblies = [...new Set(issues?.map(i => i.assembly).filter(Boolean) || [])]
+    .sort()
 
   // Calculate statistics
   const stats = {
@@ -195,9 +205,9 @@ export default function Issues() {
 
       {/* Filters */}
       <div className="card" style={{ marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <Filter size={18} style={{ color: 'var(--text-secondary)' }} />
-          <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
+          <div className="form-group" style={{ marginBottom: 0, flex: 1, minWidth: '200px' }}>
             <select
               className="form-select"
               value={filterStatus}
@@ -209,7 +219,7 @@ export default function Issues() {
               <option value="Resolved">Resolved</option>
             </select>
           </div>
-          <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
+          <div className="form-group" style={{ marginBottom: 0, flex: 1, minWidth: '200px' }}>
             <select
               className="form-select"
               value={filterIssueType}
@@ -218,6 +228,18 @@ export default function Issues() {
               <option value="">All Issue Types</option>
               {issueTypes?.map(type => (
                 <option key={type.id} value={type.id}>{type.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group" style={{ marginBottom: 0, flex: 1, minWidth: '200px' }}>
+            <select
+              className="form-select"
+              value={filterAssembly}
+              onChange={(e) => setFilterAssembly(e.target.value)}
+            >
+              <option value="">All Assemblies</option>
+              {uniqueAssemblies.map(assembly => (
+                <option key={assembly} value={assembly}>{assembly}</option>
               ))}
             </select>
           </div>
