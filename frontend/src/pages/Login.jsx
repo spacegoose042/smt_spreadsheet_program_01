@@ -133,6 +133,25 @@ export default function Login() {
         </form>
 
         <div style={{
+          marginTop: '1.5rem',
+          padding: '1rem',
+          background: 'linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%)',
+          border: '1px solid #bee5eb',
+          borderRadius: '8px',
+          textAlign: 'center'
+        }}>
+          <p style={{ 
+            fontSize: '0.875rem', 
+            color: '#0c5460',
+            margin: 0,
+            lineHeight: '1.6'
+          }}>
+            <strong>Forgot your password?</strong><br />
+            Contact an administrator to reset it.
+          </p>
+        </div>
+
+        <div style={{
           marginTop: '2rem',
           textAlign: 'center',
           fontSize: '0.75rem',
