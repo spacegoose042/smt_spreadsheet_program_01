@@ -456,6 +456,10 @@ export default function CetecImport() {
           const combinedResponse = await getCetecCombinedData(ordlineId)
           const cetecData = combinedResponse.data
           
+          if (i === 0) {
+            console.log('   ✨ First combined response:', cetecData)
+          }
+          
           // Calculate time in minutes using Cetec data
           let timeMinutes = 0
           if (cetecData.has_smt_production && cetecData.smt_location && cetecData.smt_operation) {
@@ -465,6 +469,10 @@ export default function CetecImport() {
             
             // Time calculation: (est_seconds × repetitions × balance_due) / 60
             timeMinutes = (estSeconds * repetitions * balanceDue) / 60
+            
+            if (i === 0 && timeMinutes > 0) {
+              console.log(`   ⏱️  Time calc: ${estSeconds} sec × ${repetitions} reps × ${balanceDue} qty / 60 = ${Math.round(timeMinutes)} min`)
+            }
           }
 
           // Combine all data
@@ -482,7 +490,7 @@ export default function CetecImport() {
           await new Promise(resolve => setTimeout(resolve, 100))
 
         } catch (err) {
-          console.error(`   Error for ordline ${ordlineId}:`, err.message)
+          console.error(`   ❌ Error for ordline ${ordlineId}:`, err.message, err.response?.data)
           
           // Still add the order line even if we couldn't get operations
           combinedData.push({
@@ -499,16 +507,17 @@ export default function CetecImport() {
       // STEP 3: Show statistics
       const withSmtOperation = combinedData.filter(item => item._cetec_smt_operation).length
       const withSmtLocation = combinedData.filter(item => item._cetec_smt_location).length
-      const withLocationMaps = combinedData.filter(item => item._cetec_location_maps && item._cetec_location_maps.length > 0).length
+      const withCalculatedTime = combinedData.filter(item => item._calculated_time_minutes > 0).length
 
       console.log('\n═══════════════════════════════════════')
       console.log('📊 Combined Data Statistics:')
       console.log('═══════════════════════════════════════')
       console.log(`Total order lines: ${combinedData.length}`)
-      console.log(`With location maps: ${withLocationMaps}`)
       console.log(`With SMT location: ${withSmtLocation}`)
       console.log(`With SMT operation: ${withSmtOperation}`)
-      console.log('\nSample combined record:', combinedData[0])
+      console.log(`With calculated time: ${withCalculatedTime}`)
+      console.log('\n✨ Sample combined record with time calculation:')
+      console.log(combinedData.find(item => item._calculated_time_minutes > 0) || combinedData[0])
 
       // Set the data
       setCetecData(combinedData)
