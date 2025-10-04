@@ -1062,23 +1062,48 @@ export default function CetecImport() {
   const exportToCSV = () => {
     if (!cetecData || cetecData.length === 0) return
 
-    // Create CSV header
-    const headers = Object.keys(cetecData[0])
+    // Define columns to export (matching Work Order import format)
+    const headers = [
+      'WO Number',
+      'Assembly',
+      'Revision',
+      'Customer',
+      'Quantity',
+      'Time (min)',
+      'Ship Date',
+      'Cetec Order',
+      'Cetec Line',
+      'Status',
+      'Ordline ID'
+    ]
     
-    // Create CSV rows
-    const rows = cetecData.map(item => 
-      headers.map(header => {
-        const value = item[header]
-        if (value === null || value === undefined) return ''
-        if (typeof value === 'object') return JSON.stringify(value)
-        return `"${String(value).replace(/"/g, '""')}"`
-      })
-    )
+    // Create CSV rows with mapped data
+    const rows = cetecData.map(item => {
+      const woNumber = `${item.ordernum}-${item.lineitem}`
+      const quantity = item.balancedue || item.release_qty || item.orig_order_qty || 0
+      const timeMinutes = item._calculated_time_minutes ? Math.round(item._calculated_time_minutes) : 0
+      const shipDate = item.target_ship_date || item.target_wip_date || ''
+      const status = timeMinutes > 0 ? 'Ready' : 'Missing Data'
+      
+      return [
+        `"${woNumber}"`,
+        `"${item.prcpart || ''}"`,
+        `"${item.revision || ''}"`,
+        `"${item.customer || ''}"`,
+        quantity,
+        timeMinutes,
+        `"${shipDate}"`,
+        `"${item.ordernum || ''}"`,
+        `"${item.lineitem || ''}"`,
+        `"${status}"`,
+        item.ordline_id || ''
+      ].join(',')
+    })
 
     // Combine
     const csvContent = [
       headers.join(','),
-      ...rows.map(row => row.join(','))
+      ...rows
     ].join('\n')
 
     // Download
@@ -1086,7 +1111,7 @@ export default function CetecImport() {
     const link = document.createElement('a')
     const url = URL.createObjectURL(blob)
     link.setAttribute('href', url)
-    link.setAttribute('download', `cetec_ordlines_${new Date().toISOString().split('T')[0]}.csv`)
+    link.setAttribute('download', `cetec_work_orders_preview_${new Date().toISOString().split('T')[0]}.csv`)
     link.style.visibility = 'hidden'
     document.body.appendChild(link)
     link.click()
@@ -1472,10 +1497,17 @@ export default function CetecImport() {
 
           <div className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h3 style={{ fontSize: '1.125rem', fontWeight: 700 }}>Cetec Order Lines ({cetecData.length})</h3>
+              <div>
+                <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '0.25rem' }}>
+                  Work Order Import Preview ({cetecData.length})
+                </h3>
+                <p style={{ fontSize: '0.875rem', color: '#6c757d', margin: 0 }}>
+                  {cetecData.filter(line => line._calculated_time_minutes > 0).length} ready to import
+                </p>
+              </div>
               <button className="btn btn-secondary" onClick={exportToCSV}>
                 <Download size={18} />
-                Export to CSV
+                Export Preview
               </button>
             </div>
 
@@ -1483,51 +1515,71 @@ export default function CetecImport() {
               <table>
                 <thead>
                   <tr>
-                    <th>Order #</th>
-                    <th>Line</th>
-                    <th>Part #</th>
-                    <th>Revision</th>
-                    <th>Customer</th>
-                    <th>Prod Line</th>
-                    <th>Qty</th>
-                    <th>Ship Date</th>
-                    <th>WIP Date</th>
+                    <th style={{ minWidth: '120px' }}>WO Number</th>
+                    <th style={{ minWidth: '180px' }}>Assembly</th>
+                    <th>Rev</th>
+                    <th style={{ minWidth: '150px' }}>Customer</th>
+                    <th>Quantity</th>
                     <th>Time (min)</th>
-                    <th>Trans Code</th>
+                    <th>Ship Date</th>
+                    <th>SMT Line</th>
+                    <th style={{ minWidth: '100px' }}>Cetec Order</th>
+                    <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {cetecData.map((line, idx) => (
-                    <tr key={idx}>
-                      <td><code>{line.ordernum}</code></td>
-                      <td>{line.lineitem}</td>
-                      <td><strong>{line.prcpart}</strong></td>
-                      <td>{line.revision}</td>
-                      <td>{line.customer}</td>
-                      <td>
-                        <span 
-                          className="badge" 
-                          style={{ 
-                            background: line.production_line_description === '200' ? 'var(--success)' : '#6c757d',
-                            color: 'white'
-                          }}
-                        >
-                          {line.production_line_description}
-                        </span>
-                      </td>
-                      <td>{line.balancedue || line.release_qty || line.orig_order_qty || '—'}</td>
-                      <td>{line.target_ship_date || '—'}</td>
-                      <td>{line.target_wip_date || '—'}</td>
-                      <td>
-                        {line._calculated_time_minutes !== undefined ? (
-                          <strong>{Math.round(line._calculated_time_minutes)}</strong>
-                        ) : (
-                          <span style={{ color: '#999' }}>—</span>
-                        )}
-                      </td>
-                      <td><span className="badge badge-info">{line.transcode}</span></td>
-                    </tr>
-                  ))}
+                  {cetecData.map((line, idx) => {
+                    // Generate WO number preview (would be auto-generated on import)
+                    const woNumber = `${line.ordernum}-${line.lineitem}`
+                    
+                    // Determine if this can be imported (has SMT operation data)
+                    const canImport = line._calculated_time_minutes > 0
+                    
+                    return (
+                      <tr key={idx} style={{ opacity: canImport ? 1 : 0.5 }}>
+                        <td>
+                          <code style={{ fontSize: '0.875rem' }}>{woNumber}</code>
+                        </td>
+                        <td>
+                          <strong>{line.prcpart || '—'}</strong>
+                        </td>
+                        <td>{line.revision || '—'}</td>
+                        <td style={{ fontSize: '0.875rem' }}>{line.customer || '—'}</td>
+                        <td>
+                          <strong>{line.balancedue || line.release_qty || line.orig_order_qty || '—'}</strong>
+                        </td>
+                        <td>
+                          {line._calculated_time_minutes !== undefined && line._calculated_time_minutes > 0 ? (
+                            <strong style={{ color: 'var(--success)' }}>
+                              {Math.round(line._calculated_time_minutes)}
+                            </strong>
+                          ) : (
+                            <span style={{ color: '#dc3545' }}>⚠️ No data</span>
+                          )}
+                        </td>
+                        <td>{line.target_ship_date || line.target_wip_date || '—'}</td>
+                        <td>
+                          <span className="badge badge-secondary" style={{ fontSize: '0.75rem' }}>
+                            TBD
+                          </span>
+                        </td>
+                        <td style={{ fontSize: '0.75rem' }}>
+                          <code>{line.ordernum}</code>
+                        </td>
+                        <td>
+                          {canImport ? (
+                            <span className="badge" style={{ background: 'var(--success)', color: 'white', fontSize: '0.75rem' }}>
+                              ✓ Ready
+                            </span>
+                          ) : (
+                            <span className="badge" style={{ background: '#dc3545', color: 'white', fontSize: '0.75rem' }}>
+                              Missing Data
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
