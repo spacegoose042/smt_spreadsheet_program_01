@@ -255,6 +255,107 @@ export default function CetecImport() {
     }
   }
 
+  const testPaginationMethods = async () => {
+    setLoading(true)
+    setError('')
+    setCetecData(null)
+    setRawCetecData(null)
+    setFetchStats(null)
+
+    const paginationTests = [
+      // Test 1: Basic pagination with page parameter
+      {
+        name: 'Page-based pagination',
+        params: {
+          preshared_token: CETEC_CONFIG.token,
+          page: '2',
+          limit: '50'
+        }
+      },
+      // Test 2: Offset-based pagination
+      {
+        name: 'Offset-based pagination',
+        params: {
+          preshared_token: CETEC_CONFIG.token,
+          offset: '50',
+          limit: '50'
+        }
+      },
+      // Test 3: Different limit values
+      {
+        name: 'Higher limit (100)',
+        params: {
+          preshared_token: CETEC_CONFIG.token,
+          limit: '100'
+        }
+      },
+      // Test 4: Skip parameter
+      {
+        name: 'Skip parameter',
+        params: {
+          preshared_token: CETEC_CONFIG.token,
+          skip: '50',
+          limit: '50'
+        }
+      },
+      // Test 5: Start parameter
+      {
+        name: 'Start parameter',
+        params: {
+          preshared_token: CETEC_CONFIG.token,
+          start: '50',
+          count: '50'
+        }
+      }
+    ]
+
+    const results = []
+
+    for (const test of paginationTests) {
+      try {
+        const params = new URLSearchParams(test.params)
+        if (filters.intercompany) params.append('intercompany', 'true')
+
+        const url = `https://${CETEC_CONFIG.domain}/goapis/api/v1/ordlines/list?${params.toString()}`
+        
+        console.log(`Testing ${test.name}:`, url)
+        
+        const response = await axios.get(url)
+        const data = response.data || []
+        
+        results.push({
+          name: test.name,
+          count: Array.isArray(data) ? data.length : 0,
+          success: true,
+          url: url
+        })
+        
+        console.log(`${test.name}: ${Array.isArray(data) ? data.length : 0} records`)
+        
+      } catch (err) {
+        results.push({
+          name: test.name,
+          count: 0,
+          success: false,
+          error: err.message,
+          url: `https://${CETEC_CONFIG.domain}/goapis/api/v1/ordlines/list?${new URLSearchParams(test.params).toString()}`
+        })
+        console.log(`${test.name}: ERROR - ${err.message}`)
+      }
+    }
+
+    console.log('Pagination test results:', results)
+    
+    // Show results
+    const workingMethods = results.filter(r => r.success && r.count > 0)
+    const message = workingMethods.length > 0 
+      ? `Found ${workingMethods.length} working pagination methods:\n${workingMethods.map(r => `${r.name}: ${r.count} records`).join('\n')}`
+      : 'No pagination methods worked. API likely has a hard 50-record limit.'
+    
+    alert(message)
+    setLoading(false)
+  }
+
   const handleFilterChange = (e) => {
     const { name, value, type, checked } = e.target
     setFilters(prev => ({
@@ -473,6 +574,15 @@ export default function CetecImport() {
           >
             <RefreshCw size={18} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
             {loading ? 'Testing...' : 'Test Raw API (Simple)'}
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={testPaginationMethods}
+            disabled={loading}
+            style={{ background: '#17a2b8', color: 'white' }}
+          >
+            <RefreshCw size={18} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+            {loading ? 'Testing...' : 'Test Pagination Methods'}
           </button>
         </div>
       </div>
