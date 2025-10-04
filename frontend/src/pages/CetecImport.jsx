@@ -62,17 +62,17 @@ export default function CetecImport() {
         if (filters.customer) params.append('customer', filters.customer)
         if (filters.transcode) params.append('transcode', filters.transcode)
         
-        // Try different limit/offset approaches
-        params.append('limit', filters.limit.toString())
-        params.append('offset', currentOffset.toString())
-        params.append('page', Math.floor(currentOffset / filters.limit) + 1) // Also try page parameter
-        params.append('per_page', filters.limit.toString()) // Alternative pagination
-        params.append('sort', 'ordernum,lineitem')
-        params.append('format', 'json')
-        
-        // Try different parameter names for pagination
-        params.append('start', currentOffset.toString())
-        params.append('count', filters.limit.toString())
+        // Try different limit/offset approaches - but start simple
+        if (currentOffset === 0) {
+          // For first page, try without pagination params to see default behavior
+          params.append('format', 'json')
+        } else {
+          // For subsequent pages, try different pagination methods
+          params.append('limit', filters.limit.toString())
+          params.append('offset', currentOffset.toString())
+          params.append('page', Math.floor(currentOffset / filters.limit) + 1)
+          params.append('format', 'json')
+        }
 
         const url = `https://${CETEC_CONFIG.domain}${API_ENDPOINTS[0]}?${params.toString()}`
 
@@ -197,6 +197,62 @@ export default function CetecImport() {
     
     alert(message)
     setLoading(false)
+  }
+
+  const testRawAPI = async () => {
+    setLoading(true)
+    setError('')
+    setCetecData(null)
+    setRawCetecData(null)
+    setFetchStats(null)
+
+    try {
+      // Test the EXACT same call that was working before
+      const params = new URLSearchParams({
+        preshared_token: CETEC_CONFIG.token
+      })
+
+      if (filters.intercompany) params.append('intercompany', 'true')
+      if (filters.from_date) params.append('from_date', filters.from_date)
+      if (filters.to_date) params.append('to_date', filters.to_date)
+      if (filters.ordernum) params.append('ordernum', filters.ordernum)
+      if (filters.customer) params.append('customer', filters.customer)
+      if (filters.transcode) params.append('transcode', filters.transcode)
+
+      const url = `https://${CETEC_CONFIG.domain}/goapis/api/v1/ordlines/list?${params.toString()}`
+
+      console.log('RAW API TEST - Exact same call as before:', url)
+      console.log('Parameters:', Object.fromEntries(params))
+
+      const response = await axios.get(url)
+      const data = response.data || []
+
+      console.log('RAW API RESPONSE:')
+      console.log('- Status:', response.status)
+      console.log('- Headers:', response.headers)
+      console.log('- Data type:', typeof data)
+      console.log('- Data length:', Array.isArray(data) ? data.length : 'not array')
+      console.log('- Full response:', response)
+
+      if (Array.isArray(data)) {
+        setCetecData(data)
+        setRawCetecData(data)
+        setFetchStats({
+          totalFetched: data.length,
+          afterFilter: data.length,
+          pagesLoaded: 1,
+          prodlineFilter: null
+        })
+      } else {
+        setError(`Unexpected response format: ${typeof data}`)
+      }
+
+    } catch (err) {
+      console.error('RAW API ERROR:', err)
+      setError(err.response?.data?.message || err.message || 'Raw API test failed')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleFilterChange = (e) => {
@@ -408,6 +464,15 @@ export default function CetecImport() {
           >
             <RefreshCw size={18} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
             {loading ? 'Testing...' : 'Test All Endpoints'}
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={testRawAPI}
+            disabled={loading}
+            style={{ background: '#6c757d', color: 'white' }}
+          >
+            <RefreshCw size={18} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+            {loading ? 'Testing...' : 'Test Raw API (Simple)'}
           </button>
         </div>
       </div>
