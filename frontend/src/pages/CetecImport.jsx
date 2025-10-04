@@ -554,6 +554,85 @@ export default function CetecImport() {
     }
   }
 
+  const diagnosticTest = async () => {
+    setLoading(true)
+    setError('')
+
+    try {
+      if (!cetecData || cetecData.length === 0) {
+        alert('Please fetch order lines first using "Quick Fetch" button.')
+        setLoading(false)
+        return
+      }
+
+      const orderLine = cetecData[0]
+      const ordlineId = orderLine.ordline_id
+
+      console.log('═══════════════════════════════════════')
+      console.log('🔍 DIAGNOSTIC TEST - Step by Step')
+      console.log('═══════════════════════════════════════')
+      console.log('\n📦 Testing with first order line:')
+      console.log('   Order:', orderLine.ordernum)
+      console.log('   Part:', orderLine.prcpart)
+      console.log('   ordline_id:', ordlineId)
+      console.log('   Full order line data:', orderLine)
+
+      // TEST 1: Location maps without children
+      console.log('\n[TEST 1] Fetching location_maps (no children)...')
+      const url1 = `https://${CETEC_CONFIG.domain}/goapis/api/v1/ordline/${ordlineId}/location_maps?preshared_token=${CETEC_CONFIG.token}`
+      console.log('URL:', url1)
+      
+      try {
+        const resp1 = await axios.get(url1)
+        console.log('✅ Response status:', resp1.status)
+        console.log('✅ Response data type:', typeof resp1.data, Array.isArray(resp1.data) ? `(array of ${resp1.data.length})` : '')
+        console.log('✅ Full response data:', resp1.data)
+        
+        if (resp1.data && resp1.data.length > 0) {
+          console.log('✅ First location map:', resp1.data[0])
+          console.log('   Available fields:', Object.keys(resp1.data[0]))
+        }
+      } catch (err) {
+        console.error('❌ Failed:', err.message)
+        console.error('   Full error:', err)
+      }
+
+      // TEST 2: Location maps WITH children
+      console.log('\n[TEST 2] Fetching location_maps (with children)...')
+      const url2 = `https://${CETEC_CONFIG.domain}/goapis/api/v1/ordline/${ordlineId}/location_maps?preshared_token=${CETEC_CONFIG.token}&include_children=true`
+      console.log('URL:', url2)
+      
+      try {
+        const resp2 = await axios.get(url2)
+        console.log('✅ Response status:', resp2.status)
+        console.log('✅ Response data type:', typeof resp2.data, Array.isArray(resp2.data) ? `(array of ${resp2.data.length})` : '')
+        console.log('✅ Full response data:', resp2.data)
+        
+        if (resp2.data && resp2.data.length > 0) {
+          console.log('✅ First location map (with children):', resp2.data[0])
+          console.log('   Available fields:', Object.keys(resp2.data[0]))
+        }
+      } catch (err) {
+        console.error('❌ Failed:', err.message)
+        console.error('   Full error:', err)
+      }
+
+      // TEST 3: Try to get operations (we'll need a location_map_id)
+      console.log('\n[TEST 3] Trying to fetch operations...')
+      console.log('   We need an ordline_map_id from the location maps above.')
+      console.log('   Check the console above for location map data.')
+      console.log('   Look for fields like: id, ordline_map_id, location_map_id')
+
+      alert('Diagnostic test complete! Check the console for detailed results.\n\nLook for:\n1. Location map structure\n2. Available field names\n3. Whether SMT PRODUCTION exists')
+
+    } catch (err) {
+      console.error('Diagnostic test failed:', err)
+      alert(`Error: ${err.message}\nCheck console for details.`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const testOperationEndpoints = async () => {
     setLoading(true)
     setError('')
@@ -1216,12 +1295,35 @@ export default function CetecImport() {
           </div>
         </div>
 
+        <div style={{ marginTop: '1rem', padding: '1rem', background: '#fff3cd', borderRadius: '8px', border: '2px solid #ffc107' }}>
+          <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.75rem', color: '#856404' }}>
+            🔍 Diagnostic Test - Start Here!
+          </h3>
+          <p style={{ fontSize: '0.875rem', color: '#856404', marginBottom: '0.75rem' }}>
+            Run this first to see exactly what data structure Cetec returns for location maps and operations.
+          </p>
+          <button
+            className="btn btn-primary"
+            onClick={diagnosticTest}
+            disabled={loading || !cetecData || cetecData.length === 0}
+            style={{ background: '#ffc107', color: '#000', fontWeight: 700 }}
+          >
+            <RefreshCw size={18} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+            {loading ? 'Testing...' : 'Run Diagnostic Test'}
+          </button>
+          {(!cetecData || cetecData.length === 0) && (
+            <p style={{ fontSize: '0.75rem', color: '#721c24', marginTop: '0.5rem', padding: '0.5rem', background: '#f8d7da', borderRadius: '4px' }}>
+              ⚠️ Please fetch order lines first (use "Quick Fetch" button above)
+            </p>
+          )}
+        </div>
+
         <div style={{ marginTop: '1rem', padding: '1rem', background: '#e7f3ff', borderRadius: '8px', border: '1px solid #b3d9ff' }}>
           <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.75rem', color: '#004085' }}>
             🔬 Labor Plan / Operations Testing
           </h3>
           <p style={{ fontSize: '0.875rem', color: '#004085', marginBottom: '0.75rem' }}>
-            Test operation endpoints to find SMT PRODUCTION location and SMT ASSEMBLY operation with labor time.
+            After diagnostic test, use these to test multiple orders or different approaches.
           </p>
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
             <button
@@ -1231,7 +1333,7 @@ export default function CetecImport() {
               style={{ background: '#28a745', color: 'white' }}
             >
               <RefreshCw size={18} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-              {loading ? 'Testing...' : 'Test Operations (Recommended)'}
+              {loading ? 'Testing...' : 'Test Operations (3 orders)'}
             </button>
             <button
               className="btn btn-secondary"
@@ -1243,11 +1345,6 @@ export default function CetecImport() {
               {loading ? 'Testing...' : 'Test Labor Plan Endpoints'}
             </button>
           </div>
-          {(!cetecData || cetecData.length === 0) && (
-            <p style={{ fontSize: '0.75rem', color: '#856404', marginTop: '0.5rem', padding: '0.5rem', background: '#fff3cd', borderRadius: '4px' }}>
-              ⚠️ Please fetch order lines first before testing operations
-            </p>
-          )}
         </div>
       </div>
 
