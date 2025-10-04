@@ -357,6 +357,144 @@ export default function CetecImport() {
     }
   }
 
+  const testOperationEndpoints = async () => {
+    setLoading(true)
+    setError('')
+
+    try {
+      // First, we need to get some order line IDs
+      if (!cetecData || cetecData.length === 0) {
+        alert('Please fetch order lines first using "Quick Fetch" or "Fetch All" button.')
+        setLoading(false)
+        return
+      }
+
+      console.log('═══════════════════════════════════════')
+      console.log('🔬 Testing Operation Endpoints')
+      console.log('═══════════════════════════════════════')
+
+      // Test first 3 order lines (or fewer if less available)
+      const testOrderLines = cetecData.slice(0, 3)
+      const results = []
+
+      for (const orderLine of testOrderLines) {
+        const ordlineId = orderLine.ordline_id
+        console.log(`\n📦 Testing ordline_id: ${ordlineId} (${orderLine.ordernum} - ${orderLine.prcpart})`)
+
+        try {
+          // First, try to get location maps for this order line
+          const locationMapUrl = `https://${CETEC_CONFIG.domain}/goapis/api/v1/ordline/${ordlineId}/location_map?preshared_token=${CETEC_CONFIG.token}`
+          console.log(`  Fetching location maps: ${locationMapUrl}`)
+          
+          const locationMapResponse = await axios.get(locationMapUrl)
+          const locationMaps = locationMapResponse.data || []
+          
+          console.log(`  ✅ Found ${Array.isArray(locationMaps) ? locationMaps.length : 'unknown'} location maps`)
+          console.log('  Location maps:', locationMaps)
+
+          // Look for SMT PRODUCTION location
+          const smtLocation = Array.isArray(locationMaps) 
+            ? locationMaps.find(loc => 
+                (loc.location_name && loc.location_name.includes('SMT')) ||
+                (loc.location && loc.location.includes('SMT')) ||
+                (loc.name && loc.name.includes('SMT'))
+              )
+            : null
+
+          if (smtLocation) {
+            console.log('  🎯 Found SMT location:', smtLocation)
+            
+            // Now try to get operations for this location
+            const ordlineMapId = smtLocation.ordline_map_id || smtLocation.id
+            
+            if (ordlineMapId) {
+              const operationsUrl = `https://${CETEC_CONFIG.domain}/goapis/api/v1/ordline/${ordlineId}/location_map/${ordlineMapId}/operations?preshared_token=${CETEC_CONFIG.token}`
+              console.log(`  Fetching operations: ${operationsUrl}`)
+              
+              const operationsResponse = await axios.get(operationsUrl)
+              const operations = operationsResponse.data || []
+              
+              console.log(`  ✅ Found ${Array.isArray(operations) ? operations.length : 'unknown'} operations`)
+              console.log('  Operations:', operations)
+
+              // Look for SMT ASSEMBLY operation
+              const smtOperation = Array.isArray(operations)
+                ? operations.find(op =>
+                    (op.operation_name && op.operation_name.includes('SMT')) ||
+                    (op.operation && op.operation.includes('SMT')) ||
+                    (op.name && op.name.includes('ASSEMBLY'))
+                  )
+                : null
+
+              if (smtOperation) {
+                console.log('  🎯 Found SMT ASSEMBLY operation:', smtOperation)
+              }
+
+              results.push({
+                ordlineId,
+                orderNum: orderLine.ordernum,
+                part: orderLine.prcpart,
+                locationMaps: locationMaps,
+                smtLocation: smtLocation,
+                operations: operations,
+                smtOperation: smtOperation
+              })
+            }
+          } else {
+            console.log('  ⚠️ No SMT location found')
+            results.push({
+              ordlineId,
+              orderNum: orderLine.ordernum,
+              part: orderLine.prcpart,
+              locationMaps: locationMaps,
+              smtLocation: null,
+              operations: null,
+              smtOperation: null
+            })
+          }
+
+        } catch (err) {
+          console.error(`  ❌ Error for ordline ${ordlineId}:`, err.message)
+          results.push({
+            ordlineId,
+            orderNum: orderLine.ordernum,
+            part: orderLine.prcpart,
+            error: err.message
+          })
+        }
+
+        // Small delay between requests
+        await new Promise(resolve => setTimeout(resolve, 300))
+      }
+
+      console.log('\n═══════════════════════════════════════')
+      console.log('Operation Test Complete')
+      console.log('Full results:', results)
+
+      // Show summary
+      const successCount = results.filter(r => r.operations && r.operations.length > 0).length
+      const smtCount = results.filter(r => r.smtOperation).length
+      
+      let message = `✅ Tested ${results.length} order lines:\n\n`
+      message += `Found operations: ${successCount}\n`
+      message += `Found SMT operations: ${smtCount}\n\n`
+      
+      if (smtCount > 0) {
+        message += `🎉 SUCCESS! Found SMT operation data.\nCheck console for full details.`
+      } else {
+        message += `Check console for details and structure.`
+      }
+      
+      alert(message)
+
+    } catch (err) {
+      console.error('Test failed:', err)
+      alert(`Error: ${err.message}\nCheck console for details.`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const testLaborPlanEndpoints = async () => {
     setLoading(true)
     setError('')
@@ -812,20 +950,36 @@ export default function CetecImport() {
 
         <div style={{ marginTop: '1rem', padding: '1rem', background: '#e7f3ff', borderRadius: '8px', border: '1px solid #b3d9ff' }}>
           <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.75rem', color: '#004085' }}>
-            🔬 Labor Plan Testing
+            🔬 Labor Plan / Operations Testing
           </h3>
           <p style={{ fontSize: '0.875rem', color: '#004085', marginBottom: '0.75rem' }}>
-            Test labor plan endpoints to find SMT PRODUCTION location and SMT ASSEMBLY operation data.
+            Test operation endpoints to find SMT PRODUCTION location and SMT ASSEMBLY operation with labor time.
           </p>
-          <button
-            className="btn btn-secondary"
-            onClick={testLaborPlanEndpoints}
-            disabled={loading}
-            style={{ background: '#6f42c1', color: 'white' }}
-          >
-            <RefreshCw size={18} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-            {loading ? 'Testing...' : 'Test Labor Plan Endpoints'}
-          </button>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <button
+              className="btn btn-secondary"
+              onClick={testOperationEndpoints}
+              disabled={loading || !cetecData || cetecData.length === 0}
+              style={{ background: '#28a745', color: 'white' }}
+            >
+              <RefreshCw size={18} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+              {loading ? 'Testing...' : 'Test Operations (Recommended)'}
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={testLaborPlanEndpoints}
+              disabled={loading}
+              style={{ background: '#6f42c1', color: 'white' }}
+            >
+              <RefreshCw size={18} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+              {loading ? 'Testing...' : 'Test Labor Plan Endpoints'}
+            </button>
+          </div>
+          {(!cetecData || cetecData.length === 0) && (
+            <p style={{ fontSize: '0.75rem', color: '#856404', marginTop: '0.5rem', padding: '0.5rem', background: '#fff3cd', borderRadius: '4px' }}>
+              ⚠️ Please fetch order lines first before testing operations
+            </p>
+          )}
         </div>
       </div>
 
