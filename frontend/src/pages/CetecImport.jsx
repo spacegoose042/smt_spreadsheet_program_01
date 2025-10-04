@@ -5,7 +5,9 @@ import axios from 'axios'
 export default function CetecImport() {
   const [loading, setLoading] = useState(false)
   const [cetecData, setCetecData] = useState(null)
+  const [rawCetecData, setRawCetecData] = useState(null) // Before filtering
   const [error, setError] = useState('')
+  const [fetchStats, setFetchStats] = useState(null)
   const [filters, setFilters] = useState({
     intercompany: true,
     from_date: '',
@@ -13,8 +15,8 @@ export default function CetecImport() {
     ordernum: '',
     customer: '',
     transcode: 'SA,SN', // Build and Stock orders
-    prodline: '200', // Product line 200
-    limit: 1000, // Increase limit to get more records
+    prodline: '200', // Product line 200 (client-side filter)
+    limit: 500, // Per-page limit
     offset: 0
   })
 
@@ -23,48 +25,80 @@ export default function CetecImport() {
     token: '123matthatesbrant123'
   }
 
-  const fetchCetecData = async () => {
+  const fetchCetecData = async (fetchAll = false) => {
     setLoading(true)
     setError('')
     setCetecData(null)
+    setRawCetecData(null)
+    setFetchStats(null)
 
     try {
-      // Build query parameters
-      const params = new URLSearchParams({
-        preshared_token: CETEC_CONFIG.token
-      })
+      let allData = []
+      let currentOffset = 0
+      let hasMore = true
+      let pagesLoaded = 0
+      const maxPages = 20 // Safety limit
 
-      // Add filters - trying multiple parameter names for prodline
-      if (filters.intercompany) params.append('intercompany', 'true')
-      if (filters.from_date) params.append('from_date', filters.from_date)
-      if (filters.to_date) params.append('to_date', filters.to_date)
-      if (filters.ordernum) params.append('ordernum', filters.ordernum)
-      if (filters.customer) params.append('customer', filters.customer)
-      if (filters.transcode) params.append('transcode', filters.transcode)
-      
-      // Try multiple prodline parameter names
-      if (filters.prodline) {
-        params.append('prodline', filters.prodline)
-        params.append('production_line', filters.prodline)
-        params.append('prod_line', filters.prodline)
+      while (hasMore && pagesLoaded < maxPages) {
+        // Build query parameters
+        const params = new URLSearchParams({
+          preshared_token: CETEC_CONFIG.token
+        })
+
+        // Add filters (NO prodline - doesn't work in API)
+        if (filters.intercompany) params.append('intercompany', 'true')
+        if (filters.from_date) params.append('from_date', filters.from_date)
+        if (filters.to_date) params.append('to_date', filters.to_date)
+        if (filters.ordernum) params.append('ordernum', filters.ordernum)
+        if (filters.customer) params.append('customer', filters.customer)
+        if (filters.transcode) params.append('transcode', filters.transcode)
+        
+        params.append('limit', filters.limit.toString())
+        params.append('offset', currentOffset.toString())
+        params.append('sort', 'ordernum,lineitem')
+        params.append('format', 'json')
+
+        const url = `https://${CETEC_CONFIG.domain}/goapis/api/v1/ordlines/list?${params.toString()}`
+
+        console.log(`Fetching page ${pagesLoaded + 1}, offset ${currentOffset}:`, url)
+
+        const response = await axios.get(url)
+        const pageData = response.data || []
+        
+        console.log(`Page ${pagesLoaded + 1}: ${pageData.length} records`)
+        
+        allData = [...allData, ...pageData]
+        pagesLoaded++
+        
+        // Stop if we got less than the limit (last page) or if not fetching all
+        if (pageData.length < filters.limit || !fetchAll) {
+          hasMore = false
+        } else {
+          currentOffset += filters.limit
+        }
       }
-      
-      if (filters.limit) params.append('limit', filters.limit.toString())
-      if (filters.offset) params.append('offset', filters.offset.toString())
-      
-      // Add common API parameters
-      params.append('sort', 'ordernum,lineitem')
-      params.append('format', 'json')
 
-      const url = `https://${CETEC_CONFIG.domain}/goapis/api/v1/ordlines/list?${params.toString()}`
+      console.log(`Total fetched: ${allData.length} records from ${pagesLoaded} pages`)
+      setRawCetecData(allData)
 
-      console.log('Fetching from Cetec:', url)
-      console.log('Parameters being sent:', Object.fromEntries(params))
-
-      const response = await axios.get(url)
+      // Apply client-side filtering for prodline
+      let filteredData = allData
       
-      setCetecData(response.data)
-      console.log('Cetec data:', response.data)
+      if (filters.prodline) {
+        filteredData = allData.filter(item => 
+          item.production_line_description === filters.prodline
+        )
+        console.log(`Filtered to prodline ${filters.prodline}: ${filteredData.length} records`)
+      }
+
+      setCetecData(filteredData)
+      setFetchStats({
+        totalFetched: allData.length,
+        afterFilter: filteredData.length,
+        pagesLoaded: pagesLoaded,
+        prodlineFilter: filters.prodline
+      })
+      
     } catch (err) {
       console.error('Cetec API error:', err)
       setError(err.response?.data?.message || err.message || 'Failed to fetch from Cetec')
@@ -256,14 +290,25 @@ export default function CetecImport() {
           </label>
         </div>
 
-        <button
-          className="btn btn-primary"
-          onClick={fetchCetecData}
-          disabled={loading}
-        >
-          <RefreshCw size={18} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-          {loading ? 'Fetching...' : 'Fetch from Cetec'}
-        </button>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button
+            className="btn btn-primary"
+            onClick={() => fetchCetecData(false)}
+            disabled={loading}
+          >
+            <RefreshCw size={18} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+            {loading ? 'Fetching...' : 'Fetch First Page'}
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={() => fetchCetecData(true)}
+            disabled={loading}
+            style={{ background: 'var(--success)', color: 'white' }}
+          >
+            <RefreshCw size={18} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+            {loading ? 'Fetching All...' : 'Fetch All Pages (Slow)'}
+          </button>
+        </div>
       </div>
 
       {/* Debug Info */}
@@ -277,11 +322,11 @@ export default function CetecImport() {
 {JSON.stringify(filters, null, 2)}
           </pre>
           <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: '#fff3cd', borderRadius: '4px' }}>
-            <strong>💡 Tips:</strong><br />
-            • Product line filtering: trying 'prodline', 'production_line', 'prod_line'<br />
-            • If no results: try removing prodline filter first<br />
-            • Check browser console for full API response<br />
-            • API might use different parameter names - check the full JSON response
+            <strong>💡 How it works:</strong><br />
+            • <strong>Prodline filter is client-side</strong> (API doesn't support it)<br />
+            • "Fetch First Page" = Fast, {filters.limit} records max<br />
+            • "Fetch All Pages" = Slow, fetches everything then filters<br />
+            • Filters by <code>production_line_description</code> field
           </div>
         </div>
       </div>
@@ -305,10 +350,60 @@ export default function CetecImport() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#155724' }}>
               <CheckCircle size={20} />
               <div>
-                <strong>Success!</strong> Found {cetecData.length} order line{cetecData.length !== 1 ? 's' : ''} from Cetec
+                <strong>Success!</strong> {cetecData.length} order line{cetecData.length !== 1 ? 's' : ''} {fetchStats?.prodlineFilter ? `(prodline ${fetchStats.prodlineFilter})` : ''}
               </div>
             </div>
           </div>
+
+          {/* Fetch Stats */}
+          {fetchStats && (
+            <div className="card" style={{ marginBottom: '1.5rem', background: '#e7f3ff', border: '1px solid #b3d9ff' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.75rem', color: '#004085' }}>
+                📊 Fetch Statistics
+              </h3>
+              <div style={{ fontSize: '0.875rem', color: '#004085', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
+                <div>
+                  <strong>Pages Loaded:</strong> {fetchStats.pagesLoaded}
+                </div>
+                <div>
+                  <strong>Total Fetched:</strong> {fetchStats.totalFetched} records
+                </div>
+                <div>
+                  <strong>After Prodline Filter:</strong> {fetchStats.afterFilter} records
+                </div>
+                <div>
+                  <strong>Filter Applied:</strong> {fetchStats.prodlineFilter || 'None'}
+                </div>
+              </div>
+              
+              {/* Show unique production lines in raw data */}
+              {rawCetecData && rawCetecData.length > 0 && (
+                <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: '#fff', borderRadius: '4px' }}>
+                  <strong>Production Lines Found:</strong>{' '}
+                  {[...new Set(rawCetecData.map(item => item.production_line_description))].sort().map((line, idx) => (
+                    <span 
+                      key={idx}
+                      className="badge" 
+                      style={{ 
+                        background: line === '200' ? 'var(--success)' : '#6c757d',
+                        color: 'white',
+                        marginLeft: '0.25rem'
+                      }}
+                    >
+                      {line}
+                    </span>
+                  ))}
+                </div>
+              )}
+              
+              {fetchStats.prodlineFilter && fetchStats.afterFilter === 0 && (
+                <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: '#fff3cd', borderRadius: '4px', color: '#856404' }}>
+                  <strong>⚠️ Warning:</strong> No records found for prodline "{fetchStats.prodlineFilter}". 
+                  Try clearing the prodline filter or check available values above.
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -328,12 +423,11 @@ export default function CetecImport() {
                     <th>Part #</th>
                     <th>Revision</th>
                     <th>Customer</th>
+                    <th>Prod Line</th>
                     <th>Qty</th>
                     <th>Ship Date</th>
                     <th>WIP Date</th>
                     <th>Trans Code</th>
-                    <th>Ship Type</th>
-                    <th>Order Type</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -344,12 +438,21 @@ export default function CetecImport() {
                       <td><strong>{line.prcpart}</strong></td>
                       <td>{line.revision}</td>
                       <td>{line.customer}</td>
-                      <td>{line.release_qty}</td>
+                      <td>
+                        <span 
+                          className="badge" 
+                          style={{ 
+                            background: line.production_line_description === '200' ? 'var(--success)' : '#6c757d',
+                            color: 'white'
+                          }}
+                        >
+                          {line.production_line_description}
+                        </span>
+                      </td>
+                      <td>{line.release_qty || line.orig_order_qty}</td>
                       <td>{line.target_ship_date}</td>
                       <td>{line.target_wip_date}</td>
                       <td><span className="badge badge-info">{line.transcode}</span></td>
-                      <td><span className="badge badge-secondary">{line.shiptype}</span></td>
-                      <td><span className="badge badge-secondary">{line.ordertype}</span></td>
                     </tr>
                   ))}
                 </tbody>
