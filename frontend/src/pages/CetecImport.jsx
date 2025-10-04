@@ -463,15 +463,19 @@ export default function CetecImport() {
           // Calculate time in minutes using Cetec data
           let timeMinutes = 0
           if (cetecData.has_smt_production && cetecData.smt_location && cetecData.smt_operation) {
-            const estSeconds = cetecData.smt_location.est_seconds || 0
+            // Use avg_secs from the SMT ASSEMBLY operation (time per cycle)
+            const avgSeconds = cetecData.smt_operation.avg_secs || 0
             const repetitions = cetecData.smt_operation.repetitions || 1
+            // Balance due from ordline (order line level)
             const balanceDue = orderLine.balancedue || orderLine.release_qty || orderLine.orig_order_qty || 0
             
-            // Time calculation: (est_seconds × repetitions × balance_due) / 60
-            timeMinutes = (estSeconds * repetitions * balanceDue) / 60
+            // Time calculation: (avg_secs × repetitions × balance_due) / 60
+            // avg_secs × repetitions = cycle time per unit
+            // cycle time per unit × balance_due = total time for all units
+            timeMinutes = (avgSeconds * repetitions * balanceDue) / 60
             
             if (i === 0 && timeMinutes > 0) {
-              console.log(`   ⏱️  Time calc: ${estSeconds} sec × ${repetitions} reps × ${balanceDue} qty / 60 = ${Math.round(timeMinutes)} min`)
+              console.log(`   ⏱️  Time calc: ${avgSeconds} avg_secs × ${repetitions} reps × ${balanceDue} qty / 60 = ${Math.round(timeMinutes)} min`)
             }
           }
 
