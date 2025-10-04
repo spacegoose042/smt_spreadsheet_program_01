@@ -90,5 +90,15 @@ export const createResolutionType = (data) => api.post('/api/resolution-types', 
 export const updateResolutionType = (id, data) => api.put(`/api/resolution-types/${id}`, data)
 export const deleteResolutionType = (id) => api.delete(`/api/resolution-types/${id}`)
 
+// Cetec ERP API Proxy (All authenticated users)
+export const getCetecLocationMaps = (ordlineId, includeChildren = false) =>
+  api.get(`/api/cetec/ordline/${ordlineId}/location_maps`, { 
+    params: { include_children: includeChildren } 
+  })
+export const getCetecOperations = (ordlineId, ordlineMapId) =>
+  api.get(`/api/cetec/ordline/${ordlineId}/location_map/${ordlineMapId}/operations`)
+export const getCetecOperationDetail = (ordlineId, ordlineMapId, opId) =>
+  api.get(`/api/cetec/ordline/${ordlineId}/location_map/${ordlineMapId}/operation/${opId}`)
+
 export default api
 

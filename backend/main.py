@@ -7,6 +7,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date, timedelta, datetime
+import requests
 
 from database import engine, get_db, Base
 from models import WorkOrder, SMTLine, CompletedWorkOrder, WorkOrderStatus, Priority, User, UserRole, CapacityOverride, Shift, ShiftBreak, LineConfiguration, Status, IssueType, Issue, IssueSeverity, IssueStatus, ResolutionType
@@ -1496,6 +1497,133 @@ def delete_resolution_type(
     db.commit()
     
     return {"message": "Resolution type deleted successfully"}
+
+
+# ============================================================================
+# CETEC ERP API PROXY ENDPOINTS
+# ============================================================================
+
+CETEC_CONFIG = {
+    "domain": "sandy.cetecerp.com",
+    "token": "123matthatesbrant123"
+}
+
+@app.get("/api/cetec/ordline/{ordline_id}/location_maps")
+def get_cetec_location_maps(
+    ordline_id: int,
+    include_children: bool = False,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Proxy endpoint to fetch location maps from Cetec API
+    Avoids CORS issues by proxying through our backend
+    """
+    try:
+        params = {
+            "preshared_token": CETEC_CONFIG["token"]
+        }
+        
+        if include_children:
+            params["include_children"] = "true"
+        
+        url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/location_maps"
+        
+        print(f"Proxying Cetec request: {url}")
+        print(f"Parameters: {params}")
+        
+        response = requests.get(url, params=params, timeout=30)
+        
+        print(f"Cetec response status: {response.status_code}")
+        print(f"Cetec response length: {len(response.text)} bytes")
+        
+        response.raise_for_status()
+        
+        data = response.json()
+        print(f"Cetec data type: {type(data)}, length: {len(data) if isinstance(data, list) else 'N/A'}")
+        
+        return data
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Cetec API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch from Cetec: {str(e)}"
+        )
+
+
+@app.get("/api/cetec/ordline/{ordline_id}/location_map/{ordline_map_id}/operations")
+def get_cetec_operations(
+    ordline_id: int,
+    ordline_map_id: int,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Proxy endpoint to fetch operations from Cetec API
+    Avoids CORS issues by proxying through our backend
+    """
+    try:
+        params = {
+            "preshared_token": CETEC_CONFIG["token"]
+        }
+        
+        url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/location_map/{ordline_map_id}/operations"
+        
+        print(f"Proxying Cetec request: {url}")
+        print(f"Parameters: {params}")
+        
+        response = requests.get(url, params=params, timeout=30)
+        
+        print(f"Cetec response status: {response.status_code}")
+        print(f"Cetec response length: {len(response.text)} bytes")
+        
+        response.raise_for_status()
+        
+        data = response.json()
+        print(f"Cetec data type: {type(data)}, length: {len(data) if isinstance(data, list) else 'N/A'}")
+        
+        return data
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Cetec API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch from Cetec: {str(e)}"
+        )
+
+
+@app.get("/api/cetec/ordline/{ordline_id}/location_map/{ordline_map_id}/operation/{op_id}")
+def get_cetec_operation_detail(
+    ordline_id: int,
+    ordline_map_id: int,
+    op_id: int,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Proxy endpoint to fetch specific operation details from Cetec API
+    """
+    try:
+        params = {
+            "preshared_token": CETEC_CONFIG["token"]
+        }
+        
+        url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/location_map/{ordline_map_id}/operation/{op_id}"
+        
+        print(f"Proxying Cetec request: {url}")
+        
+        response = requests.get(url, params=params, timeout=30)
+        response.raise_for_status()
+        
+        data = response.json()
+        print(f"Cetec operation detail: {data}")
+        
+        return data
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Cetec API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch from Cetec: {str(e)}"
+        )
 
 
 if __name__ == "__main__":
