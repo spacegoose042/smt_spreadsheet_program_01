@@ -12,7 +12,10 @@ export default function CetecImport() {
     to_date: '',
     ordernum: '',
     customer: '',
-    transcode: 'SA,SN' // Build and Stock orders
+    transcode: 'SA,SN', // Build and Stock orders
+    prodline: '200', // Product line 200
+    limit: 1000, // Increase limit to get more records
+    offset: 0
   })
 
   const CETEC_CONFIG = {
@@ -31,17 +34,32 @@ export default function CetecImport() {
         preshared_token: CETEC_CONFIG.token
       })
 
-      // Add filters
+      // Add filters - trying multiple parameter names for prodline
       if (filters.intercompany) params.append('intercompany', 'true')
       if (filters.from_date) params.append('from_date', filters.from_date)
       if (filters.to_date) params.append('to_date', filters.to_date)
       if (filters.ordernum) params.append('ordernum', filters.ordernum)
       if (filters.customer) params.append('customer', filters.customer)
       if (filters.transcode) params.append('transcode', filters.transcode)
+      
+      // Try multiple prodline parameter names
+      if (filters.prodline) {
+        params.append('prodline', filters.prodline)
+        params.append('production_line', filters.prodline)
+        params.append('prod_line', filters.prodline)
+      }
+      
+      if (filters.limit) params.append('limit', filters.limit.toString())
+      if (filters.offset) params.append('offset', filters.offset.toString())
+      
+      // Add common API parameters
+      params.append('sort', 'ordernum,lineitem')
+      params.append('format', 'json')
 
       const url = `https://${CETEC_CONFIG.domain}/goapis/api/v1/ordlines/list?${params.toString()}`
 
       console.log('Fetching from Cetec:', url)
+      console.log('Parameters being sent:', Object.fromEntries(params))
 
       const response = await axios.get(url)
       
@@ -121,7 +139,7 @@ export default function CetecImport() {
       <div className="card" style={{ marginBottom: '1.5rem' }}>
         <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem' }}>Filters</h3>
         
-        <div className="grid grid-cols-3">
+        <div className="grid grid-cols-4">
           <div className="form-group">
             <label className="form-label">From Date</label>
             <input
@@ -152,9 +170,24 @@ export default function CetecImport() {
               <option value="promisedate">Promise Date</option>
             </select>
           </div>
+
+          <div className="form-group">
+            <label className="form-label">Product Line</label>
+            <input
+              type="text"
+              name="prodline"
+              className="form-input"
+              value={filters.prodline}
+              onChange={handleFilterChange}
+              placeholder="200"
+            />
+            <small style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+              Filter by production line
+            </small>
+          </div>
         </div>
 
-        <div className="grid grid-cols-3">
+        <div className="grid grid-cols-4">
           <div className="form-group">
             <label className="form-label">Order Number</label>
             <input
@@ -193,6 +226,22 @@ export default function CetecImport() {
               SA=Build, SN=Stock
             </small>
           </div>
+
+          <div className="form-group">
+            <label className="form-label">Limit</label>
+            <input
+              type="number"
+              name="limit"
+              className="form-input"
+              value={filters.limit}
+              onChange={handleFilterChange}
+              min="1"
+              max="5000"
+            />
+            <small style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+              Max records to fetch
+            </small>
+          </div>
         </div>
 
         <div className="form-group">
@@ -215,6 +264,26 @@ export default function CetecImport() {
           <RefreshCw size={18} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
           {loading ? 'Fetching...' : 'Fetch from Cetec'}
         </button>
+      </div>
+
+      {/* Debug Info */}
+      <div className="card" style={{ marginBottom: '1.5rem', background: '#f8f9fa', border: '1px solid #dee2e6' }}>
+        <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.75rem', color: '#6c757d' }}>
+          Debug Info
+        </h3>
+        <div style={{ fontSize: '0.875rem', color: '#6c757d' }}>
+          <strong>Current Filters:</strong><br />
+          <pre style={{ background: '#fff', padding: '0.5rem', borderRadius: '4px', fontSize: '0.75rem', marginTop: '0.5rem' }}>
+{JSON.stringify(filters, null, 2)}
+          </pre>
+          <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: '#fff3cd', borderRadius: '4px' }}>
+            <strong>💡 Tips:</strong><br />
+            • Product line filtering: trying 'prodline', 'production_line', 'prod_line'<br />
+            • If no results: try removing prodline filter first<br />
+            • Check browser console for full API response<br />
+            • API might use different parameter names - check the full JSON response
+          </div>
+        </div>
       </div>
 
       {/* Error Message */}
