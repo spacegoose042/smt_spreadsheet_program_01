@@ -25,6 +25,15 @@ export default function CetecImport() {
     token: '123matthatesbrant123'
   }
 
+  const API_ENDPOINTS = [
+    '/goapis/api/v1/ordlines/list',
+    '/goapis/api/v1/ordlines',
+    '/api/v1/ordlines/list',
+    '/api/v1/ordlines',
+    '/goapis/ordlines/list',
+    '/ordlines/list'
+  ]
+
   const fetchCetecData = async (fetchAll = false) => {
     setLoading(true)
     setError('')
@@ -53,12 +62,19 @@ export default function CetecImport() {
         if (filters.customer) params.append('customer', filters.customer)
         if (filters.transcode) params.append('transcode', filters.transcode)
         
+        // Try different limit/offset approaches
         params.append('limit', filters.limit.toString())
         params.append('offset', currentOffset.toString())
+        params.append('page', Math.floor(currentOffset / filters.limit) + 1) // Also try page parameter
+        params.append('per_page', filters.limit.toString()) // Alternative pagination
         params.append('sort', 'ordernum,lineitem')
         params.append('format', 'json')
+        
+        // Try different parameter names for pagination
+        params.append('start', currentOffset.toString())
+        params.append('count', filters.limit.toString())
 
-        const url = `https://${CETEC_CONFIG.domain}/goapis/api/v1/ordlines/list?${params.toString()}`
+        const url = `https://${CETEC_CONFIG.domain}${API_ENDPOINTS[0]}?${params.toString()}`
 
         console.log(`Fetching page ${pagesLoaded + 1}, offset ${currentOffset}:`, url)
 
@@ -66,15 +82,31 @@ export default function CetecImport() {
         const pageData = response.data || []
         
         console.log(`Page ${pagesLoaded + 1}: ${pageData.length} records`)
+        console.log(`Response headers:`, response.headers)
+        console.log(`Response status:`, response.status)
         
-        allData = [...allData, ...pageData]
+        // Check if response has pagination info
+        if (response.headers['x-total-count'] || response.headers['total-count']) {
+          console.log('Total count from headers:', response.headers['x-total-count'] || response.headers['total-count'])
+        }
+        
+        // Check if response has pagination metadata
+        if (typeof pageData === 'object' && pageData.data) {
+          console.log('Pagination metadata:', pageData)
+          allData = [...allData, ...(pageData.data || [])]
+        } else {
+          allData = [...allData, ...pageData]
+        }
+        
         pagesLoaded++
         
         // Stop if we got less than the limit (last page) or if not fetching all
         if (pageData.length < filters.limit || !fetchAll) {
           hasMore = false
+          console.log(`Stopping: got ${pageData.length} records (limit: ${filters.limit})`)
         } else {
           currentOffset += filters.limit
+          console.log(`Continuing to next page, new offset: ${currentOffset}`)
         }
       }
 
@@ -105,6 +137,66 @@ export default function CetecImport() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const testAllEndpoints = async () => {
+    setLoading(true)
+    setError('')
+    setCetecData(null)
+    setRawCetecData(null)
+    setFetchStats(null)
+
+    const results = []
+
+    for (const endpoint of API_ENDPOINTS) {
+      try {
+        const params = new URLSearchParams({
+          preshared_token: CETEC_CONFIG.token,
+          limit: '100',
+          format: 'json'
+        })
+
+        if (filters.intercompany) params.append('intercompany', 'true')
+
+        const url = `https://${CETEC_CONFIG.domain}${endpoint}?${params.toString()}`
+        console.log(`Testing endpoint: ${endpoint}`)
+
+        const response = await axios.get(url)
+        const data = response.data || []
+        
+        results.push({
+          endpoint,
+          status: response.status,
+          count: Array.isArray(data) ? data.length : (data.data ? data.data.length : 0),
+          hasData: Array.isArray(data) ? data.length > 0 : (data.data ? data.data.length > 0 : false),
+          headers: response.headers,
+          url
+        })
+
+        console.log(`Endpoint ${endpoint}: ${Array.isArray(data) ? data.length : 'unknown'} records`)
+      } catch (err) {
+        results.push({
+          endpoint,
+          status: err.response?.status || 'error',
+          count: 0,
+          hasData: false,
+          error: err.message,
+          url: `https://${CETEC_CONFIG.domain}${endpoint}`
+        })
+        console.log(`Endpoint ${endpoint}: ERROR - ${err.message}`)
+      }
+    }
+
+    console.log('All endpoint results:', results)
+    
+    // Show results in a simple alert for now
+    const workingEndpoints = results.filter(r => r.hasData)
+    const message = workingEndpoints.length > 0 
+      ? `Found ${workingEndpoints.length} working endpoints:\n${workingEndpoints.map(r => `${r.endpoint}: ${r.count} records`).join('\n')}`
+      : 'No working endpoints found. Check console for details.'
+    
+    alert(message)
+    setLoading(false)
   }
 
   const handleFilterChange = (e) => {
@@ -290,7 +382,7 @@ export default function CetecImport() {
           </label>
         </div>
 
-        <div style={{ display: 'flex', gap: '1rem' }}>
+        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
           <button
             className="btn btn-primary"
             onClick={() => fetchCetecData(false)}
@@ -307,6 +399,15 @@ export default function CetecImport() {
           >
             <RefreshCw size={18} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
             {loading ? 'Fetching All...' : 'Fetch All Pages (Slow)'}
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={testAllEndpoints}
+            disabled={loading}
+            style={{ background: 'var(--warning)', color: 'white' }}
+          >
+            <RefreshCw size={18} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+            {loading ? 'Testing...' : 'Test All Endpoints'}
           </button>
         </div>
       </div>
