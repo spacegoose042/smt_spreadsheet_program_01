@@ -357,6 +357,203 @@ export default function CetecImport() {
     }
   }
 
+  const fetchAndCombineAll = async () => {
+    setLoading(true)
+    setError('')
+    setCetecData(null)
+    setRawCetecData(null)
+    setFetchStats(null)
+
+    try {
+      // First, fetch all order lines using date range strategy
+      console.log('═══════════════════════════════════════')
+      console.log('🚀 Fetching and Combining All Cetec Data')
+      console.log('═══════════════════════════════════════')
+
+      let allOrderLines = []
+      let batchesFetched = 0
+      
+      // Use date range strategy
+      const startDate = filters.from_date ? new Date(filters.from_date) : new Date()
+      const endDate = filters.to_date ? new Date(filters.to_date) : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000)
+      
+      // Calculate weeks
+      const weeks = []
+      let currentDate = new Date(startDate)
+      
+      while (currentDate <= endDate) {
+        const weekStart = new Date(currentDate)
+        const weekEnd = new Date(currentDate)
+        weekEnd.setDate(weekEnd.getDate() + 6)
+        
+        if (weekEnd > endDate) {
+          weeks.push({ start: weekStart, end: endDate })
+          break
+        } else {
+          weeks.push({ start: weekStart, end: weekEnd })
+        }
+        
+        currentDate.setDate(currentDate.getDate() + 7)
+      }
+      
+      console.log(`\n📅 Step 1: Fetching order lines (${weeks.length} weekly batches)`)
+      
+      for (const week of weeks) {
+        try {
+          const params = new URLSearchParams({
+            preshared_token: CETEC_CONFIG.token,
+            from_date: week.start.toISOString().split('T')[0],
+            to_date: week.end.toISOString().split('T')[0],
+            format: 'json'
+          })
+
+          if (filters.intercompany) params.append('intercompany', 'true')
+          if (filters.transcode) params.append('transcode', filters.transcode)
+
+          const url = `https://${CETEC_CONFIG.domain}/goapis/api/v1/ordlines/list?${params.toString()}`
+          const response = await axios.get(url)
+          const batchData = response.data || []
+          
+          allOrderLines = [...allOrderLines, ...batchData]
+          batchesFetched++
+          
+          console.log(`   Batch ${batchesFetched}/${weeks.length}: ${batchData.length} records`)
+          
+          await new Promise(resolve => setTimeout(resolve, 200))
+        } catch (err) {
+          console.error(`   Batch ${batchesFetched + 1} failed:`, err.message)
+        }
+      }
+      
+      console.log(`✅ Fetched ${allOrderLines.length} total order lines`)
+
+      // Apply prodline filter
+      if (filters.prodline) {
+        allOrderLines = allOrderLines.filter(item => 
+          item.production_line_description === filters.prodline
+        )
+        console.log(`   Filtered to prodline ${filters.prodline}: ${allOrderLines.length} records`)
+      }
+
+      // STEP 2: For each order line, fetch location maps and operations
+      console.log(`\n📍 Step 2: Fetching location maps and operations for ${allOrderLines.length} order lines`)
+      
+      const combinedData = []
+      let successCount = 0
+      let errorCount = 0
+
+      for (let i = 0; i < allOrderLines.length; i++) {
+        const orderLine = allOrderLines[i]
+        const ordlineId = orderLine.ordline_id
+        
+        if (i % 10 === 0) {
+          console.log(`   Progress: ${i}/${allOrderLines.length} (${successCount} successful, ${errorCount} errors)`)
+        }
+
+        try {
+          // Get location maps
+          const locationMapUrl = `https://${CETEC_CONFIG.domain}/goapis/api/v1/ordline/${ordlineId}/location_maps?preshared_token=${CETEC_CONFIG.token}&include_children=true`
+          const locationMapResponse = await axios.get(locationMapUrl)
+          const locationMaps = locationMapResponse.data || []
+
+          // Find SMT PRODUCTION location
+          const smtLocation = Array.isArray(locationMaps) 
+            ? locationMaps.find(loc => {
+                const locStr = JSON.stringify(loc).toUpperCase()
+                return locStr.includes('SMT') && (locStr.includes('PRODUCTION') || locStr.includes('PROD'))
+              })
+            : null
+
+          let operations = []
+          let smtOperation = null
+
+          if (smtLocation) {
+            const ordlineMapId = smtLocation.ordline_map_id || smtLocation.id
+            
+            if (ordlineMapId) {
+              // Get operations
+              const operationsUrl = `https://${CETEC_CONFIG.domain}/goapis/api/v1/ordline/${ordlineId}/location_map/${ordlineMapId}/operations?preshared_token=${CETEC_CONFIG.token}`
+              const operationsResponse = await axios.get(operationsUrl)
+              operations = operationsResponse.data || []
+
+              // Find SMT ASSEMBLY operation
+              smtOperation = Array.isArray(operations)
+                ? operations.find(op => {
+                    const opStr = JSON.stringify(op).toUpperCase()
+                    return opStr.includes('SMT') || opStr.includes('ASSEMBLY')
+                  })
+                : null
+            }
+          }
+
+          // Combine all data
+          combinedData.push({
+            ...orderLine,
+            _cetec_location_maps: locationMaps,
+            _cetec_smt_location: smtLocation,
+            _cetec_operations: operations,
+            _cetec_smt_operation: smtOperation
+          })
+
+          successCount++
+
+          // Delay to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 100))
+
+        } catch (err) {
+          console.error(`   Error for ordline ${ordlineId}:`, err.message)
+          
+          // Still add the order line even if we couldn't get operations
+          combinedData.push({
+            ...orderLine,
+            _cetec_error: err.message
+          })
+          
+          errorCount++
+        }
+      }
+
+      console.log(`\n✅ Step 2 Complete: ${successCount} successful, ${errorCount} errors`)
+
+      // STEP 3: Show statistics
+      const withSmtOperation = combinedData.filter(item => item._cetec_smt_operation).length
+      const withSmtLocation = combinedData.filter(item => item._cetec_smt_location).length
+      const withLocationMaps = combinedData.filter(item => item._cetec_location_maps && item._cetec_location_maps.length > 0).length
+
+      console.log('\n═══════════════════════════════════════')
+      console.log('📊 Combined Data Statistics:')
+      console.log('═══════════════════════════════════════')
+      console.log(`Total order lines: ${combinedData.length}`)
+      console.log(`With location maps: ${withLocationMaps}`)
+      console.log(`With SMT location: ${withSmtLocation}`)
+      console.log(`With SMT operation: ${withSmtOperation}`)
+      console.log('\nSample combined record:', combinedData[0])
+
+      // Set the data
+      setCetecData(combinedData)
+      setRawCetecData(combinedData)
+      setFetchStats({
+        totalFetched: combinedData.length,
+        afterFilter: combinedData.length,
+        pagesLoaded: batchesFetched,
+        prodlineFilter: filters.prodline,
+        withSmtOperation: withSmtOperation,
+        withSmtLocation: withSmtLocation,
+        successCount: successCount,
+        errorCount: errorCount
+      })
+
+      alert(`✅ Success!\n\nFetched and combined ${combinedData.length} order lines.\n\n${withSmtOperation} have SMT operation data.\n\nCheck console for details.`)
+
+    } catch (err) {
+      console.error('Fetch and combine failed:', err)
+      setError(err.message)
+      alert(`Error: ${err.message}\nCheck console for details.`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const testOperationEndpoints = async () => {
     setLoading(true)
     setError('')
@@ -949,48 +1146,74 @@ export default function CetecImport() {
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
           <button
             className="btn btn-primary"
-            onClick={() => fetchCetecData(false)}
+            onClick={fetchAndCombineAll}
             disabled={loading}
+            style={{ background: 'linear-gradient(135deg, var(--success) 0%, #218838 100%)', color: 'white', fontSize: '1rem', padding: '0.75rem 1.5rem', fontWeight: 700 }}
           >
-            <RefreshCw size={18} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-            {loading ? 'Fetching...' : 'Quick Fetch (50 max)'}
+            <RefreshCw size={20} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+            {loading ? 'Fetching & Combining...' : 'Fetch & Combine All Data (Recommended)'}
           </button>
-          <button
-            className="btn btn-secondary"
-            onClick={() => fetchCetecData(true)}
-            disabled={loading}
-            style={{ background: 'var(--success)', color: 'white' }}
-          >
-            <RefreshCw size={18} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-            {loading ? 'Fetching All...' : 'Fetch All (Date Range Strategy)'}
-          </button>
-          <button
-            className="btn btn-secondary"
-            onClick={testAllEndpoints}
-            disabled={loading}
-            style={{ background: 'var(--warning)', color: 'white' }}
-          >
-            <RefreshCw size={18} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-            {loading ? 'Testing...' : 'Test All Endpoints'}
-          </button>
-          <button
-            className="btn btn-secondary"
-            onClick={testRawAPI}
-            disabled={loading}
-            style={{ background: '#6c757d', color: 'white' }}
-          >
-            <RefreshCw size={18} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-            {loading ? 'Testing...' : 'Test Raw API (Simple)'}
-          </button>
-          <button
-            className="btn btn-secondary"
-            onClick={testPaginationMethods}
-            disabled={loading}
-            style={{ background: '#17a2b8', color: 'white' }}
-          >
-            <RefreshCw size={18} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-            {loading ? 'Testing...' : 'Test Pagination Methods'}
-          </button>
+        </div>
+        
+        <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: '#d4edda', borderRadius: '4px', border: '1px solid #c3e6cb' }}>
+          <strong style={{ color: '#155724' }}>💡 Recommended:</strong> <span style={{ color: '#155724', fontSize: '0.875rem' }}>Use "Fetch & Combine All Data" to get order lines + labor plan data in one step. This may take a few minutes for hundreds of orders.</span>
+        </div>
+
+        <div style={{ marginTop: '1rem', padding: '1rem', background: '#f8f9fa', borderRadius: '8px', border: '1px solid #dee2e6' }}>
+          <h4 style={{ fontSize: '0.875rem', fontWeight: 700, marginBottom: '0.5rem', color: '#6c757d' }}>Alternative: Test Individual Steps</h4>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <button
+              className="btn btn-secondary"
+              onClick={() => fetchCetecData(false)}
+              disabled={loading}
+              style={{ fontSize: '0.875rem' }}
+            >
+              <RefreshCw size={16} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+              Quick Fetch (50 max)
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => fetchCetecData(true)}
+              disabled={loading}
+              style={{ fontSize: '0.875rem' }}
+            >
+              <RefreshCw size={16} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+              Fetch All Order Lines
+            </button>
+          </div>
+        </div>
+
+        <div style={{ marginTop: '1rem', padding: '1rem', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffeaa7' }}>
+          <h4 style={{ fontSize: '0.875rem', fontWeight: 700, marginBottom: '0.5rem', color: '#856404' }}>🧪 Advanced Testing</h4>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <button
+              className="btn btn-secondary"
+              onClick={testAllEndpoints}
+              disabled={loading}
+              style={{ background: 'var(--warning)', color: 'white', fontSize: '0.875rem' }}
+            >
+              <RefreshCw size={16} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+              Test All Endpoints
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={testRawAPI}
+              disabled={loading}
+              style={{ background: '#6c757d', color: 'white', fontSize: '0.875rem' }}
+            >
+              <RefreshCw size={16} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+              Test Raw API
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={testPaginationMethods}
+              disabled={loading}
+              style={{ background: '#17a2b8', color: 'white', fontSize: '0.875rem' }}
+            >
+              <RefreshCw size={16} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+              Test Pagination
+            </button>
+          </div>
         </div>
 
         <div style={{ marginTop: '1rem', padding: '1rem', background: '#e7f3ff', borderRadius: '8px', border: '1px solid #b3d9ff' }}>
@@ -1081,17 +1304,32 @@ export default function CetecImport() {
               </h3>
               <div style={{ fontSize: '0.875rem', color: '#004085', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
                 <div>
-                  <strong>Pages Loaded:</strong> {fetchStats.pagesLoaded}
+                  <strong>Batches Loaded:</strong> {fetchStats.pagesLoaded}
                 </div>
                 <div>
-                  <strong>Total Fetched:</strong> {fetchStats.totalFetched} records
+                  <strong>Total Order Lines:</strong> {fetchStats.totalFetched} records
                 </div>
-                <div>
-                  <strong>After Prodline Filter:</strong> {fetchStats.afterFilter} records
-                </div>
-                <div>
-                  <strong>Filter Applied:</strong> {fetchStats.prodlineFilter || 'None'}
-                </div>
+                {fetchStats.prodlineFilter && (
+                  <div>
+                    <strong>Prodline Filter:</strong> {fetchStats.prodlineFilter}
+                  </div>
+                )}
+                {fetchStats.withSmtOperation !== undefined && (
+                  <>
+                    <div>
+                      <strong>With SMT Operation:</strong> {fetchStats.withSmtOperation} ({Math.round(fetchStats.withSmtOperation / fetchStats.totalFetched * 100)}%)
+                    </div>
+                    <div>
+                      <strong>With SMT Location:</strong> {fetchStats.withSmtLocation}
+                    </div>
+                    <div>
+                      <strong>Successful:</strong> {fetchStats.successCount}
+                    </div>
+                    <div>
+                      <strong>Errors:</strong> {fetchStats.errorCount}
+                    </div>
+                  </>
+                )}
               </div>
               
               {/* Show unique production lines in raw data */}
