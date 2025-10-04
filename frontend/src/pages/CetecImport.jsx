@@ -47,6 +47,20 @@ export default function CetecImport() {
     '/goapis/api/v1/orders/ordlines'
   ]
 
+  const LABOR_PLAN_ENDPOINTS = [
+    '/goapis/api/v1/laborplan/list',
+    '/goapis/api/v1/laborplan',
+    '/goapis/api/v1/labor/plan',
+    '/goapis/api/v1/labor/list',
+    '/goapis/api/v1/labor',
+    '/goapis/api/v1/ordlines/labor',
+    '/goapis/api/v1/order/labor',
+    '/goapis/api/v1/routing/list',
+    '/goapis/api/v1/routing',
+    '/goapis/api/v1/operations/list',
+    '/goapis/api/v1/operations'
+  ]
+
   const fetchCetecData = async (fetchAll = false) => {
     setLoading(true)
     setError('')
@@ -341,6 +355,128 @@ export default function CetecImport() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const testLaborPlanEndpoints = async () => {
+    setLoading(true)
+    setError('')
+    setCetecData(null)
+    setRawCetecData(null)
+    setFetchStats(null)
+
+    const results = []
+    let totalEndpointsTested = 0
+    let successfulEndpoints = 0
+
+    for (const endpoint of LABOR_PLAN_ENDPOINTS) {
+      totalEndpointsTested++
+      
+      try {
+        const params = new URLSearchParams({
+          preshared_token: CETEC_CONFIG.token,
+          format: 'json'
+        })
+
+        // Try with same filters as ordlines
+        if (filters.intercompany) params.append('intercompany', 'true')
+        if (filters.from_date) params.append('from_date', filters.from_date)
+        if (filters.to_date) params.append('to_date', filters.to_date)
+
+        const url = `https://${CETEC_CONFIG.domain}${endpoint}?${params.toString()}`
+        console.log(`[${totalEndpointsTested}/${LABOR_PLAN_ENDPOINTS.length}] Testing Labor Plan: ${endpoint}`)
+
+        const response = await axios.get(url)
+        const data = response.data || []
+        
+        // Try to determine record count from different response structures
+        let recordCount = 0
+        let dataType = 'unknown'
+        let hasSmtProduction = false
+        
+        if (Array.isArray(data)) {
+          recordCount = data.length
+          dataType = 'array'
+          // Check if any record has SMT PRODUCTION
+          hasSmtProduction = data.some(item => 
+            JSON.stringify(item).toLowerCase().includes('smt') || 
+            JSON.stringify(item).toLowerCase().includes('production')
+          )
+        } else if (data.data && Array.isArray(data.data)) {
+          recordCount = data.data.length
+          dataType = 'object.data'
+          hasSmtProduction = data.data.some(item => 
+            JSON.stringify(item).toLowerCase().includes('smt') || 
+            JSON.stringify(item).toLowerCase().includes('production')
+          )
+        } else if (typeof data === 'object') {
+          // Check if it's a single labor plan object
+          recordCount = 1
+          dataType = 'object'
+          hasSmtProduction = JSON.stringify(data).toLowerCase().includes('smt') || 
+                            JSON.stringify(data).toLowerCase().includes('production')
+        }
+        
+        const hasData = recordCount > 0
+        
+        if (hasData) {
+          successfulEndpoints++
+          console.log(`✅ ${endpoint}: ${recordCount} records (${dataType})${hasSmtProduction ? ' [Has SMT/Production data]' : ''}`)
+          console.log('Sample data:', Array.isArray(data) ? data[0] : data)
+        } else {
+          console.log(`❌ ${endpoint}: No data`)
+        }
+        
+        results.push({
+          endpoint,
+          status: response.status,
+          count: recordCount,
+          hasData: hasData,
+          hasSmtProduction: hasSmtProduction,
+          dataType: dataType,
+          sampleData: hasData ? (Array.isArray(data) ? data[0] : data) : null
+        })
+
+      } catch (err) {
+        results.push({
+          endpoint,
+          status: err.response?.status || 'error',
+          count: 0,
+          hasData: false,
+          hasSmtProduction: false,
+          dataType: 'error',
+          error: err.message
+        })
+        console.log(`❌ ${endpoint}: ERROR - ${err.message}`)
+      }
+    }
+
+    console.log('═══════════════════════════════════════')
+    console.log(`Labor Plan Test Complete: ${successfulEndpoints}/${totalEndpointsTested} successful`)
+    console.log('Full results:', results)
+    
+    // Show detailed results
+    const workingEndpoints = results.filter(r => r.hasData)
+    const smtEndpoints = results.filter(r => r.hasSmtProduction)
+    
+    let message = ''
+    if (workingEndpoints.length === 0) {
+      message = `❌ No labor plan endpoints found.\nTested ${totalEndpointsTested} endpoints.\n\nCheck console for details.`
+    } else {
+      message = `✅ Found ${workingEndpoints.length} working labor plan endpoints:\n\n`
+      workingEndpoints
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5)
+        .forEach(r => {
+          message += `${r.count} records - ${r.endpoint}${r.hasSmtProduction ? ' ⭐' : ''}\n`
+        })
+      
+      if (smtEndpoints.length > 0) {
+        message += `\n🎯 ${smtEndpoints.length} endpoint(s) contain SMT/Production data!`
+      }
+    }
+    
+    alert(message)
+    setLoading(false)
   }
 
   const testPaginationMethods = async () => {
@@ -671,6 +807,24 @@ export default function CetecImport() {
           >
             <RefreshCw size={18} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
             {loading ? 'Testing...' : 'Test Pagination Methods'}
+          </button>
+        </div>
+
+        <div style={{ marginTop: '1rem', padding: '1rem', background: '#e7f3ff', borderRadius: '8px', border: '1px solid #b3d9ff' }}>
+          <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.75rem', color: '#004085' }}>
+            🔬 Labor Plan Testing
+          </h3>
+          <p style={{ fontSize: '0.875rem', color: '#004085', marginBottom: '0.75rem' }}>
+            Test labor plan endpoints to find SMT PRODUCTION location and SMT ASSEMBLY operation data.
+          </p>
+          <button
+            className="btn btn-secondary"
+            onClick={testLaborPlanEndpoints}
+            disabled={loading}
+            style={{ background: '#6f42c1', color: 'white' }}
+          >
+            <RefreshCw size={18} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+            {loading ? 'Testing...' : 'Test Labor Plan Endpoints'}
           </button>
         </div>
       </div>
