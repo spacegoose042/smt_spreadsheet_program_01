@@ -382,59 +382,93 @@ export default function CetecImport() {
         console.log(`\n📦 Testing ordline_id: ${ordlineId} (${orderLine.ordernum} - ${orderLine.prcpart})`)
 
         try {
-          // First, try to get location maps for this order line
-          const locationMapUrl = `https://${CETEC_CONFIG.domain}/goapis/api/v1/ordline/${ordlineId}/location_map?preshared_token=${CETEC_CONFIG.token}`
-          console.log(`  Fetching location maps: ${locationMapUrl}`)
+          // STEP 1: Get location maps (without include_children)
+          const locationMapUrl = `https://${CETEC_CONFIG.domain}/goapis/api/v1/ordline/${ordlineId}/location_maps?preshared_token=${CETEC_CONFIG.token}`
+          console.log(`  [1] Fetching location maps (no children):`)
+          console.log(`      ${locationMapUrl}`)
           
           const locationMapResponse = await axios.get(locationMapUrl)
           const locationMaps = locationMapResponse.data || []
           
           console.log(`  ✅ Found ${Array.isArray(locationMaps) ? locationMaps.length : 'unknown'} location maps`)
-          console.log('  Location maps:', locationMaps)
+          console.log('     Full data:', locationMaps)
 
-          // Look for SMT PRODUCTION location
-          const smtLocation = Array.isArray(locationMaps) 
-            ? locationMaps.find(loc => 
-                (loc.location_name && loc.location_name.includes('SMT')) ||
-                (loc.location && loc.location.includes('SMT')) ||
-                (loc.name && loc.name.includes('SMT'))
-              )
+          // STEP 2: Also try with include_children=true
+          const locationMapUrlWithChildren = `https://${CETEC_CONFIG.domain}/goapis/api/v1/ordline/${ordlineId}/location_maps?preshared_token=${CETEC_CONFIG.token}&include_children=true`
+          console.log(`  [2] Fetching location maps (with children):`)
+          console.log(`      ${locationMapUrlWithChildren}`)
+          
+          const locationMapWithChildrenResponse = await axios.get(locationMapUrlWithChildren)
+          const locationMapsWithChildren = locationMapWithChildrenResponse.data || []
+          
+          console.log(`  ✅ Found ${Array.isArray(locationMapsWithChildren) ? locationMapsWithChildren.length : 'unknown'} location maps (with children)`)
+          console.log('     Full data:', locationMapsWithChildren)
+
+          // Use the one that has more data
+          const locationMapsToUse = (Array.isArray(locationMapsWithChildren) && locationMapsWithChildren.length > 0) 
+            ? locationMapsWithChildren 
+            : locationMaps
+
+          // STEP 3: Look for SMT PRODUCTION location
+          const smtLocation = Array.isArray(locationMapsToUse) 
+            ? locationMapsToUse.find(loc => {
+                const locStr = JSON.stringify(loc).toUpperCase()
+                return locStr.includes('SMT') && (locStr.includes('PRODUCTION') || locStr.includes('PROD'))
+              })
             : null
 
           if (smtLocation) {
             console.log('  🎯 Found SMT location:', smtLocation)
             
-            // Now try to get operations for this location
+            // STEP 4: Get operations for this location
             const ordlineMapId = smtLocation.ordline_map_id || smtLocation.id
             
             if (ordlineMapId) {
               const operationsUrl = `https://${CETEC_CONFIG.domain}/goapis/api/v1/ordline/${ordlineId}/location_map/${ordlineMapId}/operations?preshared_token=${CETEC_CONFIG.token}`
-              console.log(`  Fetching operations: ${operationsUrl}`)
+              console.log(`  [3] Fetching operations:`)
+              console.log(`      ${operationsUrl}`)
               
               const operationsResponse = await axios.get(operationsUrl)
               const operations = operationsResponse.data || []
               
               console.log(`  ✅ Found ${Array.isArray(operations) ? operations.length : 'unknown'} operations`)
-              console.log('  Operations:', operations)
+              console.log('     Full data:', operations)
 
-              // Look for SMT ASSEMBLY operation
+              // STEP 5: Look for SMT ASSEMBLY operation
               const smtOperation = Array.isArray(operations)
-                ? operations.find(op =>
-                    (op.operation_name && op.operation_name.includes('SMT')) ||
-                    (op.operation && op.operation.includes('SMT')) ||
-                    (op.name && op.name.includes('ASSEMBLY'))
-                  )
+                ? operations.find(op => {
+                    const opStr = JSON.stringify(op).toUpperCase()
+                    return opStr.includes('SMT') || opStr.includes('ASSEMBLY')
+                  })
                 : null
 
               if (smtOperation) {
                 console.log('  🎯 Found SMT ASSEMBLY operation:', smtOperation)
+                
+                // STEP 6: If we have op_id, try to get more details
+                const opId = smtOperation.operation_id || smtOperation.op_id || smtOperation.id
+                
+                if (opId) {
+                  try {
+                    const opDetailUrl = `https://${CETEC_CONFIG.domain}/goapis/api/v1/ordline/${ordlineId}/location_map/${ordlineMapId}/operation/${opId}?preshared_token=${CETEC_CONFIG.token}`
+                    console.log(`  [4] Fetching operation details:`)
+                    console.log(`      ${opDetailUrl}`)
+                    
+                    const opDetailResponse = await axios.get(opDetailUrl)
+                    const opDetail = opDetailResponse.data || {}
+                    
+                    console.log('  ✅ Operation details:', opDetail)
+                  } catch (err) {
+                    console.log('  ⚠️ Could not fetch operation details:', err.message)
+                  }
+                }
               }
 
               results.push({
                 ordlineId,
                 orderNum: orderLine.ordernum,
                 part: orderLine.prcpart,
-                locationMaps: locationMaps,
+                locationMaps: locationMapsToUse,
                 smtLocation: smtLocation,
                 operations: operations,
                 smtOperation: smtOperation
@@ -442,11 +476,17 @@ export default function CetecImport() {
             }
           } else {
             console.log('  ⚠️ No SMT location found')
+            console.log('  Available locations:', locationMapsToUse.map(loc => ({
+              id: loc.id || loc.ordline_map_id,
+              name: loc.location_name || loc.location || loc.name || 'unknown',
+              data: loc
+            })))
+            
             results.push({
               ordlineId,
               orderNum: orderLine.ordernum,
               part: orderLine.prcpart,
-              locationMaps: locationMaps,
+              locationMaps: locationMapsToUse,
               smtLocation: null,
               operations: null,
               smtOperation: null
@@ -455,6 +495,7 @@ export default function CetecImport() {
 
         } catch (err) {
           console.error(`  ❌ Error for ordline ${ordlineId}:`, err.message)
+          console.error('     Full error:', err)
           results.push({
             ordlineId,
             orderNum: orderLine.ordernum,
@@ -464,7 +505,7 @@ export default function CetecImport() {
         }
 
         // Small delay between requests
-        await new Promise(resolve => setTimeout(resolve, 300))
+        await new Promise(resolve => setTimeout(resolve, 500))
       }
 
       console.log('\n═══════════════════════════════════════')
@@ -476,13 +517,17 @@ export default function CetecImport() {
       const smtCount = results.filter(r => r.smtOperation).length
       
       let message = `✅ Tested ${results.length} order lines:\n\n`
+      message += `Found location maps: ${results.filter(r => r.locationMaps).length}\n`
+      message += `Found SMT locations: ${results.filter(r => r.smtLocation).length}\n`
       message += `Found operations: ${successCount}\n`
       message += `Found SMT operations: ${smtCount}\n\n`
       
       if (smtCount > 0) {
-        message += `🎉 SUCCESS! Found SMT operation data.\nCheck console for full details.`
+        message += `🎉 SUCCESS! Found SMT operation data.\nCheck console for full details including labor time.`
+      } else if (results.filter(r => r.locationMaps).length > 0) {
+        message += `⚠️ Found locations but no SMT location.\nCheck console to see what locations are available.`
       } else {
-        message += `Check console for details and structure.`
+        message += `❌ No location data found.\nCheck console for error details.`
       }
       
       alert(message)
