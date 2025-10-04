@@ -28,10 +28,23 @@ export default function CetecImport() {
   const API_ENDPOINTS = [
     '/goapis/api/v1/ordlines/list',
     '/goapis/api/v1/ordlines',
+    '/goapis/api/v1/ordlines/export',
+    '/goapis/api/v1/ordlines/all',
+    '/goapis/api/v1/ordlines/batch',
+    '/goapis/api/v1/ordlines/bulk',
+    '/goapis/api/v2/ordlines/list',
+    '/goapis/api/v2/ordlines',
     '/api/v1/ordlines/list',
     '/api/v1/ordlines',
+    '/api/v1/ordlines/export',
+    '/api/ordlines/list',
+    '/api/ordlines',
     '/goapis/ordlines/list',
-    '/ordlines/list'
+    '/goapis/ordlines',
+    '/ordlines/list',
+    '/ordlines',
+    '/goapis/api/v1/orders/lines',
+    '/goapis/api/v1/orders/ordlines'
   ]
 
   const fetchCetecData = async (fetchAll = false) => {
@@ -147,53 +160,107 @@ export default function CetecImport() {
     setFetchStats(null)
 
     const results = []
+    let totalEndpointsTested = 0
+    let successfulEndpoints = 0
 
     for (const endpoint of API_ENDPOINTS) {
+      totalEndpointsTested++
+      
       try {
         const params = new URLSearchParams({
           preshared_token: CETEC_CONFIG.token,
-          limit: '100',
+          limit: '1000', // Try requesting 1000 to see what we get
           format: 'json'
         })
 
         if (filters.intercompany) params.append('intercompany', 'true')
+        if (filters.transcode) params.append('transcode', filters.transcode)
 
         const url = `https://${CETEC_CONFIG.domain}${endpoint}?${params.toString()}`
-        console.log(`Testing endpoint: ${endpoint}`)
+        console.log(`[${totalEndpointsTested}/${API_ENDPOINTS.length}] Testing: ${endpoint}`)
 
         const response = await axios.get(url)
         const data = response.data || []
         
+        // Try to determine record count from different response structures
+        let recordCount = 0
+        let dataType = 'unknown'
+        
+        if (Array.isArray(data)) {
+          recordCount = data.length
+          dataType = 'array'
+        } else if (data.data && Array.isArray(data.data)) {
+          recordCount = data.data.length
+          dataType = 'object.data'
+        } else if (data.ordlines && Array.isArray(data.ordlines)) {
+          recordCount = data.ordlines.length
+          dataType = 'object.ordlines'
+        } else if (data.records && Array.isArray(data.records)) {
+          recordCount = data.records.length
+          dataType = 'object.records'
+        }
+        
+        const hasData = recordCount > 0
+        
+        if (hasData) {
+          successfulEndpoints++
+          console.log(`✅ ${endpoint}: ${recordCount} records (${dataType})`)
+        } else {
+          console.log(`❌ ${endpoint}: No data`)
+        }
+        
         results.push({
           endpoint,
           status: response.status,
-          count: Array.isArray(data) ? data.length : (data.data ? data.data.length : 0),
-          hasData: Array.isArray(data) ? data.length > 0 : (data.data ? data.data.length > 0 : false),
+          count: recordCount,
+          hasData: hasData,
+          dataType: dataType,
           headers: response.headers,
           url
         })
 
-        console.log(`Endpoint ${endpoint}: ${Array.isArray(data) ? data.length : 'unknown'} records`)
       } catch (err) {
         results.push({
           endpoint,
           status: err.response?.status || 'error',
           count: 0,
           hasData: false,
+          dataType: 'error',
           error: err.message,
           url: `https://${CETEC_CONFIG.domain}${endpoint}`
         })
-        console.log(`Endpoint ${endpoint}: ERROR - ${err.message}`)
+        console.log(`❌ ${endpoint}: ERROR - ${err.message}`)
       }
     }
 
-    console.log('All endpoint results:', results)
+    console.log('═══════════════════════════════════════')
+    console.log(`Endpoint Test Complete: ${successfulEndpoints}/${totalEndpointsTested} successful`)
+    console.log('Full results:', results)
     
-    // Show results in a simple alert for now
+    // Show detailed results
     const workingEndpoints = results.filter(r => r.hasData)
-    const message = workingEndpoints.length > 0 
-      ? `Found ${workingEndpoints.length} working endpoints:\n${workingEndpoints.map(r => `${r.endpoint}: ${r.count} records`).join('\n')}`
-      : 'No working endpoints found. Check console for details.'
+    const bestEndpoint = workingEndpoints.length > 0 
+      ? workingEndpoints.reduce((best, current) => current.count > best.count ? current : best)
+      : null
+    
+    let message = ''
+    if (workingEndpoints.length === 0) {
+      message = `❌ No working endpoints found.\nTested ${totalEndpointsTested} endpoints.\n\nCheck console for details.`
+    } else {
+      message = `✅ Found ${workingEndpoints.length} working endpoints:\n\n`
+      workingEndpoints
+        .sort((a, b) => b.count - a.count) // Sort by record count descending
+        .slice(0, 5) // Show top 5
+        .forEach(r => {
+          message += `${r.count} records - ${r.endpoint}\n`
+        })
+      
+      if (bestEndpoint && bestEndpoint.count > 50) {
+        message += `\n🎉 BEST: ${bestEndpoint.count} records from:\n${bestEndpoint.endpoint}`
+      } else {
+        message += `\n⚠️ All endpoints still limited to ~50 records`
+      }
+    }
     
     alert(message)
     setLoading(false)
