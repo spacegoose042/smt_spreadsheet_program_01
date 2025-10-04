@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Download, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react'
 import axios from 'axios'
-import { getCetecLocationMaps, getCetecOperations, getCetecOperationDetail } from '../api'
+import { getCetecLocationMaps, getCetecOperations, getCetecOperationDetail, getCetecCombinedData } from '../api'
 
 export default function CetecImport() {
   const [loading, setLoading] = useState(false)
@@ -452,46 +452,28 @@ export default function CetecImport() {
         }
 
         try {
-          // Get location maps via backend proxy (no CORS issues!)
-          const locationMapResponse = await getCetecLocationMaps(ordlineId, true)
-          const locationMaps = locationMapResponse.data || []
-
-          // Find SMT PRODUCTION location
-          const smtLocation = Array.isArray(locationMaps) 
-            ? locationMaps.find(loc => {
-                const locStr = JSON.stringify(loc).toUpperCase()
-                return locStr.includes('SMT') && (locStr.includes('PRODUCTION') || locStr.includes('PROD'))
-              })
-            : null
-
-          let operations = []
-          let smtOperation = null
-
-          if (smtLocation) {
-            const ordlineMapId = smtLocation.ordline_map_id || smtLocation.id
+          // Use new combined endpoint - much faster!
+          const combinedResponse = await getCetecCombinedData(ordlineId)
+          const cetecData = combinedResponse.data
+          
+          // Calculate time in minutes using Cetec data
+          let timeMinutes = 0
+          if (cetecData.has_smt_production && cetecData.smt_location && cetecData.smt_operation) {
+            const estSeconds = cetecData.smt_location.est_seconds || 0
+            const repetitions = cetecData.smt_operation.repetitions || 1
+            const balanceDue = orderLine.balancedue || orderLine.release_qty || orderLine.orig_order_qty || 0
             
-            if (ordlineMapId) {
-              // Get operations via backend proxy
-              const operationsResponse = await getCetecOperations(ordlineId, ordlineMapId)
-              operations = operationsResponse.data || []
-
-              // Find SMT ASSEMBLY operation
-              smtOperation = Array.isArray(operations)
-                ? operations.find(op => {
-                    const opStr = JSON.stringify(op).toUpperCase()
-                    return opStr.includes('SMT') || opStr.includes('ASSEMBLY')
-                  })
-                : null
-            }
+            // Time calculation: (est_seconds × repetitions × balance_due) / 60
+            timeMinutes = (estSeconds * repetitions * balanceDue) / 60
           }
 
           // Combine all data
           combinedData.push({
             ...orderLine,
-            _cetec_location_maps: locationMaps,
-            _cetec_smt_location: smtLocation,
-            _cetec_operations: operations,
-            _cetec_smt_operation: smtOperation
+            _cetec_smt_location: cetecData.smt_location,
+            _cetec_smt_operation: cetecData.smt_operation,
+            _cetec_all_operations: cetecData.all_operations,
+            _calculated_time_minutes: timeMinutes
           })
 
           successCount++
@@ -655,6 +637,13 @@ export default function CetecImport() {
                 console.log('   ✅ First operation:', operations[0])
                 console.log('   Available fields:', Object.keys(operations[0]))
                 
+                // COPY-FRIENDLY JSON OUTPUT
+                console.log('\n📋 COPY THIS - First Operation JSON:')
+                console.log(JSON.stringify(operations[0], null, 2))
+                
+                console.log('\n📋 COPY THIS - All Operations JSON:')
+                console.log(JSON.stringify(operations, null, 2))
+                
                 // Look for SMT ASSEMBLY
                 const smtOp = operations.find(op => {
                   const opStr = JSON.stringify(op).toUpperCase()
@@ -663,6 +652,8 @@ export default function CetecImport() {
                 
                 if (smtOp) {
                   console.log('   🎯 Found SMT ASSEMBLY operation:', smtOp)
+                  console.log('\n📋 COPY THIS - SMT Operation JSON:')
+                  console.log(JSON.stringify(smtOp, null, 2))
                 }
               }
               
@@ -1488,6 +1479,7 @@ export default function CetecImport() {
                     <th>Qty</th>
                     <th>Ship Date</th>
                     <th>WIP Date</th>
+                    <th>Time (min)</th>
                     <th>Trans Code</th>
                   </tr>
                 </thead>
@@ -1510,9 +1502,16 @@ export default function CetecImport() {
                           {line.production_line_description}
                         </span>
                       </td>
-                      <td>{line.release_qty || line.orig_order_qty}</td>
-                      <td>{line.target_ship_date}</td>
-                      <td>{line.target_wip_date}</td>
+                      <td>{line.balancedue || line.release_qty || line.orig_order_qty || '—'}</td>
+                      <td>{line.target_ship_date || '—'}</td>
+                      <td>{line.target_wip_date || '—'}</td>
+                      <td>
+                        {line._calculated_time_minutes !== undefined ? (
+                          <strong>{Math.round(line._calculated_time_minutes)}</strong>
+                        ) : (
+                          <span style={{ color: '#999' }}>—</span>
+                        )}
+                      </td>
                       <td><span className="badge badge-info">{line.transcode}</span></td>
                     </tr>
                   ))}

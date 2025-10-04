@@ -99,6 +99,8 @@ export const getCetecOperations = (ordlineId, ordlineMapId) =>
   api.get(`/api/cetec/ordline/${ordlineId}/location_map/${ordlineMapId}/operations`)
 export const getCetecOperationDetail = (ordlineId, ordlineMapId, opId) =>
   api.get(`/api/cetec/ordline/${ordlineId}/location_map/${ordlineMapId}/operation/${opId}`)
+export const getCetecCombinedData = (ordlineId) =>
+  api.get(`/api/cetec/ordline/${ordlineId}/combined`)
 
 export default api
 

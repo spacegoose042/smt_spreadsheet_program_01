@@ -1626,6 +1626,70 @@ def get_cetec_operation_detail(
         )
 
 
+@app.get("/api/cetec/ordline/{ordline_id}/combined")
+def get_cetec_combined_data(
+    ordline_id: int,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Fetch and combine order line + location map + operations in one call
+    Returns data ready to map to work order
+    """
+    try:
+        # Get location maps with children
+        params = {
+            "preshared_token": CETEC_CONFIG["token"],
+            "include_children": "true"
+        }
+        
+        url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/location_maps"
+        response = requests.get(url, params=params, timeout=30)
+        response.raise_for_status()
+        
+        location_maps = response.json()
+        
+        # Find SMT PRODUCTION location
+        smt_location = None
+        for loc in location_maps:
+            loc_str = str(loc).upper()
+            if 'SMT' in loc_str and ('PRODUCTION' in loc_str or 'PROD' in loc_str):
+                smt_location = loc
+                break
+        
+        if not smt_location:
+            return {
+                "has_smt_production": False,
+                "location_maps": location_maps,
+                "message": "No SMT PRODUCTION location found"
+            }
+        
+        # Extract SMT ASSEMBLY operation from nested operations
+        smt_operation = None
+        operations = smt_location.get('operations', [])
+        
+        for op in operations:
+            op_str = str(op).upper()
+            if 'SMT' in op_str or 'ASSEMBLY' in op_str:
+                if op.get('name') == 'SMT ASSEMBLY' or 'ASSEMBLY' in op.get('name', '').upper():
+                    smt_operation = op
+                    break
+        
+        return {
+            "has_smt_production": True,
+            "smt_location": smt_location,
+            "smt_operation": smt_operation,
+            "all_operations": operations,
+            "location_maps": location_maps
+        }
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Cetec API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch from Cetec: {str(e)}"
+        )
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
