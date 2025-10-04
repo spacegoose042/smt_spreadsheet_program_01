@@ -46,3 +46,4 @@ def downgrade() -> None:
     op.drop_column('completed_work_orders', 'estimated_quantity')
     op.drop_column('completed_work_orders', 'quantity_completed')
 
+
