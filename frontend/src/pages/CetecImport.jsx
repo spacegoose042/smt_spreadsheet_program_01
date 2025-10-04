@@ -56,74 +56,95 @@ export default function CetecImport() {
 
     try {
       let allData = []
-      let currentOffset = 0
-      let hasMore = true
-      let pagesLoaded = 0
-      const maxPages = 20 // Safety limit
+      let batchesFetched = 0
+      
+      if (fetchAll) {
+        // DATE RANGE STRATEGY: Split into weekly chunks to get past 50-record limit
+        const startDate = filters.from_date ? new Date(filters.from_date) : new Date()
+        const endDate = filters.to_date ? new Date(filters.to_date) : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000) // 60 days from now
+        
+        // Calculate weeks between dates
+        const weeks = []
+        let currentDate = new Date(startDate)
+        
+        while (currentDate <= endDate) {
+          const weekStart = new Date(currentDate)
+          const weekEnd = new Date(currentDate)
+          weekEnd.setDate(weekEnd.getDate() + 6) // 7 days per batch
+          
+          if (weekEnd > endDate) {
+            weeks.push({ start: weekStart, end: endDate })
+            break
+          } else {
+            weeks.push({ start: weekStart, end: weekEnd })
+          }
+          
+          currentDate.setDate(currentDate.getDate() + 7)
+        }
+        
+        console.log(`📅 Splitting date range into ${weeks.length} weekly batches`)
+        
+        // Fetch each week separately
+        for (const week of weeks) {
+          try {
+            const params = new URLSearchParams({
+              preshared_token: CETEC_CONFIG.token,
+              from_date: week.start.toISOString().split('T')[0],
+              to_date: week.end.toISOString().split('T')[0],
+              format: 'json'
+            })
 
-      while (hasMore && pagesLoaded < maxPages) {
-        // Build query parameters
+            if (filters.intercompany) params.append('intercompany', 'true')
+            if (filters.ordernum) params.append('ordernum', filters.ordernum)
+            if (filters.customer) params.append('customer', filters.customer)
+            if (filters.transcode) params.append('transcode', filters.transcode)
+
+            const url = `https://${CETEC_CONFIG.domain}/goapis/api/v1/ordlines/list?${params.toString()}`
+            
+            console.log(`📦 Batch ${batchesFetched + 1}/${weeks.length}: ${week.start.toISOString().split('T')[0]} to ${week.end.toISOString().split('T')[0]}`)
+
+            const response = await axios.get(url)
+            const batchData = response.data || []
+            
+            console.log(`   ✅ Got ${batchData.length} records`)
+            
+            allData = [...allData, ...batchData]
+            batchesFetched++
+            
+            // Small delay to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 200))
+            
+          } catch (err) {
+            console.error(`   ❌ Batch ${batchesFetched + 1} failed:`, err.message)
+          }
+        }
+        
+        console.log(`✅ Total fetched: ${allData.length} records from ${batchesFetched} batches`)
+        
+      } else {
+        // SINGLE REQUEST: Just fetch once with current filters
         const params = new URLSearchParams({
-          preshared_token: CETEC_CONFIG.token
+          preshared_token: CETEC_CONFIG.token,
+          format: 'json'
         })
 
-        // Add filters (NO prodline - doesn't work in API)
         if (filters.intercompany) params.append('intercompany', 'true')
         if (filters.from_date) params.append('from_date', filters.from_date)
         if (filters.to_date) params.append('to_date', filters.to_date)
         if (filters.ordernum) params.append('ordernum', filters.ordernum)
         if (filters.customer) params.append('customer', filters.customer)
         if (filters.transcode) params.append('transcode', filters.transcode)
-        
-        // Try different limit/offset approaches - but start simple
-        if (currentOffset === 0) {
-          // For first page, try without pagination params to see default behavior
-          params.append('format', 'json')
-        } else {
-          // For subsequent pages, try different pagination methods
-          params.append('limit', filters.limit.toString())
-          params.append('offset', currentOffset.toString())
-          params.append('page', Math.floor(currentOffset / filters.limit) + 1)
-          params.append('format', 'json')
-        }
 
-        const url = `https://${CETEC_CONFIG.domain}${API_ENDPOINTS[0]}?${params.toString()}`
-
-        console.log(`Fetching page ${pagesLoaded + 1}, offset ${currentOffset}:`, url)
+        const url = `https://${CETEC_CONFIG.domain}/goapis/api/v1/ordlines/list?${params.toString()}`
+        console.log('Single request:', url)
 
         const response = await axios.get(url)
-        const pageData = response.data || []
+        allData = response.data || []
+        batchesFetched = 1
         
-        console.log(`Page ${pagesLoaded + 1}: ${pageData.length} records`)
-        console.log(`Response headers:`, response.headers)
-        console.log(`Response status:`, response.status)
-        
-        // Check if response has pagination info
-        if (response.headers['x-total-count'] || response.headers['total-count']) {
-          console.log('Total count from headers:', response.headers['x-total-count'] || response.headers['total-count'])
-        }
-        
-        // Check if response has pagination metadata
-        if (typeof pageData === 'object' && pageData.data) {
-          console.log('Pagination metadata:', pageData)
-          allData = [...allData, ...(pageData.data || [])]
-        } else {
-          allData = [...allData, ...pageData]
-        }
-        
-        pagesLoaded++
-        
-        // Stop if we got less than the limit (last page) or if not fetching all
-        if (pageData.length < filters.limit || !fetchAll) {
-          hasMore = false
-          console.log(`Stopping: got ${pageData.length} records (limit: ${filters.limit})`)
-        } else {
-          currentOffset += filters.limit
-          console.log(`Continuing to next page, new offset: ${currentOffset}`)
-        }
+        console.log(`Got ${allData.length} records`)
       }
 
-      console.log(`Total fetched: ${allData.length} records from ${pagesLoaded} pages`)
       setRawCetecData(allData)
 
       // Apply client-side filtering for prodline
@@ -140,7 +161,7 @@ export default function CetecImport() {
       setFetchStats({
         totalFetched: allData.length,
         afterFilter: filteredData.length,
-        pagesLoaded: pagesLoaded,
+        pagesLoaded: batchesFetched,
         prodlineFilter: filters.prodline
       })
       
@@ -613,7 +634,7 @@ export default function CetecImport() {
             disabled={loading}
           >
             <RefreshCw size={18} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-            {loading ? 'Fetching...' : 'Fetch First Page'}
+            {loading ? 'Fetching...' : 'Quick Fetch (50 max)'}
           </button>
           <button
             className="btn btn-secondary"
@@ -622,7 +643,7 @@ export default function CetecImport() {
             style={{ background: 'var(--success)', color: 'white' }}
           >
             <RefreshCw size={18} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-            {loading ? 'Fetching All...' : 'Fetch All Pages (Slow)'}
+            {loading ? 'Fetching All...' : 'Fetch All (Date Range Strategy)'}
           </button>
           <button
             className="btn btn-secondary"
@@ -666,10 +687,11 @@ export default function CetecImport() {
           </pre>
           <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: '#fff3cd', borderRadius: '4px' }}>
             <strong>💡 How it works:</strong><br />
-            • <strong>Prodline filter is client-side</strong> (API doesn't support it)<br />
-            • "Fetch First Page" = Fast, {filters.limit} records max<br />
-            • "Fetch All Pages" = Slow, fetches everything then filters<br />
-            • Filters by <code>production_line_description</code> field
+            • <strong>API has 50-record limit per request</strong><br />
+            • "Quick Fetch" = Single request, 50 records max<br />
+            • "Fetch All" = <strong>Weekly batches</strong> to get past 50-record limit<br />
+            • Prodline filter applied client-side after fetching<br />
+            • <strong>Set From/To dates</strong> for best results with "Fetch All"
           </div>
         </div>
       </div>
