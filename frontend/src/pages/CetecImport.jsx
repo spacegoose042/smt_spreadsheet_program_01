@@ -1755,17 +1755,41 @@ export default function CetecImport() {
                         </td>
                         <td>{line.target_ship_date || line.target_wip_date || '—'}</td>
                         <td>
-                          <span 
-                            className="badge" 
-                            style={{ 
-                              background: line._current_location !== 'Unknown' ? '#17a2b8' : '#6c757d',
-                              color: 'white',
-                              fontSize: '0.75rem'
-                            }}
-                            title={line._current_location_full ? JSON.stringify(line._current_location_full, null, 2) : 'No location data'}
-                          >
-                            {line._current_location || 'Unknown'}
-                          </span>
+                          {(() => {
+                            // Color-code locations
+                            const location = line._current_location || 'Unknown'
+                            let locationColor = '#6c757d' // Default gray
+                            
+                            if (location.toUpperCase().includes('SMT PRODUCTION')) {
+                              locationColor = '#28a745' // Green
+                            } else if (location.toUpperCase().includes('KITTING') || location.toUpperCase().includes('PICK')) {
+                              locationColor = '#007bff' // Blue
+                            } else if (location.toUpperCase().includes('DEPANEL') || location.toUpperCase().includes('ASSEMBLY')) {
+                              locationColor = '#6610f2' // Purple
+                            } else if (location.toUpperCase().includes('INSPECTION') || location.toUpperCase().includes('QC')) {
+                              locationColor = '#fd7e14' // Orange
+                            } else if (location.toUpperCase().includes('SHIPPING') || location.toUpperCase().includes('SHIP')) {
+                              locationColor = '#20c997' // Teal
+                            } else if (location.toUpperCase().includes('RECEIVING') || location.toUpperCase().includes('RECEIVE')) {
+                              locationColor = '#17a2b8' // Cyan
+                            } else if (location !== 'Unknown') {
+                              locationColor = '#6c757d' // Default for known locations
+                            }
+                            
+                            return (
+                              <span 
+                                className="badge" 
+                                style={{ 
+                                  background: locationColor,
+                                  color: 'white',
+                                  fontSize: '0.75rem'
+                                }}
+                                title={line._current_location_full ? JSON.stringify(line._current_location_full, null, 2) : 'No location data'}
+                              >
+                                {location}
+                              </span>
+                            )
+                          })()}
                         </td>
                         <td>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
