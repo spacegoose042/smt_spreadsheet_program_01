@@ -383,17 +383,32 @@ export default function CetecImport() {
       let ordlineStatusMap = {}
       try {
         const statusResponse = await getCetecOrdlineStatuses()
-        const statuses = statusResponse.data || []
+        let statuses = statusResponse.data
+        
+        console.log(`   📊 Response type:`, typeof statuses, Array.isArray(statuses) ? '(array)' : '(not array)')
+        
+        // Handle if response is not an array
+        if (!Array.isArray(statuses)) {
+          console.log(`   📊 Response keys:`, Object.keys(statuses || {}))
+          // Try to extract array from response object
+          if (statuses?.data) statuses = statuses.data
+          else if (statuses?.ordlinestatus) statuses = statuses.ordlinestatus
+          else if (statuses?.rows) statuses = statuses.rows
+          else statuses = []
+        }
+        
         console.log(`   ✅ Fetched ${statuses.length} work locations`)
         
         // Create lookup map by ID
-        statuses.forEach(status => {
-          ordlineStatusMap[status.id] = status
-        })
-        
-        // Show some examples
-        if (statuses.length > 0) {
-          console.log(`   📋 Sample locations:`, statuses.slice(0, 3).map(s => `${s.id}: ${s.description}`))
+        if (Array.isArray(statuses)) {
+          statuses.forEach(status => {
+            ordlineStatusMap[status.id] = status
+          })
+          
+          // Show some examples
+          if (statuses.length > 0) {
+            console.log(`   📋 Sample locations:`, statuses.slice(0, 3).map(s => `${s.id}: ${s.description}`))
+          }
         }
       } catch (err) {
         console.error('   ⚠️  Failed to fetch work locations:', err.message)
@@ -517,8 +532,8 @@ export default function CetecImport() {
       // Map current location to each order line
       console.log(`\n📍 Mapping current work locations...`)
       allOrderLines = allOrderLines.map(orderLine => {
-        // Try to find ordlinestatus_id in the order line data
-        const statusId = orderLine.ordlinestatus_id || orderLine.current_ordlinestatus_id
+        // The field is "work_location" in the order line data
+        const statusId = orderLine.work_location || orderLine.ordlinestatus_id || orderLine.current_ordlinestatus_id
         const location = statusId ? ordlineStatusMap[statusId] : null
         
         return {
@@ -528,7 +543,15 @@ export default function CetecImport() {
           _current_location_full: location || null
         }
       })
-      console.log(`   ✅ Mapped locations for ${allOrderLines.length} order lines`)
+      
+      // Log success with sample
+      const withLocation = allOrderLines.filter(line => line._current_location !== 'Unknown').length
+      console.log(`   ✅ Mapped locations: ${withLocation}/${allOrderLines.length} have known locations`)
+      
+      if (withLocation > 0) {
+        const sample = allOrderLines.find(line => line._current_location !== 'Unknown')
+        console.log(`   📋 Sample: work_location=${sample.work_location} → "${sample._current_location}"`)
+      }
 
       // STEP 2: For each order line, fetch location maps and operations
       console.log(`\n📍 Step 2: Fetching location maps and operations for ${allOrderLines.length} order lines`)

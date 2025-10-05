@@ -1711,7 +1711,20 @@ def get_cetec_ordline_statuses(
         response.raise_for_status()
         
         data = response.json()
-        print(f"Cetec ordlinestatus: fetched {len(data) if isinstance(data, list) else 'unknown'} locations")
+        
+        # Log the structure for debugging
+        print(f"Cetec ordlinestatus response type: {type(data)}")
+        if isinstance(data, dict):
+            print(f"Response keys: {list(data.keys())}")
+            # Try to extract the actual data array
+            if 'data' in data:
+                data = data['data']
+            elif 'ordlinestatus' in data:
+                data = data['ordlinestatus']
+            elif 'rows' in data:
+                data = data['rows']
+        
+        print(f"Cetec ordlinestatus: fetched {len(data) if isinstance(data, list) else 'not an array'} locations")
         
         return data
         
