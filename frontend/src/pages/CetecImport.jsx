@@ -20,6 +20,22 @@ export default function CetecImport() {
     limit: 500, // Per-page limit
     offset: 0
   })
+  
+  // Table column filters
+  const [columnFilters, setColumnFilters] = useState({
+    woNumber: '',
+    assembly: '',
+    revision: '',
+    customer: '',
+    quantity: '',
+    time: '',
+    shipDate: '',
+    location: '',
+    materialStatus: '',
+    materialDue: '',
+    cetecOrder: '',
+    status: ''
+  })
 
   const CETEC_CONFIG = {
     domain: 'sandy.cetecerp.com',
@@ -1176,8 +1192,77 @@ export default function CetecImport() {
     }))
   }
 
+  // Filter data based on column filters
+  const filteredData = cetecData ? cetecData.filter(line => {
+    const woNumber = `${line.ordernum}-${line.lineitem}`.toLowerCase()
+    const assembly = (line.prcpart || '').toLowerCase()
+    const revision = (line.revision || '').toLowerCase()
+    const customer = (line.customer || '').toLowerCase()
+    const quantity = String(line.balancedue || line.release_qty || line.orig_order_qty || '')
+    const time = line._calculated_time_minutes ? String(Math.round(line._calculated_time_minutes)) : ''
+    const shipDate = (line.target_ship_date || line.target_wip_date || '').toLowerCase()
+    const location = (line._current_location || '').toLowerCase()
+    
+    // Material status
+    const shortAllocation = line.short_per_allocation || false
+    const shortShelf = line.short_per_shelf || false
+    let materialStatus = 'ready'
+    if (shortAllocation && shortShelf) materialStatus = 'shortage'
+    else if (shortAllocation || shortShelf) materialStatus = 'partial'
+    
+    // Extract date from material_here_on
+    let materialDue = line.material_here_on || ''
+    if (materialDue) {
+      const dateMatch = materialDue.match(/\d{4}-\d{2}-\d{2}/)
+      materialDue = dateMatch ? dateMatch[0] : materialDue
+    }
+    materialDue = materialDue.toLowerCase()
+    
+    const cetecOrder = (line.ordernum || '').toLowerCase()
+    const status = (line._calculated_time_minutes > 0 ? 'ready' : 'missing').toLowerCase()
+    
+    return (
+      woNumber.includes(columnFilters.woNumber.toLowerCase()) &&
+      assembly.includes(columnFilters.assembly.toLowerCase()) &&
+      revision.includes(columnFilters.revision.toLowerCase()) &&
+      customer.includes(columnFilters.customer.toLowerCase()) &&
+      quantity.includes(columnFilters.quantity) &&
+      time.includes(columnFilters.time) &&
+      shipDate.includes(columnFilters.shipDate.toLowerCase()) &&
+      location.includes(columnFilters.location.toLowerCase()) &&
+      materialStatus.includes(columnFilters.materialStatus.toLowerCase()) &&
+      materialDue.includes(columnFilters.materialDue.toLowerCase()) &&
+      cetecOrder.includes(columnFilters.cetecOrder.toLowerCase()) &&
+      status.includes(columnFilters.status.toLowerCase())
+    )
+  }) : []
+  
+  const clearColumnFilters = () => {
+    setColumnFilters({
+      woNumber: '',
+      assembly: '',
+      revision: '',
+      customer: '',
+      quantity: '',
+      time: '',
+      shipDate: '',
+      location: '',
+      materialStatus: '',
+      materialDue: '',
+      cetecOrder: '',
+      status: ''
+    })
+  }
+  
+  const handleColumnFilterChange = (column, value) => {
+    setColumnFilters(prev => ({
+      ...prev,
+      [column]: value
+    }))
+  }
+
   const exportToCSV = () => {
-    if (!cetecData || cetecData.length === 0) return
+    if (!filteredData || filteredData.length === 0) return
 
     // Define columns to export (matching Work Order import format)
     const headers = [
@@ -1199,8 +1284,8 @@ export default function CetecImport() {
       'Cetec Allocation URL'
     ]
     
-    // Create CSV rows with mapped data
-    const rows = cetecData.map(item => {
+    // Create CSV rows with mapped data (using filtered data)
+    const rows = filteredData.map(item => {
       const woNumber = `${item.ordernum}-${item.lineitem}`
       const quantity = item.balancedue || item.release_qty || item.orig_order_qty || 0
       const timeMinutes = item._calculated_time_minutes ? Math.round(item._calculated_time_minutes) : 0
@@ -1656,10 +1741,27 @@ export default function CetecImport() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <div>
                 <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-                  Work Order Import Preview ({cetecData.length})
+                  Work Order Import Preview ({filteredData.length} of {cetecData.length})
                 </h3>
                 <p style={{ fontSize: '0.875rem', color: '#6c757d', margin: 0 }}>
-                  {cetecData.filter(line => line._calculated_time_minutes > 0).length} ready to import
+                  {filteredData.filter(line => line._calculated_time_minutes > 0).length} ready to import
+                  {Object.values(columnFilters).some(f => f) && (
+                    <button 
+                      onClick={clearColumnFilters}
+                      style={{ 
+                        marginLeft: '1rem',
+                        padding: '0.25rem 0.5rem',
+                        fontSize: '0.75rem',
+                        background: '#dc3545',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Clear Filters
+                    </button>
+                  )}
                 </p>
               </div>
               <button className="btn btn-secondary" onClick={exportToCSV}>
@@ -1685,9 +1787,120 @@ export default function CetecImport() {
                     <th style={{ minWidth: '100px' }}>Cetec Order</th>
                     <th>Status</th>
                   </tr>
+                  {/* Filter Row */}
+                  <tr style={{ background: '#f8f9fa' }}>
+                    <th>
+                      <input
+                        type="text"
+                        placeholder="Filter..."
+                        value={columnFilters.woNumber}
+                        onChange={(e) => handleColumnFilterChange('woNumber', e.target.value)}
+                        style={{ width: '100%', padding: '0.25rem', fontSize: '0.75rem', border: '1px solid #ced4da', borderRadius: '4px' }}
+                      />
+                    </th>
+                    <th>
+                      <input
+                        type="text"
+                        placeholder="Filter..."
+                        value={columnFilters.assembly}
+                        onChange={(e) => handleColumnFilterChange('assembly', e.target.value)}
+                        style={{ width: '100%', padding: '0.25rem', fontSize: '0.75rem', border: '1px solid #ced4da', borderRadius: '4px' }}
+                      />
+                    </th>
+                    <th>
+                      <input
+                        type="text"
+                        placeholder="Filter..."
+                        value={columnFilters.revision}
+                        onChange={(e) => handleColumnFilterChange('revision', e.target.value)}
+                        style={{ width: '100%', padding: '0.25rem', fontSize: '0.75rem', border: '1px solid #ced4da', borderRadius: '4px' }}
+                      />
+                    </th>
+                    <th>
+                      <input
+                        type="text"
+                        placeholder="Filter..."
+                        value={columnFilters.customer}
+                        onChange={(e) => handleColumnFilterChange('customer', e.target.value)}
+                        style={{ width: '100%', padding: '0.25rem', fontSize: '0.75rem', border: '1px solid #ced4da', borderRadius: '4px' }}
+                      />
+                    </th>
+                    <th>
+                      <input
+                        type="text"
+                        placeholder="Filter..."
+                        value={columnFilters.quantity}
+                        onChange={(e) => handleColumnFilterChange('quantity', e.target.value)}
+                        style={{ width: '100%', padding: '0.25rem', fontSize: '0.75rem', border: '1px solid #ced4da', borderRadius: '4px' }}
+                      />
+                    </th>
+                    <th>
+                      <input
+                        type="text"
+                        placeholder="Filter..."
+                        value={columnFilters.time}
+                        onChange={(e) => handleColumnFilterChange('time', e.target.value)}
+                        style={{ width: '100%', padding: '0.25rem', fontSize: '0.75rem', border: '1px solid #ced4da', borderRadius: '4px' }}
+                      />
+                    </th>
+                    <th>
+                      <input
+                        type="text"
+                        placeholder="Filter..."
+                        value={columnFilters.shipDate}
+                        onChange={(e) => handleColumnFilterChange('shipDate', e.target.value)}
+                        style={{ width: '100%', padding: '0.25rem', fontSize: '0.75rem', border: '1px solid #ced4da', borderRadius: '4px' }}
+                      />
+                    </th>
+                    <th>
+                      <input
+                        type="text"
+                        placeholder="Filter..."
+                        value={columnFilters.location}
+                        onChange={(e) => handleColumnFilterChange('location', e.target.value)}
+                        style={{ width: '100%', padding: '0.25rem', fontSize: '0.75rem', border: '1px solid #ced4da', borderRadius: '4px' }}
+                      />
+                    </th>
+                    <th>
+                      <input
+                        type="text"
+                        placeholder="Filter..."
+                        value={columnFilters.materialStatus}
+                        onChange={(e) => handleColumnFilterChange('materialStatus', e.target.value)}
+                        style={{ width: '100%', padding: '0.25rem', fontSize: '0.75rem', border: '1px solid #ced4da', borderRadius: '4px' }}
+                      />
+                    </th>
+                    <th>
+                      <input
+                        type="text"
+                        placeholder="Filter..."
+                        value={columnFilters.materialDue}
+                        onChange={(e) => handleColumnFilterChange('materialDue', e.target.value)}
+                        style={{ width: '100%', padding: '0.25rem', fontSize: '0.75rem', border: '1px solid #ced4da', borderRadius: '4px' }}
+                      />
+                    </th>
+                    <th>
+                      <input
+                        type="text"
+                        placeholder="Filter..."
+                        value={columnFilters.cetecOrder}
+                        onChange={(e) => handleColumnFilterChange('cetecOrder', e.target.value)}
+                        style={{ width: '100%', padding: '0.25rem', fontSize: '0.75rem', border: '1px solid #ced4da', borderRadius: '4px' }}
+                      />
+                    </th>
+                    <th>
+                      <input
+                        type="text"
+                        placeholder="Filter..."
+                        value={columnFilters.status}
+                        onChange={(e) => handleColumnFilterChange('status', e.target.value)}
+                        style={{ width: '100%', padding: '0.25rem', fontSize: '0.75rem', border: '1px solid #ced4da', borderRadius: '4px' }}
+                      />
+                    </th>
+                  </tr>
                 </thead>
                 <tbody>
-                  {cetecData.map((line, idx) => {
+                  {filteredData.map((line, idx) => {
                     // Generate WO number preview (would be auto-generated on import)
                     const woNumber = `${line.ordernum}-${line.lineitem}`
                     
