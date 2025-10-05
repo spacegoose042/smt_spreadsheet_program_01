@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Download, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react'
 import axios from 'axios'
-import { getCetecLocationMaps, getCetecOperations, getCetecOperationDetail, getCetecCombinedData } from '../api'
+import { getCetecLocationMaps, getCetecOperations, getCetecOperationDetail, getCetecCombinedData, getCetecOrdlineStatuses } from '../api'
 
 export default function CetecImport() {
   const [loading, setLoading] = useState(false)
@@ -378,6 +378,27 @@ export default function CetecImport() {
       console.log('   Prodline:', filters.prodline || '(none)')
       console.log('═══════════════════════════════════════\n')
 
+      // Fetch ordline statuses (work locations) first
+      console.log('📍 Fetching work locations (ordlinestatus)...')
+      let ordlineStatusMap = {}
+      try {
+        const statusResponse = await getCetecOrdlineStatuses()
+        const statuses = statusResponse.data || []
+        console.log(`   ✅ Fetched ${statuses.length} work locations`)
+        
+        // Create lookup map by ID
+        statuses.forEach(status => {
+          ordlineStatusMap[status.id] = status
+        })
+        
+        // Show some examples
+        if (statuses.length > 0) {
+          console.log(`   📋 Sample locations:`, statuses.slice(0, 3).map(s => `${s.id}: ${s.description}`))
+        }
+      } catch (err) {
+        console.error('   ⚠️  Failed to fetch work locations:', err.message)
+      }
+
       let allOrderLines = []
       let batchesFetched = 0
       
@@ -465,7 +486,18 @@ export default function CetecImport() {
       if (allOrderLines.length > 0) {
         const uniqueProdlines = [...new Set(allOrderLines.map(item => item.production_line_description))]
         console.log(`   📊 Unique production lines found:`, uniqueProdlines)
-        console.log(`   📊 Sample record:`, allOrderLines[0])
+        console.log(`   📊 Sample record (check for location fields):`, allOrderLines[0])
+        
+        // Check for location-related fields
+        const sampleRecord = allOrderLines[0]
+        const locationFields = Object.keys(sampleRecord).filter(key => 
+          key.toLowerCase().includes('location') || 
+          key.toLowerCase().includes('status') ||
+          key.toLowerCase().includes('ordlinestatus')
+        )
+        if (locationFields.length > 0) {
+          console.log(`   📍 Location-related fields found:`, locationFields)
+        }
       }
 
       // Apply prodline filter
@@ -481,6 +513,22 @@ export default function CetecImport() {
           console.warn(`   💡 Check if production_line_description field matches "${filters.prodline}"`)
         }
       }
+      
+      // Map current location to each order line
+      console.log(`\n📍 Mapping current work locations...`)
+      allOrderLines = allOrderLines.map(orderLine => {
+        // Try to find ordlinestatus_id in the order line data
+        const statusId = orderLine.ordlinestatus_id || orderLine.current_ordlinestatus_id
+        const location = statusId ? ordlineStatusMap[statusId] : null
+        
+        return {
+          ...orderLine,
+          _current_location: location ? location.description : 'Unknown',
+          _current_location_id: statusId || null,
+          _current_location_full: location || null
+        }
+      })
+      console.log(`   ✅ Mapped locations for ${allOrderLines.length} order lines`)
 
       // STEP 2: For each order line, fetch location maps and operations
       console.log(`\n📍 Step 2: Fetching location maps and operations for ${allOrderLines.length} order lines`)
@@ -1117,6 +1165,7 @@ export default function CetecImport() {
       'Quantity',
       'Time (min)',
       'Ship Date',
+      'Current Location',
       'Cetec Order',
       'Cetec Line',
       'Status',
@@ -1129,6 +1178,7 @@ export default function CetecImport() {
       const quantity = item.balancedue || item.release_qty || item.orig_order_qty || 0
       const timeMinutes = item._calculated_time_minutes ? Math.round(item._calculated_time_minutes) : 0
       const shipDate = item.target_ship_date || item.target_wip_date || ''
+      const currentLocation = item._current_location || 'Unknown'
       const status = timeMinutes > 0 ? 'Ready' : 'Missing Data'
       
       return [
@@ -1139,6 +1189,7 @@ export default function CetecImport() {
         quantity,
         timeMinutes,
         `"${shipDate}"`,
+        `"${currentLocation}"`,
         `"${item.ordernum || ''}"`,
         `"${item.lineitem || ''}"`,
         `"${status}"`,
@@ -1568,7 +1619,7 @@ export default function CetecImport() {
                     <th>Quantity</th>
                     <th>Time (min)</th>
                     <th>Ship Date</th>
-                    <th>SMT Line</th>
+                    <th style={{ minWidth: '120px' }}>Current Location</th>
                     <th style={{ minWidth: '100px' }}>Cetec Order</th>
                     <th>Status</th>
                   </tr>
@@ -1605,8 +1656,16 @@ export default function CetecImport() {
                         </td>
                         <td>{line.target_ship_date || line.target_wip_date || '—'}</td>
                         <td>
-                          <span className="badge badge-secondary" style={{ fontSize: '0.75rem' }}>
-                            TBD
+                          <span 
+                            className="badge" 
+                            style={{ 
+                              background: line._current_location !== 'Unknown' ? '#17a2b8' : '#6c757d',
+                              color: 'white',
+                              fontSize: '0.75rem'
+                            }}
+                            title={line._current_location_full ? JSON.stringify(line._current_location_full, null, 2) : 'No location data'}
+                          >
+                            {line._current_location || 'Unknown'}
                           </span>
                         </td>
                         <td style={{ fontSize: '0.75rem' }}>

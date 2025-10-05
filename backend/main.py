@@ -1690,6 +1690,39 @@ def get_cetec_combined_data(
         )
 
 
+@app.get("/api/cetec/ordlinestatus/list")
+def get_cetec_ordline_statuses(
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Proxy endpoint to fetch ordline statuses (work locations) from Cetec
+    """
+    try:
+        params = {
+            "preshared_token": CETEC_CONFIG["token"],
+            "rows": "1000"  # Get a large number to ensure we get all locations
+        }
+        
+        url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlinestatus/list"
+        
+        print(f"Proxying Cetec ordlinestatus request: {url}")
+        
+        response = requests.get(url, params=params, timeout=30)
+        response.raise_for_status()
+        
+        data = response.json()
+        print(f"Cetec ordlinestatus: fetched {len(data) if isinstance(data, list) else 'unknown'} locations")
+        
+        return data
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Cetec API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch from Cetec: {str(e)}"
+        )
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
