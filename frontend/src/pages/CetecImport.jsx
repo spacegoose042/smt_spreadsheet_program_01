@@ -1189,6 +1189,8 @@ export default function CetecImport() {
       'Time (min)',
       'Ship Date',
       'Current Location',
+      'Material Status',
+      'Material Due Date',
       'Cetec Order',
       'Cetec Line',
       'Status',
@@ -1204,6 +1206,18 @@ export default function CetecImport() {
       const currentLocation = item._current_location || 'Unknown'
       const status = timeMinutes > 0 ? 'Ready' : 'Missing Data'
       
+      // Material status
+      const shortAllocation = item.short_per_allocation || false
+      const shortShelf = item.short_per_shelf || false
+      const materialHereOn = item.material_here_on || ''
+      
+      let materialStatus = 'Ready'
+      if (shortAllocation && shortShelf) {
+        materialStatus = 'Shortage'
+      } else if (shortAllocation || shortShelf) {
+        materialStatus = 'Partial'
+      }
+      
       return [
         `"${woNumber}"`,
         `"${item.prcpart || ''}"`,
@@ -1213,6 +1227,8 @@ export default function CetecImport() {
         timeMinutes,
         `"${shipDate}"`,
         `"${currentLocation}"`,
+        `"${materialStatus}"`,
+        `"${materialHereOn}"`,
         `"${item.ordernum || ''}"`,
         `"${item.lineitem || ''}"`,
         `"${status}"`,
@@ -1643,6 +1659,7 @@ export default function CetecImport() {
                     <th>Time (min)</th>
                     <th>Ship Date</th>
                     <th style={{ minWidth: '120px' }}>Current Location</th>
+                    <th style={{ minWidth: '150px' }}>Material Status</th>
                     <th style={{ minWidth: '100px' }}>Cetec Order</th>
                     <th>Status</th>
                   </tr>
@@ -1654,6 +1671,25 @@ export default function CetecImport() {
                     
                     // Determine if this can be imported (has SMT operation data)
                     const canImport = line._calculated_time_minutes > 0
+                    
+                    // Determine material status
+                    const shortAllocation = line.short_per_allocation || false
+                    const shortShelf = line.short_per_shelf || false
+                    const materialHereOn = line.material_here_on || null
+                    
+                    let materialStatus = 'Ready'
+                    let materialColor = '#28a745' // Green
+                    let materialIcon = '✓'
+                    
+                    if (shortAllocation && shortShelf) {
+                      materialStatus = 'Shortage'
+                      materialColor = '#dc3545' // Red
+                      materialIcon = '✗'
+                    } else if (shortAllocation || shortShelf) {
+                      materialStatus = 'Partial'
+                      materialColor = '#ffc107' // Yellow
+                      materialIcon = '⚠'
+                    }
                     
                     return (
                       <tr key={idx} style={{ opacity: canImport ? 1 : 0.5 }}>
@@ -1690,6 +1726,29 @@ export default function CetecImport() {
                           >
                             {line._current_location || 'Unknown'}
                           </span>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                            <span 
+                              className="badge" 
+                              style={{ 
+                                background: materialColor,
+                                color: 'white',
+                                fontSize: '0.75rem',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.25rem'
+                              }}
+                              title={`Allocation Short: ${shortAllocation}, Shelf Short: ${shortShelf}`}
+                            >
+                              {materialIcon} {materialStatus}
+                            </span>
+                            {(shortAllocation || shortShelf) && materialHereOn && (
+                              <span style={{ fontSize: '0.7rem', color: '#6c757d' }}>
+                                Due: {materialHereOn}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td style={{ fontSize: '0.75rem' }}>
                           <code>{line.ordernum}</code>
