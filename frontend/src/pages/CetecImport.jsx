@@ -1673,7 +1673,8 @@ export default function CetecImport() {
                     <th>Time (min)</th>
                     <th>Ship Date</th>
                     <th style={{ minWidth: '120px' }}>Current Location</th>
-                    <th style={{ minWidth: '150px' }}>Material Status</th>
+                    <th style={{ minWidth: '120px' }}>Material Status</th>
+                    <th style={{ minWidth: '100px' }}>Material Due</th>
                     <th style={{ minWidth: '100px' }}>Cetec Order</th>
                     <th>Status</th>
                   </tr>
@@ -1792,34 +1793,14 @@ export default function CetecImport() {
                           })()}
                         </td>
                         <td>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                            {(shortAllocation || shortShelf) && line.ordernum ? (
-                              <a
-                                href={`https://${CETEC_CONFIG.domain}/otd/allocation/list?reloaded=1&late=1&controlnum=${line.ordernum}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{ textDecoration: 'none' }}
-                                title={`View allocation in Cetec ERP (Allocation Short: ${shortAllocation}, Shelf Short: ${shortShelf})`}
-                              >
-                                <span 
-                                  className="badge" 
-                                  style={{ 
-                                    background: materialColor,
-                                    color: 'white',
-                                    fontSize: '0.75rem',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '0.25rem',
-                                    cursor: 'pointer',
-                                    transition: 'opacity 0.2s'
-                                  }}
-                                  onMouseEnter={(e) => e.target.style.opacity = '0.8'}
-                                  onMouseLeave={(e) => e.target.style.opacity = '1'}
-                                >
-                                  {materialIcon} {materialStatus} 🔗
-                                </span>
-                              </a>
-                            ) : (
+                          {(shortAllocation || shortShelf) && line.ordernum ? (
+                            <a
+                              href={`https://${CETEC_CONFIG.domain}/otd/allocation/list?reloaded=1&late=1&controlnum=${line.ordernum}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ textDecoration: 'none' }}
+                              title={`View allocation in Cetec ERP (Allocation Short: ${shortAllocation}, Shelf Short: ${shortShelf})`}
+                            >
                               <span 
                                 className="badge" 
                                 style={{ 
@@ -1828,19 +1809,35 @@ export default function CetecImport() {
                                   fontSize: '0.75rem',
                                   display: 'inline-flex',
                                   alignItems: 'center',
-                                  gap: '0.25rem'
+                                  gap: '0.25rem',
+                                  cursor: 'pointer',
+                                  transition: 'opacity 0.2s'
                                 }}
-                                title={`Allocation Short: ${shortAllocation}, Shelf Short: ${shortShelf}`}
+                                onMouseEnter={(e) => e.target.style.opacity = '0.8'}
+                                onMouseLeave={(e) => e.target.style.opacity = '1'}
                               >
-                                {materialIcon} {materialStatus}
+                                {materialIcon} {materialStatus} 🔗
                               </span>
-                            )}
-                            {(shortAllocation || shortShelf) && materialHereOn && (
-                              <span style={{ fontSize: '0.7rem', color: '#6c757d' }}>
-                                Due: {materialHereOn}
-                              </span>
-                            )}
-                          </div>
+                            </a>
+                          ) : (
+                            <span 
+                              className="badge" 
+                              style={{ 
+                                background: materialColor,
+                                color: 'white',
+                                fontSize: '0.75rem',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.25rem'
+                              }}
+                              title={`Allocation Short: ${shortAllocation}, Shelf Short: ${shortShelf}`}
+                            >
+                              {materialIcon} {materialStatus}
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ fontSize: '0.875rem', color: materialHereOn ? '#495057' : '#6c757d' }}>
+                          {materialHereOn || '—'}
                         </td>
                         <td style={{ fontSize: '0.75rem' }}>
                           <code>{line.ordernum}</code>
