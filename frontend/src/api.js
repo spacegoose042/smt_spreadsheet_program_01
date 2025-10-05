@@ -18,6 +18,21 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// Handle 401 errors (expired token)
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Token expired or invalid
+      console.error('❌ Authentication failed (401). Redirecting to login...')
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      window.location.href = '/login'
+    }
+    return Promise.reject(error)
+  }
+)
+
 // Dashboard & Analytics
 export const getDashboard = () => api.get('/api/dashboard')
 export const getTrolleyStatus = () => api.get('/api/trolley-status')
