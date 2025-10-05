@@ -370,41 +370,78 @@ export default function CetecImport() {
       console.log('═══════════════════════════════════════')
       console.log('🚀 Fetching and Combining All Cetec Data')
       console.log('═══════════════════════════════════════')
+      console.log('📋 Active Filters:')
+      console.log('   From Date:', filters.from_date)
+      console.log('   To Date:', filters.to_date)
+      console.log('   Intercompany:', filters.intercompany)
+      console.log('   Transcode:', filters.transcode || '(none)')
+      console.log('   Prodline:', filters.prodline || '(none)')
+      console.log('═══════════════════════════════════════\n')
 
       let allOrderLines = []
       let batchesFetched = 0
       
-      // Use date range strategy
-      const startDate = filters.from_date ? new Date(filters.from_date) : new Date()
-      const endDate = filters.to_date ? new Date(filters.to_date) : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000)
-      
-      // Calculate weeks
-      const weeks = []
-      let currentDate = new Date(startDate)
-      
-      while (currentDate <= endDate) {
-        const weekStart = new Date(currentDate)
-        const weekEnd = new Date(currentDate)
-        weekEnd.setDate(weekEnd.getDate() + 6)
+      // Check if date range is provided
+      if (filters.from_date && filters.to_date) {
+        // Use date range strategy (weekly batches)
+        const startDate = new Date(filters.from_date)
+        const endDate = new Date(filters.to_date)
         
-        if (weekEnd > endDate) {
-          weeks.push({ start: weekStart, end: endDate })
-          break
-        } else {
-          weeks.push({ start: weekStart, end: weekEnd })
+        // Calculate weeks
+        const weeks = []
+        let currentDate = new Date(startDate)
+        
+        while (currentDate <= endDate) {
+          const weekStart = new Date(currentDate)
+          const weekEnd = new Date(currentDate)
+          weekEnd.setDate(weekEnd.getDate() + 6)
+          
+          if (weekEnd > endDate) {
+            weeks.push({ start: weekStart, end: endDate })
+            break
+          } else {
+            weeks.push({ start: weekStart, end: weekEnd })
+          }
+          
+          currentDate.setDate(currentDate.getDate() + 7)
         }
         
-        currentDate.setDate(currentDate.getDate() + 7)
-      }
-      
-      console.log(`\n📅 Step 1: Fetching order lines (${weeks.length} weekly batches)`)
-      
-      for (const week of weeks) {
+        console.log(`\n📅 Step 1: Fetching order lines (${weeks.length} weekly batches with date range)`)
+        
+        for (const week of weeks) {
+          try {
+            const params = new URLSearchParams({
+              preshared_token: CETEC_CONFIG.token,
+              from_date: week.start.toISOString().split('T')[0],
+              to_date: week.end.toISOString().split('T')[0],
+              format: 'json'
+            })
+
+            if (filters.intercompany) params.append('intercompany', 'true')
+            if (filters.transcode) params.append('transcode', filters.transcode)
+
+            const url = `https://${CETEC_CONFIG.domain}/goapis/api/v1/ordlines/list?${params.toString()}`
+            const response = await axios.get(url)
+            const batchData = response.data || []
+            
+            allOrderLines = [...allOrderLines, ...batchData]
+            batchesFetched++
+            
+            console.log(`   Batch ${batchesFetched}/${weeks.length}: ${batchData.length} records`)
+            
+            await new Promise(resolve => setTimeout(resolve, 200))
+          } catch (err) {
+            console.error(`   Batch ${batchesFetched + 1} failed:`, err.message)
+          }
+        }
+      } else {
+        // No date range - fetch ALL orders in one call
+        console.log(`\n📅 Step 1: Fetching ALL order lines (no date filter)`)
+        console.log(`   ⚠️  WARNING: This may return a large number of records!`)
+        
         try {
           const params = new URLSearchParams({
             preshared_token: CETEC_CONFIG.token,
-            from_date: week.start.toISOString().split('T')[0],
-            to_date: week.end.toISOString().split('T')[0],
             format: 'json'
           })
 
@@ -413,27 +450,36 @@ export default function CetecImport() {
 
           const url = `https://${CETEC_CONFIG.domain}/goapis/api/v1/ordlines/list?${params.toString()}`
           const response = await axios.get(url)
-          const batchData = response.data || []
+          allOrderLines = response.data || []
+          batchesFetched = 1
           
-          allOrderLines = [...allOrderLines, ...batchData]
-          batchesFetched++
-          
-          console.log(`   Batch ${batchesFetched}/${weeks.length}: ${batchData.length} records`)
-          
-          await new Promise(resolve => setTimeout(resolve, 200))
+          console.log(`   Fetched ${allOrderLines.length} records`)
         } catch (err) {
-          console.error(`   Batch ${batchesFetched + 1} failed:`, err.message)
+          console.error(`   Fetch failed:`, err.message)
         }
       }
       
       console.log(`✅ Fetched ${allOrderLines.length} total order lines`)
+      
+      // Show unique production lines in raw data
+      if (allOrderLines.length > 0) {
+        const uniqueProdlines = [...new Set(allOrderLines.map(item => item.production_line_description))]
+        console.log(`   📊 Unique production lines found:`, uniqueProdlines)
+        console.log(`   📊 Sample record:`, allOrderLines[0])
+      }
 
       // Apply prodline filter
+      const beforeProdlineFilter = allOrderLines.length
       if (filters.prodline) {
         allOrderLines = allOrderLines.filter(item => 
           item.production_line_description === filters.prodline
         )
-        console.log(`   Filtered to prodline ${filters.prodline}: ${allOrderLines.length} records`)
+        console.log(`   🔽 Prodline filter "${filters.prodline}": ${beforeProdlineFilter} → ${allOrderLines.length} records`)
+        
+        if (allOrderLines.length === 0 && beforeProdlineFilter > 0) {
+          console.warn(`   ⚠️  WARNING: Prodline filter removed ALL records!`)
+          console.warn(`   💡 Check if production_line_description field matches "${filters.prodline}"`)
+        }
       }
 
       // STEP 2: For each order line, fetch location maps and operations
