@@ -1194,7 +1194,8 @@ export default function CetecImport() {
       'Cetec Order',
       'Cetec Line',
       'Status',
-      'Ordline ID'
+      'Ordline ID',
+      'Cetec URL'
     ]
     
     // Create CSV rows with mapped data
@@ -1218,6 +1219,11 @@ export default function CetecImport() {
         materialStatus = 'Partial'
       }
       
+      // Cetec work view URL
+      const cetecUrl = item.ordline_id 
+        ? `https://${CETEC_CONFIG.domain}/react/otd/order/${item.ordline_id}/work_view`
+        : ''
+      
       return [
         `"${woNumber}"`,
         `"${item.prcpart || ''}"`,
@@ -1232,7 +1238,8 @@ export default function CetecImport() {
         `"${item.ordernum || ''}"`,
         `"${item.lineitem || ''}"`,
         `"${status}"`,
-        item.ordline_id || ''
+        item.ordline_id || '',
+        `"${cetecUrl}"`
       ].join(',')
     })
 
@@ -1691,10 +1698,36 @@ export default function CetecImport() {
                       materialIcon = '⚠'
                     }
                     
+                    // Cetec work view URL
+                    const cetecWorkViewUrl = line.ordline_id 
+                      ? `https://${CETEC_CONFIG.domain}/react/otd/order/${line.ordline_id}/work_view`
+                      : null
+                    
                     return (
                       <tr key={idx} style={{ opacity: canImport ? 1 : 0.5 }}>
                         <td>
-                          <code style={{ fontSize: '0.875rem' }}>{woNumber}</code>
+                          {cetecWorkViewUrl ? (
+                            <a 
+                              href={cetecWorkViewUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              style={{ 
+                                fontSize: '0.875rem', 
+                                textDecoration: 'none',
+                                color: 'var(--primary)',
+                                fontWeight: 500,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.25rem'
+                              }}
+                              title="Open in Cetec ERP"
+                            >
+                              <code style={{ fontSize: '0.875rem' }}>{woNumber}</code>
+                              <span style={{ fontSize: '0.7rem' }}>🔗</span>
+                            </a>
+                          ) : (
+                            <code style={{ fontSize: '0.875rem' }}>{woNumber}</code>
+                          )}
                         </td>
                         <td>
                           <strong>{line.prcpart || '—'}</strong>
