@@ -1211,7 +1211,14 @@ export default function CetecImport() {
       // Material status
       const shortAllocation = item.short_per_allocation || false
       const shortShelf = item.short_per_shelf || false
-      const materialHereOn = item.material_here_on || ''
+      
+      // Extract just the date from material_here_on (may contain extra text like "(+ Unset!)")
+      let materialHereOn = item.material_here_on || ''
+      if (materialHereOn) {
+        // Extract date portion (YYYY-MM-DD format)
+        const dateMatch = materialHereOn.match(/\d{4}-\d{2}-\d{2}/)
+        materialHereOn = dateMatch ? dateMatch[0] : materialHereOn
+      }
       
       let materialStatus = 'Ready'
       if (shortAllocation && shortShelf) {
@@ -1690,7 +1697,14 @@ export default function CetecImport() {
                     // Determine material status
                     const shortAllocation = line.short_per_allocation || false
                     const shortShelf = line.short_per_shelf || false
-                    const materialHereOn = line.material_here_on || null
+                    
+                    // Extract just the date from material_here_on (may contain extra text like "(+ Unset!)")
+                    let materialHereOn = line.material_here_on || null
+                    if (materialHereOn) {
+                      // Extract date portion (YYYY-MM-DD format)
+                      const dateMatch = materialHereOn.match(/\d{4}-\d{2}-\d{2}/)
+                      materialHereOn = dateMatch ? dateMatch[0] : materialHereOn
+                    }
                     
                     let materialStatus = 'Ready'
                     let materialColor = '#28a745' // Green
