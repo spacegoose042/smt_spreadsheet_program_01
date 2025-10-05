@@ -1195,7 +1195,8 @@ export default function CetecImport() {
       'Cetec Line',
       'Status',
       'Ordline ID',
-      'Cetec URL'
+      'Cetec Work URL',
+      'Cetec Allocation URL'
     ]
     
     // Create CSV rows with mapped data
@@ -1220,8 +1221,13 @@ export default function CetecImport() {
       }
       
       // Cetec work view URL
-      const cetecUrl = item.ordline_id 
+      const cetecWorkUrl = item.ordline_id 
         ? `https://${CETEC_CONFIG.domain}/react/otd/order/${item.ordline_id}/work_view`
+        : ''
+      
+      // Cetec allocation URL (only if there's a shortage)
+      const cetecAllocationUrl = (shortAllocation || shortShelf) && item.ordernum
+        ? `https://${CETEC_CONFIG.domain}/otd/allocation/list?reloaded=1&late=1&controlnum=${item.ordernum}`
         : ''
       
       return [
@@ -1239,7 +1245,8 @@ export default function CetecImport() {
         `"${item.lineitem || ''}"`,
         `"${status}"`,
         item.ordline_id || '',
-        `"${cetecUrl}"`
+        `"${cetecWorkUrl}"`,
+        `"${cetecAllocationUrl}"`
       ].join(',')
     })
 
@@ -1762,20 +1769,48 @@ export default function CetecImport() {
                         </td>
                         <td>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                            <span 
-                              className="badge" 
-                              style={{ 
-                                background: materialColor,
-                                color: 'white',
-                                fontSize: '0.75rem',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '0.25rem'
-                              }}
-                              title={`Allocation Short: ${shortAllocation}, Shelf Short: ${shortShelf}`}
-                            >
-                              {materialIcon} {materialStatus}
-                            </span>
+                            {(shortAllocation || shortShelf) && line.ordernum ? (
+                              <a
+                                href={`https://${CETEC_CONFIG.domain}/otd/allocation/list?reloaded=1&late=1&controlnum=${line.ordernum}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ textDecoration: 'none' }}
+                                title={`View allocation in Cetec ERP (Allocation Short: ${shortAllocation}, Shelf Short: ${shortShelf})`}
+                              >
+                                <span 
+                                  className="badge" 
+                                  style={{ 
+                                    background: materialColor,
+                                    color: 'white',
+                                    fontSize: '0.75rem',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.25rem',
+                                    cursor: 'pointer',
+                                    transition: 'opacity 0.2s'
+                                  }}
+                                  onMouseEnter={(e) => e.target.style.opacity = '0.8'}
+                                  onMouseLeave={(e) => e.target.style.opacity = '1'}
+                                >
+                                  {materialIcon} {materialStatus} 🔗
+                                </span>
+                              </a>
+                            ) : (
+                              <span 
+                                className="badge" 
+                                style={{ 
+                                  background: materialColor,
+                                  color: 'white',
+                                  fontSize: '0.75rem',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.25rem'
+                                }}
+                                title={`Allocation Short: ${shortAllocation}, Shelf Short: ${shortShelf}`}
+                              >
+                                {materialIcon} {materialStatus}
+                              </span>
+                            )}
                             {(shortAllocation || shortShelf) && materialHereOn && (
                               <span style={{ fontSize: '0.7rem', color: '#6c757d' }}>
                                 Due: {materialHereOn}
