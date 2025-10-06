@@ -1809,10 +1809,13 @@ def get_cetec_customers_list(
     """
     # Try multiple possible endpoints
     endpoints_to_try = [
+        "/goapis/api/v1/custvendor/list",  # Often customers and vendors combined
         "/goapis/api/v1/customer/list",
         "/goapis/api/v1/customers/list",
-        "/goapis/api/v1/customers",
-        "/goapis/api/v1/customer"
+        "/api/v1/customer/list",
+        "/api/v1/customers/list",
+        "/goapis/customer/list",
+        "/customer/list"
     ]
     
     for endpoint in endpoints_to_try:
@@ -1831,19 +1834,37 @@ def get_cetec_customers_list(
             if response.status_code == 200:
                 data = response.json()
                 
+                print(f"  Response type: {type(data)}")
+                if isinstance(data, dict):
+                    print(f"  Response keys: {list(data.keys())}")
+                
                 # Handle potential nested structure
                 if isinstance(data, dict):
                     if 'data' in data:
                         data = data['data']
                     elif 'customers' in data:
                         data = data['customers']
+                    elif 'custvendor' in data:
+                        data = data['custvendor']
                     elif 'rows' in data:
                         data = data['rows']
                 
                 print(f"✓ Success! Fetched {len(data) if isinstance(data, list) else 'unknown'} customers from {endpoint}")
+                
+                # Filter to only customers (if custvendor endpoint)
+                if isinstance(data, list) and len(data) > 0:
+                    if 'is_customer' in data[0]:
+                        data = [item for item in data if item.get('is_customer')]
+                        print(f"  Filtered to {len(data)} customers (excluded vendors)")
+                
                 return data
             else:
                 print(f"  {endpoint} returned {response.status_code}")
+                try:
+                    error_data = response.json()
+                    print(f"  Error response: {error_data}")
+                except:
+                    print(f"  Error response: {response.text[:200]}")
                 
         except requests.exceptions.RequestException as e:
             print(f"  {endpoint} failed: {str(e)}")
