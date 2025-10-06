@@ -509,19 +509,75 @@ export default function Schedule() {
           <table>
             <thead>
               <tr>
-                <th>Pos</th>
-                <th>Customer</th>
-                <th>Assembly</th>
-                <th>WO #</th>
-                <th>Qty</th>
-                <th>Status</th>
-                <th>Material</th>
-                <th>Priority</th>
+                <th 
+                  onClick={() => handleSort('line_position')}
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                >
+                  Pos {sortColumn === 'line_position' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  onClick={() => handleSort('customer')}
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                >
+                  Customer {sortColumn === 'customer' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  onClick={() => handleSort('assembly')}
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                >
+                  Assembly {sortColumn === 'assembly' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  onClick={() => handleSort('wo_number')}
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                >
+                  WO # {sortColumn === 'wo_number' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  onClick={() => handleSort('quantity')}
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                >
+                  Qty {sortColumn === 'quantity' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  onClick={() => handleSort('status')}
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                >
+                  Status {sortColumn === 'status' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  onClick={() => handleSort('material_status')}
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                >
+                  Material {sortColumn === 'material_status' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  onClick={() => handleSort('current_location')}
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                >
+                  Location {sortColumn === 'current_location' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  onClick={() => handleSort('priority')}
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                >
+                  Priority {sortColumn === 'priority' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
                 <th>Line</th>
                 <th>Start Date</th>
                 <th>End Date</th>
-                <th>Ship Date</th>
-                <th>Time</th>
+                <th 
+                  onClick={() => handleSort('cetec_ship_date')}
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                >
+                  Ship Date {sortColumn === 'cetec_ship_date' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  onClick={() => handleSort('time_minutes')}
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                >
+                  Time {sortColumn === 'time_minutes' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
                 <th>Trolleys</th>
                 <th>Actions</th>
               </tr>
@@ -568,6 +624,26 @@ export default function Schedule() {
                         }}
                       >
                         {wo.material_status === 'Ready' ? '✓' : wo.material_status === 'Partial' ? '⚠' : '✗'} {wo.material_status}
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    {wo.current_location && (
+                      <span 
+                        className="badge" 
+                        style={{ 
+                          background: wo.current_location.toUpperCase().includes('SMT PRODUCTION') ? '#28a745' : 
+                                     wo.current_location.toUpperCase().includes('KITTING') ? '#007bff' :
+                                     wo.current_location.toUpperCase().includes('DEPANEL') ? '#6610f2' :
+                                     wo.current_location.toUpperCase().includes('ASSEMBLY') ? '#6610f2' :
+                                     wo.current_location.toUpperCase().includes('INSPECTION') ? '#fd7e14' :
+                                     wo.current_location.toUpperCase().includes('SHIPPING') ? '#20c997' :
+                                     '#6c757d',
+                          color: 'white',
+                          fontSize: '0.75rem'
+                        }}
+                      >
+                        {wo.current_location}
                       </span>
                     )}
                   </td>
