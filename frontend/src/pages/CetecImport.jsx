@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Download, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react'
 import axios from 'axios'
-import { getCetecLocationMaps, getCetecOperations, getCetecOperationDetail, getCetecCombinedData, getCetecOrdlineStatuses } from '../api'
+import { getCetecLocationMaps, getCetecOperations, getCetecOperationDetail, getCetecCombinedData, getCetecOrdlineStatuses, getCetecPart, getCetecCustomer } from '../api'
 
 export default function CetecImport() {
   const [loading, setLoading] = useState(false)
@@ -27,6 +27,7 @@ export default function CetecImport() {
     assembly: '',
     revision: '',
     customer: '',
+    customerPartNum: '',
     quantity: '',
     time: '',
     shipDate: '',
@@ -567,6 +568,51 @@ export default function CetecImport() {
         const sample = allOrderLines.find(line => line._current_location !== 'Unknown')
         console.log(`   📋 Sample: work_location=${sample.work_location} → "${sample._current_location}"`)
       }
+
+      // STEP 1.5: Fetch customer part numbers (custnum)
+      console.log(`\n🔖 Fetching customer part numbers...`)
+      const partCustnumMap = {}
+      
+      // Get unique prcparts
+      const uniquePrcparts = [...new Set(allOrderLines.map(line => line.prcpart).filter(Boolean))]
+      console.log(`   Found ${uniquePrcparts.length} unique parts`)
+      
+      let partsFetched = 0
+      let partsErrored = 0
+      
+      for (let i = 0; i < uniquePrcparts.length; i++) {
+        const prcpart = uniquePrcparts[i]
+        
+        try {
+          const partResponse = await getCetecPart(prcpart)
+          const partData = partResponse.data
+          
+          if (partData?.most_recent_custnum) {
+            partCustnumMap[prcpart] = partData.most_recent_custnum
+            partsFetched++
+          }
+          
+          // Log progress every 20 parts
+          if (i % 20 === 0 && i > 0) {
+            console.log(`   Progress: ${i}/${uniquePrcparts.length} (${partsFetched} with custnum)`)
+          }
+          
+          // Small delay to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 50))
+          
+        } catch (err) {
+          partsErrored++
+          // Silent fail - not critical if we can't get custnum
+        }
+      }
+      
+      console.log(`   ✅ Fetched customer part numbers: ${partsFetched} parts, ${partsErrored} errors`)
+      
+      // Map custnum to order lines
+      allOrderLines = allOrderLines.map(orderLine => ({
+        ...orderLine,
+        _customer_part_number: partCustnumMap[orderLine.prcpart] || null
+      }))
 
       // STEP 2: For each order line, fetch location maps and operations
       console.log(`\n📍 Step 2: Fetching location maps and operations for ${allOrderLines.length} order lines`)
@@ -1197,6 +1243,7 @@ export default function CetecImport() {
     const assembly = (line.prcpart || '').toLowerCase()
     const revision = (line.revision || '').toLowerCase()
     const customer = (line.customer || '').toLowerCase()
+    const customerPartNum = (line._customer_part_number || '').toLowerCase()
     const quantity = String(line.balancedue || line.release_qty || line.orig_order_qty || '')
     const time = line._calculated_time_minutes ? String(Math.round(line._calculated_time_minutes)) : ''
     const shipDate = (line.promisedate || line.target_ship_date || '').toLowerCase()
@@ -1217,6 +1264,7 @@ export default function CetecImport() {
       assembly.includes(columnFilters.assembly.toLowerCase()) &&
       revision.includes(columnFilters.revision.toLowerCase()) &&
       customer.includes(columnFilters.customer.toLowerCase()) &&
+      customerPartNum.includes(columnFilters.customerPartNum.toLowerCase()) &&
       quantity.includes(columnFilters.quantity) &&
       time.includes(columnFilters.time) &&
       shipDate.includes(columnFilters.shipDate.toLowerCase()) &&
@@ -1233,6 +1281,7 @@ export default function CetecImport() {
       assembly: '',
       revision: '',
       customer: '',
+      customerPartNum: '',
       quantity: '',
       time: '',
       shipDate: '',
@@ -1259,6 +1308,7 @@ export default function CetecImport() {
       'Assembly',
       'Revision',
       'Customer',
+      'Customer Part #',
       'Quantity',
       'Time (min)',
       'Ship Date',
@@ -1280,6 +1330,7 @@ export default function CetecImport() {
       const timeMinutes = item._calculated_time_minutes ? Math.round(item._calculated_time_minutes) : 0
       const shipDate = item.promisedate || item.target_ship_date || ''
       const currentLocation = item._current_location || 'Unknown'
+      const customerPartNum = item._customer_part_number || ''
       const status = timeMinutes > 0 ? 'Ready' : 'Missing Data'
       
       // Material status
@@ -1316,6 +1367,7 @@ export default function CetecImport() {
         `"${item.prcpart || ''}"`,
         `"${item.revision || ''}"`,
         `"${item.customer || ''}"`,
+        `"${customerPartNum}"`,
         quantity,
         timeMinutes,
         `"${shipDate}"`,
@@ -1767,6 +1819,7 @@ export default function CetecImport() {
                     <th style={{ minWidth: '180px' }}>Assembly</th>
                     <th>Rev</th>
                     <th style={{ minWidth: '150px' }}>Customer</th>
+                    <th style={{ minWidth: '120px' }}>Cust Part #</th>
                     <th>Quantity</th>
                     <th>Time (min)</th>
                     <th>Ship Date</th>
@@ -1810,6 +1863,15 @@ export default function CetecImport() {
                         placeholder="Filter..."
                         value={columnFilters.customer}
                         onChange={(e) => handleColumnFilterChange('customer', e.target.value)}
+                        style={{ width: '100%', padding: '0.25rem', fontSize: '0.75rem', border: '1px solid #ced4da', borderRadius: '4px' }}
+                      />
+                    </th>
+                    <th>
+                      <input
+                        type="text"
+                        placeholder="Filter..."
+                        value={columnFilters.customerPartNum}
+                        onChange={(e) => handleColumnFilterChange('customerPartNum', e.target.value)}
                         style={{ width: '100%', padding: '0.25rem', fontSize: '0.75rem', border: '1px solid #ced4da', borderRadius: '4px' }}
                       />
                     </th>
@@ -1948,6 +2010,9 @@ export default function CetecImport() {
                         </td>
                         <td>{line.revision || '—'}</td>
                         <td style={{ fontSize: '0.875rem' }}>{line.customer || '—'}</td>
+                        <td style={{ fontSize: '0.875rem', color: line._customer_part_number ? '#495057' : '#999' }}>
+                          {line._customer_part_number || '—'}
+                        </td>
                         <td>
                           <strong>{line.balancedue || line.release_qty || line.orig_order_qty || '—'}</strong>
                         </td>

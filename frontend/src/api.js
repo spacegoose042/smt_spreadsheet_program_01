@@ -118,6 +118,10 @@ export const getCetecCombinedData = (ordlineId) =>
   api.get(`/api/cetec/ordline/${ordlineId}/combined`)
 export const getCetecOrdlineStatuses = () =>
   api.get('/api/cetec/ordlinestatus/list')
+export const getCetecPart = (prcpart) =>
+  api.get(`/api/cetec/part/${encodeURIComponent(prcpart)}`)
+export const getCetecCustomer = (custnum) =>
+  api.get(`/api/cetec/customer/${encodeURIComponent(custnum)}`)
 
 export default api
 

@@ -1736,6 +1736,70 @@ def get_cetec_ordline_statuses(
         )
 
 
+@app.get("/api/cetec/part/{prcpart}")
+def get_cetec_part(
+    prcpart: str,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Proxy endpoint to fetch part data from Cetec API
+    """
+    try:
+        params = {
+            "preshared_token": CETEC_CONFIG["token"]
+        }
+        
+        url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/part/{prcpart}"
+        
+        print(f"Proxying Cetec part request: {url}")
+        
+        response = requests.get(url, params=params, timeout=30)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        return data
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Cetec API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch from Cetec: {str(e)}"
+        )
+
+
+@app.get("/api/cetec/customer/{custnum}")
+def get_cetec_customer(
+    custnum: str,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Proxy endpoint to fetch customer data from Cetec API
+    """
+    try:
+        params = {
+            "preshared_token": CETEC_CONFIG["token"]
+        }
+        
+        url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/customer/{custnum}"
+        
+        print(f"Proxying Cetec customer request: {url}")
+        
+        response = requests.get(url, params=params, timeout=30)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        return data
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Cetec API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch from Cetec: {str(e)}"
+        )
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
