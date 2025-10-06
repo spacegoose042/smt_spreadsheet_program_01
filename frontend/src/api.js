@@ -122,6 +122,10 @@ export const getCetecPart = (prcpart) =>
   api.get(`/api/cetec/part/${encodeURIComponent(prcpart)}`)
 export const getCetecCustomer = (custnum) =>
   api.get(`/api/cetec/customer/${encodeURIComponent(custnum)}`)
+export const runCetecImport = (data) =>
+  api.post('/api/cetec/import', data)
+export const getCetecSyncLogs = (days = 30) =>
+  api.get('/api/cetec/sync-logs', { params: { days } })
 
 export default api
 

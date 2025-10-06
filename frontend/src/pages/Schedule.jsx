@@ -56,6 +56,8 @@ export default function Schedule() {
   const [reportingIssueWO, setReportingIssueWO] = useState(null)
   const [filterLine, setFilterLine] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
+  const [filterLocation, setFilterLocation] = useState('SMT PRODUCTION')
+  const [filterMaterialStatus, setFilterMaterialStatus] = useState('')
   const [draggedWO, setDraggedWO] = useState(null)
   const [dragOverWO, setDragOverWO] = useState(null)
   
@@ -73,8 +75,21 @@ export default function Schedule() {
   // Filter unscheduled if that option is selected
   const filteredWorkOrders = workOrders?.data.filter(wo => {
     if (filterLine === 'unscheduled') {
-      return !wo.line_id
+      if (wo.line_id) return false
     }
+    
+    // Filter by current location
+    if (filterLocation) {
+      const woLocation = (wo.current_location || '').toLowerCase()
+      const filterLoc = filterLocation.toLowerCase()
+      if (!woLocation.includes(filterLoc)) return false
+    }
+    
+    // Filter by material status
+    if (filterMaterialStatus) {
+      if (wo.material_status !== filterMaterialStatus) return false
+    }
+    
     return true
   })
 
@@ -360,6 +375,35 @@ export default function Schedule() {
             </select>
           </div>
           
+          <div style={{ flex: 1, minWidth: '200px' }}>
+            <select 
+              className="form-select"
+              value={filterLocation}
+              onChange={(e) => setFilterLocation(e.target.value)}
+            >
+              <option value="">All Locations</option>
+              <option value="SMT PRODUCTION">SMT PRODUCTION</option>
+              <option value="DEPANEL">DEPANEL</option>
+              <option value="KITTING">KITTING</option>
+              <option value="ASSEMBLY">ASSEMBLY</option>
+              <option value="INSPECTION">INSPECTION</option>
+              <option value="SHIPPING">SHIPPING</option>
+            </select>
+          </div>
+          
+          <div style={{ flex: 1, minWidth: '180px' }}>
+            <select 
+              className="form-select"
+              value={filterMaterialStatus}
+              onChange={(e) => setFilterMaterialStatus(e.target.value)}
+            >
+              <option value="">All Materials</option>
+              <option value="Ready">✓ Ready</option>
+              <option value="Partial">⚠ Partial</option>
+              <option value="Shortage">✗ Shortage</option>
+            </select>
+          </div>
+          
           <button className="btn btn-primary" onClick={() => setShowForm(true)}>
             <Plus size={18} />
             Add Work Order
@@ -400,6 +444,7 @@ export default function Schedule() {
                 <th>WO #</th>
                 <th>Qty</th>
                 <th>Status</th>
+                <th>Material</th>
                 <th>Priority</th>
                 <th>Line</th>
                 <th>Start Date</th>
@@ -441,6 +486,20 @@ export default function Schedule() {
                   <td><code>{wo.wo_number}</code></td>
                   <td>{wo.quantity}</td>
                   <td><StatusBadge status={wo.status} statusName={wo.status_name} statusColor={wo.status_color} /></td>
+                  <td>
+                    {wo.material_status && (
+                      <span 
+                        className="badge" 
+                        style={{ 
+                          background: wo.material_status === 'Ready' ? '#28a745' : wo.material_status === 'Partial' ? '#ffc107' : '#dc3545',
+                          color: 'white',
+                          fontSize: '0.75rem'
+                        }}
+                      >
+                        {wo.material_status === 'Ready' ? '✓' : wo.material_status === 'Partial' ? '⚠' : '✗'} {wo.material_status}
+                      </span>
+                    )}
+                  </td>
                   <td><PriorityBadge priority={wo.priority} /></td>
                   <td>
                     {wo.line?.name || <em style={{ color: 'var(--warning)', fontWeight: 600 }}>⚠️ Unscheduled</em>}

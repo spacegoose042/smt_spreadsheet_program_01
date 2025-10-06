@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Download, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react'
 import axios from 'axios'
-import { getCetecLocationMaps, getCetecOperations, getCetecOperationDetail, getCetecCombinedData, getCetecOrdlineStatuses, getCetecPart, getCetecCustomer } from '../api'
+import { getCetecLocationMaps, getCetecOperations, getCetecOperationDetail, getCetecCombinedData, getCetecOrdlineStatuses, getCetecPart, getCetecCustomer, runCetecImport } from '../api'
 
 export default function CetecImport() {
   const [loading, setLoading] = useState(false)
@@ -9,6 +9,7 @@ export default function CetecImport() {
   const [rawCetecData, setRawCetecData] = useState(null) // Before filtering
   const [error, setError] = useState('')
   const [fetchStats, setFetchStats] = useState(null)
+  const [importResult, setImportResult] = useState(null)
   const [filters, setFilters] = useState({
     intercompany: true,
     from_date: '',
@@ -737,6 +738,52 @@ export default function CetecImport() {
       console.error('Fetch and combine failed:', err)
       setError(err.message)
       alert(`Error: ${err.message}\nCheck console for details.`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const runImport = async () => {
+    if (!confirm('This will import Work Orders into the application.\n\nAre you sure you want to proceed?')) {
+      return
+    }
+    
+    setLoading(true)
+    setError('')
+    setImportResult(null)
+
+    try {
+      console.log('🚀 Starting Cetec Import...')
+      
+      const importRequest = {
+        from_date: filters.from_date || null,
+        to_date: filters.to_date || null,
+        prodline: filters.prodline || "200",
+        transcode: filters.transcode || "SA,SN",
+        intercompany: filters.intercompany
+      }
+      
+      console.log('Import parameters:', importRequest)
+      
+      const response = await runCetecImport(importRequest)
+      const result = response.data
+      
+      console.log('✅ Import complete:', result)
+      
+      setImportResult(result)
+      
+      alert(`✅ Import Successful!\n\n` +
+        `Fetched: ${result.total_fetched} order lines\n` +
+        `Created: ${result.created_count} new WOs\n` +
+        `Updated: ${result.updated_count} existing WOs\n` +
+        `Errors: ${result.error_count}\n\n` +
+        `Changes tracked: ${result.changes.length}`
+      )
+
+    } catch (err) {
+      console.error('Import failed:', err)
+      setError(err.response?.data?.detail || err.message)
+      alert(`❌ Import Failed:\n${err.response?.data?.detail || err.message}`)
     } finally {
       setLoading(false)
     }
@@ -1565,6 +1612,16 @@ export default function CetecImport() {
             <RefreshCw size={20} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
             {loading ? 'Fetching & Combining...' : 'Fetch & Combine All Data (Recommended)'}
           </button>
+          
+          <button
+            className="btn btn-primary"
+            onClick={runImport}
+            disabled={loading}
+            style={{ background: 'linear-gradient(135deg, #6610f2 0%, #520dc2 100%)', color: 'white', fontSize: '1rem', padding: '0.75rem 1.5rem', fontWeight: 700 }}
+          >
+            <Download size={20} />
+            {loading ? 'Importing...' : 'Import to Work Orders'}
+          </button>
         </div>
         
         <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: '#d4edda', borderRadius: '4px', border: '1px solid #c3e6cb' }}>
@@ -1710,6 +1767,36 @@ export default function CetecImport() {
             <div>
               <strong>Error:</strong> {error}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Results */}
+      {importResult && (
+        <div className="card" style={{ background: '#d1ecf1', border: '1px solid #bee5eb', marginBottom: '1.5rem' }}>
+          <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', color: '#0c5460' }}>
+            ✅ Import Complete
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1rem' }}>
+            <div>
+              <div style={{ fontSize: '0.875rem', color: '#0c5460' }}>Fetched</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#0c5460' }}>{importResult.total_fetched}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.875rem', color: '#0c5460' }}>Created</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#28a745' }}>{importResult.created_count}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.875rem', color: '#0c5460' }}>Updated</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#007bff' }}>{importResult.updated_count}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.875rem', color: '#0c5460' }}>Errors</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#dc3545' }}>{importResult.error_count}</div>
+            </div>
+          </div>
+          <div style={{ fontSize: '0.875rem', color: '#0c5460' }}>
+            <strong>{importResult.changes.length} changes tracked</strong> - View in <a href="/cetec-sync-report" style={{ color: '#0c5460', textDecoration: 'underline' }}>Sync Report</a>
           </div>
         </div>
       )}
