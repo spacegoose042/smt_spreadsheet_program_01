@@ -506,80 +506,89 @@ export default function Schedule() {
         </div>
       ) : (
         <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
-          <table>
+          <table style={{ fontSize: '0.875rem' }}>
             <thead>
               <tr>
                 <th 
                   onClick={() => handleSort('line_position')}
-                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', whiteSpace: 'nowrap' }}
+                  title="Position in queue"
                 >
-                  Pos {sortColumn === 'line_position' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  # {sortColumn === 'line_position' && (sortDirection === 'asc' ? '↑' : '↓')}
                 </th>
                 <th 
                   onClick={() => handleSort('customer')}
-                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', maxWidth: '120px' }}
+                  title="Customer"
                 >
-                  Customer {sortColumn === 'customer' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  Cust {sortColumn === 'customer' && (sortDirection === 'asc' ? '↑' : '↓')}
                 </th>
                 <th 
                   onClick={() => handleSort('assembly')}
-                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', maxWidth: '140px' }}
+                  title="Assembly & Revision"
                 >
-                  Assembly {sortColumn === 'assembly' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  Assy {sortColumn === 'assembly' && (sortDirection === 'asc' ? '↑' : '↓')}
                 </th>
                 <th 
                   onClick={() => handleSort('wo_number')}
-                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', whiteSpace: 'nowrap' }}
+                  title="Work Order Number"
                 >
-                  WO # {sortColumn === 'wo_number' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  WO# {sortColumn === 'wo_number' && (sortDirection === 'asc' ? '↑' : '↓')}
                 </th>
                 <th 
                   onClick={() => handleSort('quantity')}
-                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem' }}
+                  title="Quantity"
                 >
                   Qty {sortColumn === 'quantity' && (sortDirection === 'asc' ? '↑' : '↓')}
                 </th>
                 <th 
                   onClick={() => handleSort('status')}
-                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', maxWidth: '100px' }}
+                  title="Status"
                 >
-                  Status {sortColumn === 'status' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  Stat {sortColumn === 'status' && (sortDirection === 'asc' ? '↑' : '↓')}
                 </th>
                 <th 
                   onClick={() => handleSort('material_status')}
-                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', maxWidth: '80px' }}
+                  title="Material Status"
                 >
-                  Material {sortColumn === 'material_status' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  Mat {sortColumn === 'material_status' && (sortDirection === 'asc' ? '↑' : '↓')}
                 </th>
                 <th 
                   onClick={() => handleSort('current_location')}
-                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', maxWidth: '100px' }}
+                  title="Current Location"
                 >
-                  Location {sortColumn === 'current_location' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  Loc {sortColumn === 'current_location' && (sortDirection === 'asc' ? '↑' : '↓')}
                 </th>
                 <th 
                   onClick={() => handleSort('priority')}
-                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', maxWidth: '80px' }}
+                  title="Priority"
                 >
-                  Priority {sortColumn === 'priority' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  Pri {sortColumn === 'priority' && (sortDirection === 'asc' ? '↑' : '↓')}
                 </th>
-                <th>Line</th>
-                <th>Start Date</th>
-                <th>End Date</th>
+                <th style={{ padding: '0.5rem', maxWidth: '80px' }} title="SMT Line">Line</th>
                 <th 
                   onClick={() => handleSort('cetec_ship_date')}
-                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', whiteSpace: 'nowrap' }}
+                  title="Ship Date"
                 >
-                  Ship Date {sortColumn === 'cetec_ship_date' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  Ship {sortColumn === 'cetec_ship_date' && (sortDirection === 'asc' ? '↑' : '↓')}
                 </th>
                 <th 
                   onClick={() => handleSort('time_minutes')}
-                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem' }}
+                  title="Time (hours)"
                 >
-                  Time {sortColumn === 'time_minutes' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  Hrs {sortColumn === 'time_minutes' && (sortDirection === 'asc' ? '↑' : '↓')}
                 </th>
-                <th>Trolleys</th>
-                <th>Actions</th>
+                <th style={{ padding: '0.5rem' }} title="Trolleys">Trl</th>
+                <th style={{ padding: '0.5rem', whiteSpace: 'nowrap' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -604,30 +613,36 @@ export default function Schedule() {
                     transition: 'all 0.2s'
                   }}
                 >
-                  <td>{wo.line_position || '-'}</td>
-                  <td>{wo.customer}</td>
-                  <td>
+                  <td style={{ padding: '0.5rem', textAlign: 'center' }}>{wo.line_position || '-'}</td>
+                  <td style={{ padding: '0.5rem', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={wo.customer}>
+                    {wo.customer}
+                  </td>
+                  <td style={{ padding: '0.5rem', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${wo.assembly} ${wo.revision}`}>
                     {wo.assembly} {wo.revision}
                     {wo.is_new_rev_assembly && <span style={{ color: 'var(--danger)', marginLeft: '0.25rem' }}>*</span>}
                   </td>
-                  <td><code>{wo.wo_number}</code></td>
-                  <td>{wo.quantity}</td>
-                  <td><StatusBadge status={wo.status} statusName={wo.status_name} statusColor={wo.status_color} /></td>
-                  <td>
+                  <td style={{ padding: '0.5rem' }}><code style={{ fontSize: '0.75rem' }}>{wo.wo_number}</code></td>
+                  <td style={{ padding: '0.5rem', textAlign: 'center' }}>{wo.quantity}</td>
+                  <td style={{ padding: '0.5rem' }}><StatusBadge status={wo.status} statusName={wo.status_name} statusColor={wo.status_color} /></td>
+                  <td style={{ padding: '0.5rem', textAlign: 'center' }} title={wo.material_status}>
                     {wo.material_status && (
                       <span 
-                        className="badge" 
                         style={{ 
+                          display: 'inline-block',
+                          width: '22px',
+                          height: '22px',
+                          lineHeight: '22px',
+                          borderRadius: '4px',
                           background: wo.material_status === 'Ready' ? '#28a745' : wo.material_status === 'Partial' ? '#ffc107' : '#dc3545',
                           color: 'white',
-                          fontSize: '0.75rem'
+                          fontSize: '0.875rem'
                         }}
                       >
-                        {wo.material_status === 'Ready' ? '✓' : wo.material_status === 'Partial' ? '⚠' : '✗'} {wo.material_status}
+                        {wo.material_status === 'Ready' ? '✓' : wo.material_status === 'Partial' ? '⚠' : '✗'}
                       </span>
                     )}
                   </td>
-                  <td>
+                  <td style={{ padding: '0.5rem' }} title={wo.current_location}>
                     {wo.current_location && (
                       <span 
                         className="badge" 
@@ -640,49 +655,29 @@ export default function Schedule() {
                                      wo.current_location.toUpperCase().includes('SHIPPING') ? '#20c997' :
                                      '#6c757d',
                           color: 'white',
-                          fontSize: '0.75rem'
+                          fontSize: '0.7rem',
+                          padding: '0.2rem 0.4rem'
                         }}
                       >
-                        {wo.current_location}
+                        {wo.current_location.replace('SMT PRODUCTION', 'SMT').replace('ASSEMBLY', 'ASSY').substring(0, 12)}
                       </span>
                     )}
                   </td>
-                  <td><PriorityBadge priority={wo.priority} /></td>
-                  <td>
-                    {wo.line?.name || <em style={{ color: 'var(--warning)', fontWeight: 600 }}>⚠️ Unscheduled</em>}
+                  <td style={{ padding: '0.5rem' }}><PriorityBadge priority={wo.priority} /></td>
+                  <td style={{ padding: '0.5rem', fontSize: '0.8rem' }}>
+                    {wo.line?.name || <em style={{ color: 'var(--warning)', fontWeight: 600, fontSize: '0.75rem' }}>⚠️</em>}
                   </td>
-                  <td style={{ fontWeight: 600, color: 'var(--primary)' }}>
-                    {wo.calculated_start_datetime ? (
-                      <div>
-                        <div>{format(new Date(wo.calculated_start_datetime), 'MMM d, yyyy')}</div>
-                        <div style={{ fontSize: '0.7rem', opacity: 0.8 }}>
-                          {format(new Date(wo.calculated_start_datetime), 'h:mm a')}
-                        </div>
-                      </div>
-                    ) : wo.calculated_start_date ? (
-                      format(new Date(wo.calculated_start_date), 'MMM d, yyyy')
-                    ) : '-'}
+                  <td style={{ padding: '0.5rem', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
+                    {wo.cetec_ship_date ? format(new Date(wo.cetec_ship_date), 'MM/dd/yy') : '-'}
                   </td>
-                  <td style={{ fontWeight: 600, color: 'var(--success)' }}>
-                    {wo.calculated_end_datetime ? (
-                      <div>
-                        <div>{format(new Date(wo.calculated_end_datetime), 'MMM d, yyyy')}</div>
-                        <div style={{ fontSize: '0.7rem', opacity: 0.8 }}>
-                          {format(new Date(wo.calculated_end_datetime), 'h:mm a')}
-                        </div>
-                      </div>
-                    ) : wo.calculated_end_date ? (
-                      format(new Date(wo.calculated_end_date), 'MMM d, yyyy')
-                    ) : '-'}
-                  </td>
-                  <td>{wo.actual_ship_date ? format(new Date(wo.actual_ship_date), 'MMM d') : '-'}</td>
-                  <td>{wo.time_minutes} min</td>
-                  <td>{wo.trolley_count}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <td style={{ padding: '0.5rem', whiteSpace: 'nowrap', textAlign: 'right' }}>{(wo.time_minutes / 60).toFixed(1)}</td>
+                  <td style={{ padding: '0.5rem', textAlign: 'center' }}>{wo.trolley_count}</td>
+                  <td style={{ padding: '0.5rem' }}>
+                    <div style={{ display: 'flex', gap: '0.25rem', justifyContent: 'center' }}>
                       <button 
                         className="btn btn-sm btn-success" 
                         onClick={() => setCompletingWO(wo)}
+                        style={{ padding: '0.25rem 0.5rem' }}
                         title="Mark as Complete"
                       >
                         <CheckCircle size={14} />
