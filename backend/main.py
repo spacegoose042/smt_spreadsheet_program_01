@@ -1827,13 +1827,18 @@ def get_cetec_sync_logs(
 def import_from_cetec(
     request: schemas.CetecImportRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth.get_current_admin)
+    current_user: User = Depends(auth.get_current_user)
 ):
     """
     Import work orders from Cetec ERP.
     Creates new WOs or updates existing ones based on wo_number.
     Tracks all changes in cetec_sync_logs table.
+    Admin only.
     """
+    # Check admin permission
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Only admins can run Cetec import")
+    
     sync_time = datetime.utcnow()
     changes = []
     created_count = 0
