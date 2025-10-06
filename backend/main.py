@@ -10,7 +10,7 @@ from datetime import date, timedelta, datetime
 import requests
 
 from database import engine, get_db, Base
-from models import WorkOrder, SMTLine, CompletedWorkOrder, WorkOrderStatus, Priority, User, UserRole, CapacityOverride, Shift, ShiftBreak, LineConfiguration, Status, IssueType, Issue, IssueSeverity, IssueStatus, ResolutionType
+from models import WorkOrder, SMTLine, CompletedWorkOrder, WorkOrderStatus, Priority, User, UserRole, CapacityOverride, Shift, ShiftBreak, LineConfiguration, Status, IssueType, Issue, IssueSeverity, IssueStatus, ResolutionType, CetecSyncLog
 import schemas
 import scheduler as sched
 import time_scheduler as time_sched
@@ -1798,6 +1798,318 @@ def get_cetec_customer(
             status_code=500,
             detail=f"Failed to fetch from Cetec: {str(e)}"
         )
+
+
+@app.get("/api/cetec/sync-logs", response_model=List[schemas.CetecSyncLogResponse])
+def get_cetec_sync_logs(
+    days: int = 30,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Get Cetec sync logs for the report page.
+    Shows changes from Cetec imports.
+    """
+    if current_user.role == UserRole.OPERATOR:
+        raise HTTPException(status_code=403, detail="Operators cannot view sync reports")
+    
+    # Get logs from the last N days
+    cutoff_date = datetime.utcnow() - timedelta(days=days)
+    
+    logs = db.query(CetecSyncLog).filter(
+        CetecSyncLog.sync_date >= cutoff_date
+    ).order_by(CetecSyncLog.sync_date.desc()).all()
+    
+    return logs
+
+
+@app.post("/api/cetec/import", response_model=schemas.CetecImportResponse)
+def import_from_cetec(
+    request: schemas.CetecImportRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_admin)
+):
+    """
+    Import work orders from Cetec ERP.
+    Creates new WOs or updates existing ones based on wo_number.
+    Tracks all changes in cetec_sync_logs table.
+    """
+    sync_time = datetime.utcnow()
+    changes = []
+    created_count = 0
+    updated_count = 0
+    error_count = 0
+    
+    try:
+        # Fetch all order lines from Cetec using date range strategy
+        all_order_lines = []
+        
+        if request.from_date and request.to_date:
+            # Use date range (similar to frontend logic)
+            start_date = datetime.strptime(request.from_date, "%Y-%m-%d")
+            end_date = datetime.strptime(request.to_date, "%Y-%m-%d")
+            
+            # Calculate weeks
+            weeks = []
+            current_date = start_date
+            
+            while current_date <= end_date:
+                week_end = current_date + timedelta(days=6)
+                if week_end > end_date:
+                    weeks.append((current_date, end_date))
+                    break
+                else:
+                    weeks.append((current_date, week_end))
+                current_date = week_end + timedelta(days=1)
+            
+            # Fetch each week
+            for week_start, week_end in weeks:
+                params = {
+                    "preshared_token": CETEC_CONFIG["token"],
+                    "from_date": week_start.strftime("%Y-%m-%d"),
+                    "to_date": week_end.strftime("%Y-%m-%d"),
+                    "format": "json"
+                }
+                
+                if request.intercompany:
+                    params["intercompany"] = "true"
+                if request.transcode:
+                    params["transcode"] = request.transcode
+                
+                url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines/list"
+                response = requests.get(url, params=params, timeout=30)
+                response.raise_for_status()
+                
+                batch_data = response.json() or []
+                all_order_lines.extend(batch_data)
+        else:
+            # No date range - fetch all
+            params = {
+                "preshared_token": CETEC_CONFIG["token"],
+                "format": "json"
+            }
+            
+            if request.intercompany:
+                params["intercompany"] = "true"
+            if request.transcode:
+                params["transcode"] = request.transcode
+            
+            url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines/list"
+            response = requests.get(url, params=params, timeout=30)
+            response.raise_for_status()
+            
+            all_order_lines = response.json() or []
+        
+        # Filter by prodline
+        if request.prodline:
+            all_order_lines = [
+                line for line in all_order_lines 
+                if line.get("production_line_description") == request.prodline
+            ]
+        
+        print(f"Fetched {len(all_order_lines)} order lines from Cetec")
+        
+        # Process each order line
+        for order_line in all_order_lines:
+            try:
+                ordline_id = order_line.get("ordline_id")
+                ordernum = order_line.get("ordernum")
+                lineitem = order_line.get("lineitem")
+                
+                if not all([ordline_id, ordernum, lineitem]):
+                    error_count += 1
+                    continue
+                
+                wo_number = f"{ordernum}-{lineitem}"
+                
+                # Fetch combined data (location maps + operations)
+                combined_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/location_maps"
+                combined_response = requests.get(
+                    combined_url,
+                    params={"preshared_token": CETEC_CONFIG["token"], "include_children": "true"},
+                    timeout=30
+                )
+                combined_response.raise_for_status()
+                location_maps = combined_response.json()
+                
+                # Find SMT location and operation
+                smt_location = None
+                smt_operation = None
+                
+                for loc in location_maps:
+                    loc_str = str(loc).upper()
+                    if 'SMT' in loc_str and ('PRODUCTION' in loc_str or 'PROD' in loc_str):
+                        smt_location = loc
+                        operations = loc.get('operations', [])
+                        for op in operations:
+                            if op.get('name') == 'SMT ASSEMBLY' or 'ASSEMBLY' in op.get('name', '').upper():
+                                smt_operation = op
+                                break
+                        break
+                
+                # Calculate time
+                time_minutes = 0
+                if smt_location and smt_operation:
+                    avg_secs = smt_operation.get('avg_secs', 0)
+                    repetitions = smt_operation.get('repetitions', 1)
+                    balance_due = order_line.get('balancedue') or order_line.get('release_qty') or order_line.get('orig_order_qty') or 0
+                    time_minutes = (avg_secs * repetitions * balance_due) / 60
+                
+                # Skip if no time calculated
+                if time_minutes == 0:
+                    continue
+                
+                # Determine material status
+                short_allocation = order_line.get('short_per_allocation', False)
+                short_shelf = order_line.get('short_per_shelf', False)
+                material_status = "Ready"
+                if short_allocation and short_shelf:
+                    material_status = "Shortage"
+                elif short_allocation or short_shelf:
+                    material_status = "Partial"
+                
+                # Get current location (work_location)
+                # We'll need to fetch location name if we have the ID
+                current_location = order_line.get('_current_location', 'Unknown')
+                
+                # Prepare WO data
+                prcpart = order_line.get('prcpart', '')
+                revision = order_line.get('revision', '')
+                customer = order_line.get('customer', '')
+                quantity = order_line.get('balancedue') or order_line.get('release_qty') or order_line.get('orig_order_qty') or 0
+                promisedate_str = order_line.get('promisedate') or order_line.get('target_ship_date')
+                cetec_ship_date = datetime.strptime(promisedate_str, "%Y-%m-%d").date() if promisedate_str else date.today()
+                
+                # Check if WO exists
+                existing_wo = db.query(WorkOrder).filter(WorkOrder.wo_number == wo_number).first()
+                
+                if existing_wo:
+                    # UPDATE existing WO
+                    has_changes = False
+                    
+                    # Track changes
+                    if existing_wo.quantity != quantity:
+                        changes.append(CetecSyncLog(
+                            sync_date=sync_time,
+                            wo_number=wo_number,
+                            change_type="qty_changed",
+                            field_name="quantity",
+                            old_value=str(existing_wo.quantity),
+                            new_value=str(quantity),
+                            cetec_ordline_id=ordline_id
+                        ))
+                        existing_wo.quantity = quantity
+                        has_changes = True
+                    
+                    if existing_wo.cetec_ship_date != cetec_ship_date:
+                        changes.append(CetecSyncLog(
+                            sync_date=sync_time,
+                            wo_number=wo_number,
+                            change_type="date_changed",
+                            field_name="cetec_ship_date",
+                            old_value=str(existing_wo.cetec_ship_date),
+                            new_value=str(cetec_ship_date),
+                            cetec_ordline_id=ordline_id
+                        ))
+                        existing_wo.cetec_ship_date = cetec_ship_date
+                        has_changes = True
+                    
+                    if existing_wo.time_minutes != time_minutes:
+                        existing_wo.time_minutes = time_minutes
+                        has_changes = True
+                    
+                    if existing_wo.current_location != current_location:
+                        changes.append(CetecSyncLog(
+                            sync_date=sync_time,
+                            wo_number=wo_number,
+                            change_type="location_changed",
+                            field_name="current_location",
+                            old_value=existing_wo.current_location,
+                            new_value=current_location,
+                            cetec_ordline_id=ordline_id
+                        ))
+                        existing_wo.current_location = current_location
+                        has_changes = True
+                    
+                    if existing_wo.material_status != material_status:
+                        changes.append(CetecSyncLog(
+                            sync_date=sync_time,
+                            wo_number=wo_number,
+                            change_type="material_changed",
+                            field_name="material_status",
+                            old_value=existing_wo.material_status,
+                            new_value=material_status,
+                            cetec_ordline_id=ordline_id
+                        ))
+                        existing_wo.material_status = material_status
+                        has_changes = True
+                    
+                    if has_changes:
+                        existing_wo.last_cetec_sync = sync_time
+                        updated_count += 1
+                
+                else:
+                    # CREATE new WO
+                    new_wo = WorkOrder(
+                        wo_number=wo_number,
+                        assembly=prcpart,
+                        revision=revision,
+                        customer=customer,
+                        quantity=quantity,
+                        time_minutes=time_minutes,
+                        cetec_ship_date=cetec_ship_date,
+                        cetec_ordline_id=ordline_id,
+                        current_location=current_location,
+                        material_status=material_status,
+                        last_cetec_sync=sync_time,
+                        priority=Priority.FACTORY_DEFAULT,
+                        is_complete=False
+                    )
+                    db.add(new_wo)
+                    
+                    # Log creation
+                    changes.append(CetecSyncLog(
+                        sync_date=sync_time,
+                        wo_number=wo_number,
+                        change_type="created",
+                        field_name=None,
+                        old_value=None,
+                        new_value=f"New WO: {prcpart}",
+                        cetec_ordline_id=ordline_id
+                    ))
+                    created_count += 1
+                
+            except Exception as e:
+                print(f"Error processing ordline {ordline_id}: {str(e)}")
+                error_count += 1
+                continue
+        
+        # Save changes
+        for change in changes:
+            db.add(change)
+        
+        db.commit()
+        
+        # Fetch the saved changes with IDs
+        change_responses = [
+            schemas.CetecSyncLogResponse.from_orm(change)
+            for change in changes
+        ]
+        
+        return schemas.CetecImportResponse(
+            success=True,
+            message=f"Import complete: {created_count} created, {updated_count} updated, {error_count} errors",
+            total_fetched=len(all_order_lines),
+            created_count=created_count,
+            updated_count=updated_count,
+            error_count=error_count,
+            changes=change_responses
+        )
+        
+    except Exception as e:
+        db.rollback()
+        print(f"Import failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
 
 
 if __name__ == "__main__":

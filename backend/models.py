@@ -229,6 +229,12 @@ class WorkOrder(Base):
     # Notes
     notes = Column(String)
     
+    # Cetec Integration
+    cetec_ordline_id = Column(Integer, nullable=True, index=True)  # Cetec ordline_id for linking
+    current_location = Column(String, nullable=True)  # Current work location from Cetec
+    material_status = Column(String, nullable=True)  # "Ready", "Partial", "Shortage"
+    last_cetec_sync = Column(DateTime, nullable=True)  # When last synced from Cetec
+    
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -238,6 +244,24 @@ class WorkOrder(Base):
     status_obj = relationship("Status", back_populates="work_orders")
     completed_record = relationship("CompletedWorkOrder", back_populates="work_order", uselist=False)
     issues = relationship("Issue", back_populates="work_order", cascade="all, delete-orphan")
+
+
+class CetecSyncLog(Base):
+    """
+    Tracks changes from Cetec API imports for reporting.
+    """
+    __tablename__ = "cetec_sync_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    sync_date = Column(DateTime, default=datetime.utcnow, index=True)
+    wo_number = Column(String, nullable=False, index=True)
+    change_type = Column(String, nullable=False)  # "created", "date_changed", "qty_changed", "location_changed", "material_changed"
+    field_name = Column(String, nullable=True)  # Which field changed
+    old_value = Column(String, nullable=True)  # Previous value
+    new_value = Column(String, nullable=True)  # New value
+    cetec_ordline_id = Column(Integer, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class CompletedWorkOrder(Base):

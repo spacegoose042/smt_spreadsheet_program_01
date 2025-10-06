@@ -156,6 +156,12 @@ class WorkOrderResponse(WorkOrderBase):
     calculated_end_datetime: Optional[datetime] = None
     wo_start_datetime: Optional[datetime] = None
     
+    # Cetec Integration
+    cetec_ordline_id: Optional[int] = None
+    current_location: Optional[str] = None
+    material_status: Optional[str] = None
+    last_cetec_sync: Optional[datetime] = None
+    
     # Include line info if available
     line: Optional[SMTLineResponse] = None
 
@@ -443,4 +449,38 @@ class ResolutionTypeResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# Cetec Sync Schemas
+class CetecSyncLogResponse(BaseModel):
+    id: int
+    sync_date: datetime
+    wo_number: str
+    change_type: str  # "created", "date_changed", "qty_changed", "location_changed", "material_changed"
+    field_name: Optional[str] = None
+    old_value: Optional[str] = None
+    new_value: Optional[str] = None
+    cetec_ordline_id: Optional[int] = None
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class CetecImportRequest(BaseModel):
+    from_date: Optional[str] = None  # YYYY-MM-DD format
+    to_date: Optional[str] = None
+    prodline: Optional[str] = "200"
+    transcode: Optional[str] = "SA,SN"
+    intercompany: bool = False
+
+
+class CetecImportResponse(BaseModel):
+    success: bool
+    message: str
+    total_fetched: int
+    created_count: int
+    updated_count: int
+    error_count: int
+    changes: list[CetecSyncLogResponse]
 
