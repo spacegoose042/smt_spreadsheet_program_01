@@ -25,6 +25,18 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Run database migrations and seed data on startup
+@app.on_event("startup")
+def startup_event():
+    """Run database migrations and seed initial data"""
+    print("🚀 Running database migrations and seed...")
+    try:
+        from seed_data import main as seed_main
+        seed_main()
+    except Exception as e:
+        print(f"❌ Error during startup migration: {e}")
+        print("⚠️  Application will continue, but database may be incomplete.")
+
 # CORS middleware - Allow frontend to make authenticated requests
 from config import settings as config_settings
 
