@@ -368,6 +368,27 @@ def main():
         seed_statuses(db)
         seed_issue_types(db)
         seed_resolution_types(db)
+        
+        # Fix existing work orders with null status
+        print("\n🔧 Checking for work orders with null status...")
+        try:
+            from models import WorkOrder, WorkOrderStatus
+            null_status_count = db.query(WorkOrder).filter(WorkOrder.status.is_(None)).count()
+            
+            if null_status_count > 0:
+                print(f"   Found {null_status_count} work orders with null status")
+                print(f"   Setting them to UNASSIGNED...")
+                db.query(WorkOrder).filter(WorkOrder.status.is_(None)).update(
+                    {WorkOrder.status: WorkOrderStatus.UNASSIGNED},
+                    synchronize_session=False
+                )
+                db.commit()
+                print(f"   ✓ Updated {null_status_count} work orders to UNASSIGNED")
+            else:
+                print("   ✓ All work orders have a status assigned")
+        except Exception as e:
+            print(f"   Note: Status check: {e}")
+        
         print("\n✅ Database seeded successfully!")
         print("\nDefault users:")
         print("  admin / admin123 (Admin - full system access)")

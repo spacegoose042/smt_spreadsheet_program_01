@@ -2130,6 +2130,12 @@ def import_from_cetec(
                     # UPDATE existing WO
                     has_changes = False
                     
+                    # If existing WO has no status, set it to UNASSIGNED
+                    if existing_wo.status is None:
+                        existing_wo.status = WorkOrderStatus.UNASSIGNED
+                        has_changes = True
+                        print(f"  WO {wo_number}: Setting null status to UNASSIGNED")
+                    
                     # Track changes
                     if existing_wo.quantity != quantity:
                         changes.append(CetecSyncLog(
