@@ -38,7 +38,7 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
   const statuses = statusesData || []
 
   // Fetch Cetec customers (only when needed)
-  const { data: cetecCustomersData } = useQuery({
+  const { data: cetecCustomersData, isLoading: loadingCustomers, isError: customersError } = useQuery({
     queryKey: ['cetec-customers'],
     queryFn: async () => {
       const response = await getCetecCustomersList()
@@ -54,7 +54,8 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
       
       return customers
     },
-    enabled: showCetecCustomers
+    enabled: showCetecCustomers,
+    retry: false
   })
 
   const cetecCustomers = cetecCustomersData || []
@@ -232,23 +233,49 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
           </label>
           
           {isInternalAccount && showCetecCustomers ? (
-            <select
-              name="customer"
-              className="form-select"
-              value={formData.customer}
-              onChange={(e) => {
-                handleChange(e)
-                setShowCetecCustomers(false)
-              }}
-              required
-            >
-              <option value="">Select Customer...</option>
-              {cetecCustomers.map((cust, idx) => (
-                <option key={idx} value={cust.name || cust.custname}>
-                  {cust.name || cust.custname || cust.customer}
-                </option>
-              ))}
-            </select>
+            <>
+              {loadingCustomers ? (
+                <div style={{ padding: '0.75rem', textAlign: 'center', color: '#6c757d' }}>
+                  Loading customers from Cetec...
+                </div>
+              ) : customersError || cetecCustomers.length === 0 ? (
+                <div>
+                  <div style={{ padding: '0.75rem', background: '#fff3cd', borderRadius: '4px', marginBottom: '0.5rem' }}>
+                    <strong style={{ color: '#856404' }}>⚠️ Could not load Cetec customers.</strong>
+                    <p style={{ fontSize: '0.875rem', color: '#856404', margin: '0.25rem 0 0 0' }}>
+                      Please type the customer name manually below.
+                    </p>
+                  </div>
+                  <input
+                    type="text"
+                    name="customer"
+                    className="form-input"
+                    value={formData.customer}
+                    onChange={handleChange}
+                    placeholder="Type customer name..."
+                    required
+                  />
+                </div>
+              ) : (
+                <select
+                  name="customer"
+                  className="form-select"
+                  value={formData.customer}
+                  onChange={(e) => {
+                    handleChange(e)
+                    setShowCetecCustomers(false)
+                  }}
+                  required
+                >
+                  <option value="">Select Customer...</option>
+                  {cetecCustomers.map((cust, idx) => (
+                    <option key={idx} value={cust.name || cust.custname}>
+                      {cust.name || cust.custname || cust.customer}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </>
           ) : (
             <input
               type="text"
@@ -263,7 +290,7 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
           
           {isInternalAccount && !showCetecCustomers && (
             <small style={{ fontSize: '0.75rem', color: '#6c757d', marginTop: '0.25rem', display: 'block' }}>
-              This is an Internal Account order. Click "Select from Cetec" to choose the actual customer.
+              This is an Internal Account order. Click "Select from Cetec" or type customer name manually.
             </small>
           )}
         </div>
