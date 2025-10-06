@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
-import { Home, Calendar, Settings, CheckCircle, List, LayoutGrid, LogOut, User as UserIcon, Users, Clock, Timer, Tag, ChevronDown, Key } from 'lucide-react'
+import { Home, Calendar, Settings, CheckCircle, List, LayoutGrid, LogOut, User as UserIcon, Users, Clock, Timer, Tag, ChevronDown, Key, AlertTriangle, Database, RefreshCw } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import Login from './pages/Login'
@@ -14,6 +14,11 @@ import CapacityCalendar from './pages/CapacityCalendar'
 import ShiftConfiguration from './pages/ShiftConfiguration'
 import StatusManagement from './pages/StatusManagement'
 import ChangePassword from './pages/ChangePassword'
+import IssueTypeManagement from './pages/IssueTypeManagement'
+import ResolutionTypeManagement from './pages/ResolutionTypeManagement'
+import Issues from './pages/Issues'
+import CetecImport from './pages/CetecImport'
+import CetecSyncReport from './pages/CetecSyncReport'
 import './App.css'
 
 function ProtectedRoute({ children, requireAuth = true }) {
@@ -37,7 +42,7 @@ function Navigation() {
   const settingsRef = useRef(null)
   
   const isActive = (path) => location.pathname === path
-  const isSettingsActive = ['/capacity', '/shifts', '/users', '/statuses', '/settings', '/change-password'].includes(location.pathname)
+  const isSettingsActive = ['/capacity', '/shifts', '/users', '/statuses', '/issue-types', '/resolution-types', '/cetec-import', '/cetec-sync-report', '/settings', '/change-password'].includes(location.pathname)
   
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -89,6 +94,10 @@ function Navigation() {
             <CheckCircle size={18} />
             Completed
           </Link>
+          <Link to="/issues" className={isActive('/issues') ? 'active' : ''}>
+            <AlertTriangle size={18} />
+            Issues
+          </Link>
           
           {/* Settings Dropdown */}
           <div className="nav-dropdown" ref={settingsRef}>
@@ -122,6 +131,22 @@ function Navigation() {
                   <Timer size={16} />
                   Shift Configuration
                 </Link>
+                <Link 
+                  to="/cetec-import" 
+                  className={isActive('/cetec-import') ? 'active' : ''}
+                  onClick={() => setSettingsOpen(false)}
+                >
+                  <Database size={16} />
+                  Cetec Import Test
+                </Link>
+                <Link 
+                  to="/cetec-sync-report" 
+                  className={isActive('/cetec-sync-report') ? 'active' : ''}
+                  onClick={() => setSettingsOpen(false)}
+                >
+                  <RefreshCw size={16} />
+                  Cetec Sync Report
+                </Link>
                 {isAdmin && (
                   <>
                     <div className="nav-dropdown-divider" />
@@ -140,6 +165,22 @@ function Navigation() {
                     >
                       <Tag size={16} />
                       Status Management
+                    </Link>
+                    <Link 
+                      to="/issue-types" 
+                      className={isActive('/issue-types') ? 'active' : ''}
+                      onClick={() => setSettingsOpen(false)}
+                    >
+                      <AlertTriangle size={16} />
+                      Issue Types
+                    </Link>
+                    <Link 
+                      to="/resolution-types" 
+                      className={isActive('/resolution-types') ? 'active' : ''}
+                      onClick={() => setSettingsOpen(false)}
+                    >
+                      <CheckCircle size={16} />
+                      Resolution Types
                     </Link>
                     <div className="nav-dropdown-divider" />
                   </>
@@ -205,10 +246,15 @@ function AppContent() {
           <Route path="/lines" element={<ProtectedRoute><LineView /></ProtectedRoute>} />
           <Route path="/lines/:lineId" element={<ProtectedRoute><LineView /></ProtectedRoute>} />
           <Route path="/completed" element={<ProtectedRoute><Completed /></ProtectedRoute>} />
+          <Route path="/issues" element={<ProtectedRoute><Issues /></ProtectedRoute>} />
           <Route path="/capacity" element={<ProtectedRoute><CapacityCalendar /></ProtectedRoute>} />
           <Route path="/shifts" element={<ProtectedRoute><ShiftConfiguration /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
           <Route path="/statuses" element={<ProtectedRoute><StatusManagement /></ProtectedRoute>} />
+          <Route path="/issue-types" element={<ProtectedRoute><IssueTypeManagement /></ProtectedRoute>} />
+          <Route path="/resolution-types" element={<ProtectedRoute><ResolutionTypeManagement /></ProtectedRoute>} />
+          <Route path="/cetec-import" element={<ProtectedRoute><CetecImport /></ProtectedRoute>} />
+          <Route path="/cetec-sync-report" element={<ProtectedRoute><CetecSyncReport /></ProtectedRoute>} />
           <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
         </Routes>

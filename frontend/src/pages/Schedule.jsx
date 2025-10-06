@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getWorkOrders, getLines, createWorkOrder, updateWorkOrder, deleteWorkOrder, completeWorkOrder, getDashboard, getStatuses } from '../api'
-import { Plus, Edit2, Trash2, Lock, Unlock, CheckCircle, Calendar } from 'lucide-react'
+import { Plus, Edit2, Trash2, Lock, Unlock, CheckCircle, Calendar, AlertTriangle } from 'lucide-react'
 import { format } from 'date-fns'
 import WorkOrderForm from '../components/WorkOrderForm'
 import CompleteJobModal from '../components/CompleteJobModal'
+import ReportIssueModal from '../components/ReportIssueModal'
 
 function PriorityBadge({ priority }) {
   const colors = {
@@ -52,8 +53,13 @@ export default function Schedule() {
   const [showForm, setShowForm] = useState(false)
   const [editingWO, setEditingWO] = useState(null)
   const [completingWO, setCompletingWO] = useState(null)
+  const [reportingIssueWO, setReportingIssueWO] = useState(null)
   const [filterLine, setFilterLine] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
+  const [filterLocation, setFilterLocation] = useState('')
+  const [filterMaterialStatus, setFilterMaterialStatus] = useState('')
+  const [sortColumn, setSortColumn] = useState('line_position')
+  const [sortDirection, setSortDirection] = useState('asc')
   const [draggedWO, setDraggedWO] = useState(null)
   const [dragOverWO, setDragOverWO] = useState(null)
   
@@ -68,13 +74,95 @@ export default function Schedule() {
     }),
   })
 
-  // Filter unscheduled if that option is selected
-  const filteredWorkOrders = workOrders?.data.filter(wo => {
-    if (filterLine === 'unscheduled') {
-      return !wo.line_id
+  // Filter and sort work orders
+  const filteredAndSortedWorkOrders = workOrders?.data
+    .filter(wo => {
+      if (filterLine === 'unscheduled') {
+        if (wo.line_id) return false
+      }
+      
+      // Filter by current location
+      if (filterLocation) {
+        const woLocation = (wo.current_location || '').toLowerCase()
+        const filterLoc = filterLocation.toLowerCase()
+        if (!woLocation.includes(filterLoc)) return false
+      }
+      
+      // Filter by material status
+      if (filterMaterialStatus) {
+        if (wo.material_status !== filterMaterialStatus) return false
+      }
+      
+      return true
+    })
+    .sort((a, b) => {
+      let aVal, bVal
+      
+      switch (sortColumn) {
+        case 'customer':
+          aVal = a.customer || ''
+          bVal = b.customer || ''
+          break
+        case 'assembly':
+          aVal = `${a.assembly} ${a.revision}`
+          bVal = `${b.assembly} ${b.revision}`
+          break
+        case 'wo_number':
+          aVal = a.wo_number || ''
+          bVal = b.wo_number || ''
+          break
+        case 'quantity':
+          aVal = a.quantity || 0
+          bVal = b.quantity || 0
+          break
+        case 'status':
+          aVal = a.status_name || a.status || ''
+          bVal = b.status_name || b.status || ''
+          break
+        case 'material_status':
+          aVal = a.material_status || ''
+          bVal = b.material_status || ''
+          break
+        case 'priority':
+          aVal = a.priority || ''
+          bVal = b.priority || ''
+          break
+        case 'current_location':
+          aVal = a.current_location || ''
+          bVal = b.current_location || ''
+          break
+        case 'cetec_ship_date':
+          aVal = a.cetec_ship_date || ''
+          bVal = b.cetec_ship_date || ''
+          break
+        case 'time_minutes':
+          aVal = a.time_minutes || 0
+          bVal = b.time_minutes || 0
+          break
+        case 'line_position':
+        default:
+          aVal = a.line_position || 999
+          bVal = b.line_position || 999
+          break
+      }
+      
+      if (sortDirection === 'asc') {
+        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0
+      } else {
+        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0
+      }
+    })
+
+  const filteredWorkOrders = filteredAndSortedWorkOrders
+  
+  const handleSort = (column) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortColumn(column)
+      setSortDirection('asc')
     }
-    return true
-  })
+  }
 
   const { data: lines } = useQuery({
     queryKey: ['lines'],
@@ -227,6 +315,18 @@ export default function Schedule() {
     )
   }
 
+  // Render Report Issue Modal
+  if (reportingIssueWO) {
+    return (
+      <>
+        <ReportIssueModal
+          workOrder={reportingIssueWO}
+          onClose={() => setReportingIssueWO(null)}
+        />
+      </>
+    )
+  }
+
   return (
     <div className="container">
       {showForm && (
@@ -346,6 +446,35 @@ export default function Schedule() {
             </select>
           </div>
           
+          <div style={{ flex: 1, minWidth: '200px' }}>
+            <select 
+              className="form-select"
+              value={filterLocation}
+              onChange={(e) => setFilterLocation(e.target.value)}
+            >
+              <option value="">All Locations</option>
+              <option value="SMT PRODUCTION">SMT PRODUCTION</option>
+              <option value="DEPANEL">DEPANEL</option>
+              <option value="KITTING">KITTING</option>
+              <option value="ASSEMBLY">ASSEMBLY</option>
+              <option value="INSPECTION">INSPECTION</option>
+              <option value="SHIPPING">SHIPPING</option>
+            </select>
+          </div>
+          
+          <div style={{ flex: 1, minWidth: '180px' }}>
+            <select 
+              className="form-select"
+              value={filterMaterialStatus}
+              onChange={(e) => setFilterMaterialStatus(e.target.value)}
+            >
+              <option value="">All Materials</option>
+              <option value="Ready">✓ Ready</option>
+              <option value="Partial">⚠ Partial</option>
+              <option value="Shortage">✗ Shortage</option>
+            </select>
+          </div>
+          
           <button className="btn btn-primary" onClick={() => setShowForm(true)}>
             <Plus size={18} />
             Add Work Order
@@ -377,23 +506,89 @@ export default function Schedule() {
         </div>
       ) : (
         <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
-          <table>
+          <table style={{ fontSize: '0.875rem' }}>
             <thead>
               <tr>
-                <th>Pos</th>
-                <th>Customer</th>
-                <th>Assembly</th>
-                <th>WO #</th>
-                <th>Qty</th>
-                <th>Status</th>
-                <th>Priority</th>
-                <th>Line</th>
-                <th>Start Date</th>
-                <th>End Date</th>
-                <th>Ship Date</th>
-                <th>Time</th>
-                <th>Trolleys</th>
-                <th>Actions</th>
+                <th 
+                  onClick={() => handleSort('line_position')}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', whiteSpace: 'nowrap' }}
+                  title="Position in queue"
+                >
+                  # {sortColumn === 'line_position' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  onClick={() => handleSort('customer')}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', maxWidth: '120px' }}
+                  title="Customer"
+                >
+                  Cust {sortColumn === 'customer' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  onClick={() => handleSort('assembly')}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', maxWidth: '140px' }}
+                  title="Assembly & Revision"
+                >
+                  Assy {sortColumn === 'assembly' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  onClick={() => handleSort('wo_number')}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', whiteSpace: 'nowrap' }}
+                  title="Work Order Number"
+                >
+                  WO# {sortColumn === 'wo_number' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  onClick={() => handleSort('quantity')}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem' }}
+                  title="Quantity"
+                >
+                  Qty {sortColumn === 'quantity' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  onClick={() => handleSort('status')}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', maxWidth: '100px' }}
+                  title="Status"
+                >
+                  Stat {sortColumn === 'status' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  onClick={() => handleSort('material_status')}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', maxWidth: '80px' }}
+                  title="Material Status"
+                >
+                  Mat {sortColumn === 'material_status' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  onClick={() => handleSort('current_location')}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', maxWidth: '100px' }}
+                  title="Current Location"
+                >
+                  Loc {sortColumn === 'current_location' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  onClick={() => handleSort('priority')}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', maxWidth: '80px' }}
+                  title="Priority"
+                >
+                  Pri {sortColumn === 'priority' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th style={{ padding: '0.5rem', maxWidth: '80px' }} title="SMT Line">Line</th>
+                <th 
+                  onClick={() => handleSort('cetec_ship_date')}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', whiteSpace: 'nowrap' }}
+                  title="Ship Date"
+                >
+                  Ship {sortColumn === 'cetec_ship_date' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  onClick={() => handleSort('time_minutes')}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem' }}
+                  title="Time (hours)"
+                >
+                  Hrs {sortColumn === 'time_minutes' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th style={{ padding: '0.5rem' }} title="Trolleys">Trl</th>
+                <th style={{ padding: '0.5rem', whiteSpace: 'nowrap' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -418,54 +613,81 @@ export default function Schedule() {
                     transition: 'all 0.2s'
                   }}
                 >
-                  <td>{wo.line_position || '-'}</td>
-                  <td>{wo.customer}</td>
-                  <td>
+                  <td style={{ padding: '0.5rem', textAlign: 'center' }}>{wo.line_position || '-'}</td>
+                  <td style={{ padding: '0.5rem', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={wo.customer}>
+                    {wo.customer}
+                  </td>
+                  <td style={{ padding: '0.5rem', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${wo.assembly} ${wo.revision}`}>
                     {wo.assembly} {wo.revision}
                     {wo.is_new_rev_assembly && <span style={{ color: 'var(--danger)', marginLeft: '0.25rem' }}>*</span>}
                   </td>
-                  <td><code>{wo.wo_number}</code></td>
-                  <td>{wo.quantity}</td>
-                  <td><StatusBadge status={wo.status} statusName={wo.status_name} statusColor={wo.status_color} /></td>
-                  <td><PriorityBadge priority={wo.priority} /></td>
-                  <td>
-                    {wo.line?.name || <em style={{ color: 'var(--warning)', fontWeight: 600 }}>⚠️ Unscheduled</em>}
+                  <td style={{ padding: '0.5rem' }}><code style={{ fontSize: '0.75rem' }}>{wo.wo_number}</code></td>
+                  <td style={{ padding: '0.5rem', textAlign: 'center' }}>{wo.quantity}</td>
+                  <td style={{ padding: '0.5rem' }}><StatusBadge status={wo.status} statusName={wo.status_name} statusColor={wo.status_color} /></td>
+                  <td style={{ padding: '0.5rem', textAlign: 'center' }} title={wo.material_status}>
+                    {wo.material_status && (
+                      <span 
+                        style={{ 
+                          display: 'inline-block',
+                          width: '22px',
+                          height: '22px',
+                          lineHeight: '22px',
+                          borderRadius: '4px',
+                          background: wo.material_status === 'Ready' ? '#28a745' : wo.material_status === 'Partial' ? '#ffc107' : '#dc3545',
+                          color: 'white',
+                          fontSize: '0.875rem'
+                        }}
+                      >
+                        {wo.material_status === 'Ready' ? '✓' : wo.material_status === 'Partial' ? '⚠' : '✗'}
+                      </span>
+                    )}
                   </td>
-                  <td style={{ fontWeight: 600, color: 'var(--primary)' }}>
-                    {wo.calculated_start_datetime ? (
-                      <div>
-                        <div>{format(new Date(wo.calculated_start_datetime), 'MMM d, yyyy')}</div>
-                        <div style={{ fontSize: '0.7rem', opacity: 0.8 }}>
-                          {format(new Date(wo.calculated_start_datetime), 'h:mm a')}
-                        </div>
-                      </div>
-                    ) : wo.calculated_start_date ? (
-                      format(new Date(wo.calculated_start_date), 'MMM d, yyyy')
-                    ) : '-'}
+                  <td style={{ padding: '0.5rem' }} title={wo.current_location}>
+                    {wo.current_location && (
+                      <span 
+                        className="badge" 
+                        style={{ 
+                          background: wo.current_location.toUpperCase().includes('SMT PRODUCTION') ? '#28a745' : 
+                                     wo.current_location.toUpperCase().includes('KITTING') ? '#007bff' :
+                                     wo.current_location.toUpperCase().includes('DEPANEL') ? '#6610f2' :
+                                     wo.current_location.toUpperCase().includes('ASSEMBLY') ? '#6610f2' :
+                                     wo.current_location.toUpperCase().includes('INSPECTION') ? '#fd7e14' :
+                                     wo.current_location.toUpperCase().includes('SHIPPING') ? '#20c997' :
+                                     '#6c757d',
+                          color: 'white',
+                          fontSize: '0.7rem',
+                          padding: '0.2rem 0.4rem'
+                        }}
+                      >
+                        {wo.current_location.replace('SMT PRODUCTION', 'SMT').replace('ASSEMBLY', 'ASSY').substring(0, 12)}
+                      </span>
+                    )}
                   </td>
-                  <td style={{ fontWeight: 600, color: 'var(--success)' }}>
-                    {wo.calculated_end_datetime ? (
-                      <div>
-                        <div>{format(new Date(wo.calculated_end_datetime), 'MMM d, yyyy')}</div>
-                        <div style={{ fontSize: '0.7rem', opacity: 0.8 }}>
-                          {format(new Date(wo.calculated_end_datetime), 'h:mm a')}
-                        </div>
-                      </div>
-                    ) : wo.calculated_end_date ? (
-                      format(new Date(wo.calculated_end_date), 'MMM d, yyyy')
-                    ) : '-'}
+                  <td style={{ padding: '0.5rem' }}><PriorityBadge priority={wo.priority} /></td>
+                  <td style={{ padding: '0.5rem', fontSize: '0.8rem' }}>
+                    {wo.line?.name || <em style={{ color: 'var(--warning)', fontWeight: 600, fontSize: '0.75rem' }}>⚠️</em>}
                   </td>
-                  <td>{wo.actual_ship_date ? format(new Date(wo.actual_ship_date), 'MMM d') : '-'}</td>
-                  <td>{wo.time_minutes} min</td>
-                  <td>{wo.trolley_count}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <td style={{ padding: '0.5rem', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
+                    {wo.cetec_ship_date ? format(new Date(wo.cetec_ship_date), 'MM/dd/yy') : '-'}
+                  </td>
+                  <td style={{ padding: '0.5rem', whiteSpace: 'nowrap', textAlign: 'right' }}>{(wo.time_minutes / 60).toFixed(1)}</td>
+                  <td style={{ padding: '0.5rem', textAlign: 'center' }}>{wo.trolley_count}</td>
+                  <td style={{ padding: '0.5rem' }}>
+                    <div style={{ display: 'flex', gap: '0.25rem', justifyContent: 'center' }}>
                       <button 
                         className="btn btn-sm btn-success" 
                         onClick={() => setCompletingWO(wo)}
+                        style={{ padding: '0.25rem 0.5rem' }}
                         title="Mark as Complete"
                       >
                         <CheckCircle size={14} />
+                      </button>
+                      <button 
+                        className="btn btn-sm btn-warning" 
+                        onClick={() => setReportingIssueWO(wo)}
+                        title="Report Issue"
+                      >
+                        <AlertTriangle size={14} />
                       </button>
                       <button 
                         className="btn btn-sm btn-secondary" 

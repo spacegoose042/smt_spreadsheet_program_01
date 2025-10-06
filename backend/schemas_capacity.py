@@ -52,3 +52,4 @@ class DayCapacityResponse(BaseModel):
     shifts_count: int
     reason: Optional[str] = None
 
+

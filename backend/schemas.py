@@ -4,7 +4,7 @@ Pydantic schemas for request/response validation
 from pydantic import BaseModel, EmailStr, Field
 from datetime import date, datetime, time
 from typing import Optional
-from models import UserRole, WorkOrderStatus, Priority, SideType, THKitStatus
+from models import UserRole, WorkOrderStatus, Priority, SideType, THKitStatus, IssueSeverity, IssueStatus
 
 
 # User Schemas
@@ -155,6 +155,12 @@ class WorkOrderResponse(WorkOrderBase):
     calculated_start_datetime: Optional[datetime] = None
     calculated_end_datetime: Optional[datetime] = None
     wo_start_datetime: Optional[datetime] = None
+    
+    # Cetec Integration
+    cetec_ordline_id: Optional[int] = None
+    current_location: Optional[str] = None
+    material_status: Optional[str] = None
+    last_cetec_sync: Optional[datetime] = None
     
     # Include line info if available
     line: Optional[SMTLineResponse] = None
@@ -332,4 +338,149 @@ class StatusResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# Issue Type Schemas
+class IssueTypeCreate(BaseModel):
+    name: str
+    color: str = "#dc3545"
+    category: Optional[str] = None
+    is_active: bool = True
+    display_order: int = 0
+
+
+class IssueTypeUpdate(BaseModel):
+    name: Optional[str] = None
+    color: Optional[str] = None
+    category: Optional[str] = None
+    is_active: Optional[bool] = None
+    display_order: Optional[int] = None
+
+
+class IssueTypeResponse(BaseModel):
+    id: int
+    name: str
+    color: str
+    category: Optional[str]
+    is_active: bool
+    display_order: int
+    is_system: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# Issue Schemas
+class IssueCreate(BaseModel):
+    work_order_id: int
+    issue_type_id: int
+    severity: IssueSeverity = IssueSeverity.MINOR
+    description: str
+
+
+class IssueUpdate(BaseModel):
+    issue_type_id: Optional[int] = None
+    severity: Optional[IssueSeverity] = None
+    status: Optional[IssueStatus] = None
+    description: Optional[str] = None
+    resolution_type_id: Optional[int] = None
+    resolution_notes: Optional[str] = None
+
+
+class IssueResponse(BaseModel):
+    id: int
+    work_order_id: int
+    issue_type_id: int
+    severity: IssueSeverity
+    status: IssueStatus
+    description: str
+    reported_by_id: int
+    reported_at: datetime
+    resolved_by_id: Optional[int]
+    resolved_at: Optional[datetime]
+    resolution_type_id: Optional[int]
+    resolution_notes: Optional[str]
+    
+    # Computed fields for display
+    issue_type_name: Optional[str] = None
+    issue_type_color: Optional[str] = None
+    resolution_type_name: Optional[str] = None
+    resolution_type_color: Optional[str] = None
+    reported_by_username: Optional[str] = None
+    resolved_by_username: Optional[str] = None
+    
+    # Work order details
+    wo_number: Optional[str] = None
+    assembly: Optional[str] = None
+    revision: Optional[str] = None
+    customer: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+# Resolution Type Schemas
+class ResolutionTypeCreate(BaseModel):
+    name: str
+    color: str = "#28a745"
+    category: Optional[str] = None
+    is_active: bool = True
+    display_order: int = 0
+
+
+class ResolutionTypeUpdate(BaseModel):
+    name: Optional[str] = None
+    color: Optional[str] = None
+    category: Optional[str] = None
+    is_active: Optional[bool] = None
+    display_order: Optional[int] = None
+
+
+class ResolutionTypeResponse(BaseModel):
+    id: int
+    name: str
+    color: str
+    category: Optional[str]
+    is_active: bool
+    display_order: int
+    is_system: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# Cetec Sync Schemas
+class CetecSyncLogResponse(BaseModel):
+    id: int
+    sync_date: datetime
+    wo_number: str
+    change_type: str  # "created", "date_changed", "qty_changed", "location_changed", "material_changed"
+    field_name: Optional[str] = None
+    old_value: Optional[str] = None
+    new_value: Optional[str] = None
+    cetec_ordline_id: Optional[int] = None
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class CetecImportRequest(BaseModel):
+    from_date: Optional[str] = None  # YYYY-MM-DD format
+    to_date: Optional[str] = None
+    prodline: Optional[str] = "200"
+    transcode: Optional[str] = "SA,SN"
+    intercompany: bool = False
+
+
+class CetecImportResponse(BaseModel):
+    success: bool
+    message: str
+    total_fetched: int
+    created_count: int
+    updated_count: int
+    error_count: int
+    changes: list[CetecSyncLogResponse]
 

@@ -4,7 +4,7 @@ Script to seed the database with initial data (lines, sample work orders)
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from database import SessionLocal, engine
-from models import Base, SMTLine, User, UserRole, Shift, ShiftBreak, LineConfiguration
+from models import Base, SMTLine, User, UserRole, Shift, ShiftBreak, LineConfiguration, IssueType, ResolutionType
 from passlib.context import CryptContext
 from datetime import time
 
@@ -164,6 +164,73 @@ def seed_users(db: Session):
     print("✓ Seeded users (default password: password123)")
 
 
+def seed_issue_types(db: Session):
+    """Create default issue types (only if none exist)"""
+    # Check if issue types already exist
+    existing = db.query(IssueType).count()
+    if existing > 0:
+        print(f"✓ Issue types already exist ({existing} types) - skipping seed")
+        return
+    
+    default_issue_types = [
+        {"name": "Packaging - Tape & Reel Needed", "color": "#f39c12", "category": "Packaging", "display_order": 1},
+        {"name": "Missing Parts", "color": "#e74c3c", "category": "Parts", "display_order": 2},
+        {"name": "Program Issue", "color": "#9b59b6", "category": "Program", "display_order": 3},
+        {"name": "Stencil Issue", "color": "#3498db", "category": "Stencil", "display_order": 4},
+        {"name": "Quality Issue", "color": "#e67e22", "category": "Quality", "display_order": 5},
+        {"name": "Other", "color": "#95a5a6", "category": "Other", "display_order": 6},
+    ]
+    
+    for it_data in default_issue_types:
+        issue_type = IssueType(
+            name=it_data["name"],
+            color=it_data["color"],
+            category=it_data["category"],
+            display_order=it_data["display_order"],
+            is_active=True,
+            is_system=True  # Default types are system types
+        )
+        db.add(issue_type)
+    
+    db.commit()
+    print("✓ Seeded default issue types")
+
+
+def seed_resolution_types(db: Session):
+    """Create default resolution types (only if none exist)"""
+    # Check if resolution types already exist
+    existing = db.query(ResolutionType).count()
+    if existing > 0:
+        print(f"✓ Resolution types already exist ({existing} types) - skipping seed")
+        return
+    
+    default_resolution_types = [
+        {"name": "BOM Update Required", "color": "#e74c3c", "category": "Action Required", "display_order": 1},
+        {"name": "Ordered Tape & Reel Packaging", "color": "#f39c12", "category": "Packaging", "display_order": 2},
+        {"name": "Program Updated", "color": "#9b59b6", "category": "Program", "display_order": 3},
+        {"name": "Stencil Modified", "color": "#3498db", "category": "Stencil", "display_order": 4},
+        {"name": "Part Substitution Approved", "color": "#1abc9c", "category": "Parts", "display_order": 5},
+        {"name": "Vendor Contacted", "color": "#f1c40f", "category": "External", "display_order": 6},
+        {"name": "No Action Needed", "color": "#95a5a6", "category": "No Action", "display_order": 7},
+        {"name": "Workaround Found", "color": "#16a085", "category": "Resolved", "display_order": 8},
+        {"name": "Other", "color": "#7f8c8d", "category": "Other", "display_order": 9},
+    ]
+    
+    for rt_data in default_resolution_types:
+        resolution_type = ResolutionType(
+            name=rt_data["name"],
+            color=rt_data["color"],
+            category=rt_data["category"],
+            display_order=rt_data["display_order"],
+            is_active=True,
+            is_system=True  # Default types are system types
+        )
+        db.add(resolution_type)
+    
+    db.commit()
+    print("✓ Seeded default resolution types")
+
+
 def main():
     """Run all seeding functions"""
     # Create tables (this will create new tables and columns)
@@ -172,6 +239,70 @@ def main():
         print("✓ Created database tables")
     except Exception as e:
         print(f"Note: {e}")
+        print("Continuing with seed...")
+    
+    # Add new columns to existing tables if they don't exist
+    try:
+        with engine.begin() as conn:
+            # Check and add resolution_type_id to issues table
+            result = conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.columns 
+                    WHERE table_name = 'issues' AND column_name = 'resolution_type_id'
+                )
+            """))
+            column_exists = result.scalar()
+            
+            if not column_exists:
+                print("Adding resolution_type_id column to issues...")
+                conn.execute(text("ALTER TABLE issues ADD COLUMN resolution_type_id INTEGER"))
+                conn.execute(text("ALTER TABLE issues ADD CONSTRAINT fk_issues_resolution_type FOREIGN KEY (resolution_type_id) REFERENCES resolution_types(id)"))
+                print("✓ Added resolution_type_id to issues")
+            else:
+                print("✓ resolution_type_id column already exists in issues")
+            
+            # Check and add resolution_notes to issues table
+            result = conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.columns 
+                    WHERE table_name = 'issues' AND column_name = 'resolution_notes'
+                )
+            """))
+            column_exists = result.scalar()
+            
+            if not column_exists:
+                print("Adding resolution_notes column to issues...")
+                conn.execute(text("ALTER TABLE issues ADD COLUMN resolution_notes VARCHAR"))
+                print("✓ Added resolution_notes to issues")
+            else:
+                print("✓ resolution_notes column already exists in issues")
+    except Exception as e:
+        print(f"Note: Column check/add: {e}")
+        print("Continuing with seed...")
+    
+    # Add Cetec integration columns to work_orders table if they don't exist
+    try:
+        with engine.begin() as conn:
+            # Check for cetec_ordline_id column
+            result = conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name='work_orders' AND column_name='cetec_ordline_id'
+                )
+            """))
+            column_exists = result.scalar()
+            
+            if not column_exists:
+                print("Adding Cetec integration columns to work_orders...")
+                conn.execute(text("ALTER TABLE work_orders ADD COLUMN cetec_ordline_id INTEGER"))
+                conn.execute(text("ALTER TABLE work_orders ADD COLUMN current_location VARCHAR"))
+                conn.execute(text("ALTER TABLE work_orders ADD COLUMN material_status VARCHAR"))
+                conn.execute(text("ALTER TABLE work_orders ADD COLUMN last_cetec_sync TIMESTAMP"))
+                print("✓ Added Cetec integration columns to work_orders")
+            else:
+                print("✓ Cetec integration columns already exist in work_orders")
+    except Exception as e:
+        print(f"Note: Cetec column check/add: {e}")
         print("Continuing with seed...")
     
     # Add all role values to userrole enum if they don't exist
@@ -201,6 +332,8 @@ def main():
         seed_lines(db)
         seed_users(db)
         seed_shifts_and_config(db)
+        seed_issue_types(db)
+        seed_resolution_types(db)
         print("\n✅ Database seeded successfully!")
         print("\nDefault users:")
         print("  admin / admin123 (Admin - full system access)")

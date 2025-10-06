@@ -41,6 +41,90 @@ class Status(Base):
     work_orders = relationship("WorkOrder", back_populates="status_obj")
 
 
+class IssueType(Base):
+    """
+    Configurable issue types for work orders.
+    Admins can add/edit/delete issue types as needed.
+    """
+    __tablename__ = "issue_types"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False, index=True)
+    color = Column(String, default="#dc3545")  # Badge color (hex)
+    category = Column(String, nullable=True)  # Optional grouping (Packaging, Parts, etc.)
+    is_active = Column(Boolean, default=True)
+    display_order = Column(Integer, default=0)
+    is_system = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    issues = relationship("Issue", back_populates="issue_type_obj")
+
+
+class ResolutionType(Base):
+    """
+    Configurable resolution types for issues.
+    Tracks how issues were resolved.
+    """
+    __tablename__ = "resolution_types"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False, index=True)
+    color = Column(String, default="#28a745")  # Badge color (hex)
+    category = Column(String, nullable=True)  # Optional grouping
+    is_active = Column(Boolean, default=True)
+    display_order = Column(Integer, default=0)
+    is_system = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    issues = relationship("Issue", back_populates="resolution_type_obj")
+
+
+class IssueSeverity(str, enum.Enum):
+    MINOR = "Minor"
+    MAJOR = "Major"
+    BLOCKER = "Blocker"
+
+
+class IssueStatus(str, enum.Enum):
+    OPEN = "Open"
+    IN_PROGRESS = "In Progress"
+    RESOLVED = "Resolved"
+
+
+class Issue(Base):
+    """
+    Issues logged against work orders.
+    Tracks problems that need resolution.
+    """
+    __tablename__ = "issues"
+
+    id = Column(Integer, primary_key=True, index=True)
+    work_order_id = Column(Integer, ForeignKey("work_orders.id"), nullable=False, index=True)
+    issue_type_id = Column(Integer, ForeignKey("issue_types.id"), nullable=False)
+    severity = Column(SQLEnum(IssueSeverity), default=IssueSeverity.MINOR)
+    status = Column(SQLEnum(IssueStatus), default=IssueStatus.OPEN)
+    description = Column(String, nullable=False)
+    
+    # Tracking
+    reported_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    reported_at = Column(DateTime, default=datetime.utcnow)
+    resolved_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+    
+    # Resolution details
+    resolution_type_id = Column(Integer, ForeignKey("resolution_types.id"), nullable=True)
+    resolution_notes = Column(String, nullable=True)
+    
+    # Relationships
+    work_order = relationship("WorkOrder", back_populates="issues")
+    issue_type_obj = relationship("IssueType", back_populates="issues")
+    resolution_type_obj = relationship("ResolutionType", back_populates="issues")
+    reported_by = relationship("User", foreign_keys=[reported_by_id])
+    resolved_by = relationship("User", foreign_keys=[resolved_by_id])
+
+
 class Priority(str, enum.Enum):
     CRITICAL_MASS = "Critical Mass"
     OVERCLOCKED = "Overclocked"
@@ -145,6 +229,12 @@ class WorkOrder(Base):
     # Notes
     notes = Column(String)
     
+    # Cetec Integration
+    cetec_ordline_id = Column(Integer, nullable=True, index=True)  # Cetec ordline_id for linking
+    current_location = Column(String, nullable=True)  # Current work location from Cetec
+    material_status = Column(String, nullable=True)  # "Ready", "Partial", "Shortage"
+    last_cetec_sync = Column(DateTime, nullable=True)  # When last synced from Cetec
+    
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -153,6 +243,25 @@ class WorkOrder(Base):
     line = relationship("SMTLine", back_populates="work_orders")
     status_obj = relationship("Status", back_populates="work_orders")
     completed_record = relationship("CompletedWorkOrder", back_populates="work_order", uselist=False)
+    issues = relationship("Issue", back_populates="work_order", cascade="all, delete-orphan")
+
+
+class CetecSyncLog(Base):
+    """
+    Tracks changes from Cetec API imports for reporting.
+    """
+    __tablename__ = "cetec_sync_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    sync_date = Column(DateTime, default=datetime.utcnow, index=True)
+    wo_number = Column(String, nullable=False, index=True)
+    change_type = Column(String, nullable=False)  # "created", "date_changed", "qty_changed", "location_changed", "material_changed"
+    field_name = Column(String, nullable=True)  # Which field changed
+    old_value = Column(String, nullable=True)  # Previous value
+    new_value = Column(String, nullable=True)  # New value
+    cetec_ordline_id = Column(Integer, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class CompletedWorkOrder(Base):

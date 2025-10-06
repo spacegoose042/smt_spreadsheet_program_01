@@ -80,3 +80,4 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_statuses_id'), table_name='statuses')
     op.drop_table('statuses')
 
+

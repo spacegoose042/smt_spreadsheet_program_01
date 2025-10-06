@@ -3,8 +3,9 @@ import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getLines, getWorkOrders, completeWorkOrder } from '../api'
 import { format } from 'date-fns'
-import { Clock, Package, Calendar, CheckCircle } from 'lucide-react'
+import { Clock, Package, Calendar, CheckCircle, AlertTriangle } from 'lucide-react'
 import CompleteJobModal from '../components/CompleteJobModal'
+import ReportIssueModal from '../components/ReportIssueModal'
 
 function StatusBadge({ status, statusName, statusColor }) {
   // Use new status system if available, fallback to legacy
@@ -49,6 +50,7 @@ function PriorityBadge({ priority }) {
 export default function LineView() {
   const { lineId } = useParams()
   const [completingWO, setCompletingWO] = useState(null)
+  const [reportingIssueWO, setReportingIssueWO] = useState(null)
   const queryClient = useQueryClient()
   
   const { data: lines } = useQuery({
@@ -110,6 +112,18 @@ export default function LineView() {
           onComplete={handleComplete}
           onCancel={() => setCompletingWO(null)}
           isSubmitting={completeMutation.isPending}
+        />
+      </>
+    )
+  }
+
+  // Render Report Issue Modal
+  if (reportingIssueWO) {
+    return (
+      <>
+        <ReportIssueModal
+          workOrder={reportingIssueWO}
+          onClose={() => setReportingIssueWO(null)}
         />
       </>
     )
@@ -197,13 +211,22 @@ export default function LineView() {
                     <td>{wo.trolley_count}</td>
                     <td>{wo.notes}</td>
                     <td>
-                      <button 
-                        className="btn btn-sm btn-success" 
-                        onClick={() => setCompletingWO(wo)}
-                        title="Mark as Complete"
-                      >
-                        <CheckCircle size={14} />
-                      </button>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button 
+                          className="btn btn-sm btn-success" 
+                          onClick={() => setCompletingWO(wo)}
+                          title="Mark as Complete"
+                        >
+                          <CheckCircle size={14} />
+                        </button>
+                        <button 
+                          className="btn btn-sm btn-warning" 
+                          onClick={() => setReportingIssueWO(wo)}
+                          title="Report Issue"
+                        >
+                          <AlertTriangle size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

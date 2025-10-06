@@ -18,6 +18,21 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// Handle 401 errors (expired token)
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Token expired or invalid
+      console.error('❌ Authentication failed (401). Redirecting to login...')
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      window.location.href = '/login'
+    }
+    return Promise.reject(error)
+  }
+)
+
 // Dashboard & Analytics
 export const getDashboard = () => api.get('/api/dashboard')
 export const getTrolleyStatus = () => api.get('/api/trolley-status')
@@ -69,6 +84,50 @@ export const getStatuses = (includeInactive = false) =>
 export const createStatus = (data) => api.post('/api/statuses', data)
 export const updateStatus = (id, data) => api.put(`/api/statuses/${id}`, data)
 export const deleteStatus = (id) => api.delete(`/api/statuses/${id}`)
+
+// Issue Types (Admin only)
+export const getIssueTypes = (includeInactive = false) =>
+  api.get('/api/issue-types', { params: { include_inactive: includeInactive } })
+export const createIssueType = (data) => api.post('/api/issue-types', data)
+export const updateIssueType = (id, data) => api.put(`/api/issue-types/${id}`, data)
+export const deleteIssueType = (id) => api.delete(`/api/issue-types/${id}`)
+
+// Issues (All users)
+export const getIssues = (params = {}) => api.get('/api/issues', { params })
+export const createIssue = (data) => api.post('/api/issues', data)
+export const updateIssue = (id, data) => api.put(`/api/issues/${id}`, data)
+export const deleteIssue = (id) => api.delete(`/api/issues/${id}`)
+
+// Resolution Types (Admin only)
+export const getResolutionTypes = (includeInactive = false) =>
+  api.get('/api/resolution-types', { params: { include_inactive: includeInactive } })
+export const createResolutionType = (data) => api.post('/api/resolution-types', data)
+export const updateResolutionType = (id, data) => api.put(`/api/resolution-types/${id}`, data)
+export const deleteResolutionType = (id) => api.delete(`/api/resolution-types/${id}`)
+
+// Cetec ERP API Proxy (All authenticated users)
+export const getCetecLocationMaps = (ordlineId, includeChildren = false) =>
+  api.get(`/api/cetec/ordline/${ordlineId}/location_maps`, { 
+    params: { include_children: includeChildren } 
+  })
+export const getCetecOperations = (ordlineId, ordlineMapId) =>
+  api.get(`/api/cetec/ordline/${ordlineId}/location_map/${ordlineMapId}/operations`)
+export const getCetecOperationDetail = (ordlineId, ordlineMapId, opId) =>
+  api.get(`/api/cetec/ordline/${ordlineId}/location_map/${ordlineMapId}/operation/${opId}`)
+export const getCetecCombinedData = (ordlineId) =>
+  api.get(`/api/cetec/ordline/${ordlineId}/combined`)
+export const getCetecOrdlineStatuses = () =>
+  api.get('/api/cetec/ordlinestatus/list')
+export const getCetecPart = (prcpart) =>
+  api.get(`/api/cetec/part/${encodeURIComponent(prcpart)}`)
+export const getCetecCustomer = (custnum) =>
+  api.get(`/api/cetec/customer/${encodeURIComponent(custnum)}`)
+export const getCetecCustomersList = () =>
+  api.get('/api/cetec/customers/list')
+export const runCetecImport = (data) =>
+  api.post('/api/cetec/import', data)
+export const getCetecSyncLogs = (days = 30) =>
+  api.get('/api/cetec/sync-logs', { params: { days } })
 
 export default api
 
