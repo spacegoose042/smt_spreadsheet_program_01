@@ -1914,6 +1914,34 @@ def import_from_cetec(
         
         print(f"Fetched {len(all_order_lines)} order lines from Cetec")
         
+        # Fetch ordline statuses (work locations) for mapping
+        ordline_status_map = {}
+        try:
+            status_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlinestatus/list"
+            status_response = requests.get(
+                status_url,
+                params={"preshared_token": CETEC_CONFIG["token"], "rows": "1000"},
+                timeout=30
+            )
+            status_response.raise_for_status()
+            statuses_data = status_response.json()
+            
+            # Handle if response is not an array
+            if isinstance(statuses_data, dict):
+                if 'data' in statuses_data:
+                    statuses_data = statuses_data['data']
+                elif 'ordlinestatus' in statuses_data:
+                    statuses_data = statuses_data['ordlinestatus']
+                elif 'rows' in statuses_data:
+                    statuses_data = statuses_data['rows']
+            
+            if isinstance(statuses_data, list):
+                for status in statuses_data:
+                    ordline_status_map[status.get('id')] = status.get('description', 'Unknown')
+                print(f"Fetched {len(ordline_status_map)} work locations")
+        except Exception as e:
+            print(f"Warning: Could not fetch work locations: {e}")
+        
         # Process each order line
         for order_line in all_order_lines:
             try:
@@ -1973,9 +2001,9 @@ def import_from_cetec(
                 elif short_allocation or short_shelf:
                     material_status = "Partial"
                 
-                # Get current location (work_location)
-                # We'll need to fetch location name if we have the ID
-                current_location = order_line.get('_current_location', 'Unknown')
+                # Get current location (work_location field contains the status ID)
+                work_location_id = order_line.get('work_location')
+                current_location = ordline_status_map.get(work_location_id, 'Unknown') if work_location_id else 'Unknown'
                 
                 # Prepare WO data
                 prcpart = order_line.get('prcpart', '')
