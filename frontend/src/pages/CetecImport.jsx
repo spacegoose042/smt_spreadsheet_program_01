@@ -1921,6 +1921,7 @@ export default function CetecImport() {
                     <th style={{ minWidth: '150px' }}>Customer</th>
                     <th>Quantity</th>
                     <th>Time (min)</th>
+                    <th>Min Start Date</th>
                     <th>Ship Date</th>
                     <th style={{ minWidth: '120px' }}>Current Location</th>
                     <th style={{ minWidth: '120px' }}>Material Status</th>
@@ -1982,6 +1983,9 @@ export default function CetecImport() {
                         onChange={(e) => handleColumnFilterChange('time', e.target.value)}
                         style={{ width: '100%', padding: '0.25rem', fontSize: '0.75rem', border: '1px solid #ced4da', borderRadius: '4px' }}
                       />
+                    </th>
+                    <th>
+                      {/* No filter for Min Start (calculated on import) */}
                     </th>
                     <th>
                       <input
@@ -2111,6 +2115,9 @@ export default function CetecImport() {
                           ) : (
                             <span style={{ color: '#dc3545' }}>⚠️ No data</span>
                           )}
+                        </td>
+                        <td>
+                          <em style={{ color: '#6c757d', fontSize: '0.75rem' }}>(on import)</em>
                         </td>
                         <td>{line.promisedate || line.target_ship_date || '—'}</td>
                         <td>

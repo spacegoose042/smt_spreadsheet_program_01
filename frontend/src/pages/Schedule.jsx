@@ -574,6 +574,13 @@ export default function Schedule() {
                 </th>
                 <th style={{ padding: '0.5rem', maxWidth: '80px' }} title="SMT Line">Line</th>
                 <th 
+                  onClick={() => handleSort('min_start_date')}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', whiteSpace: 'nowrap' }}
+                  title="Minimum Start Date (calculated)"
+                >
+                  Min Start {sortColumn === 'min_start_date' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
                   onClick={() => handleSort('cetec_ship_date')}
                   style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', whiteSpace: 'nowrap' }}
                   title="Ship Date"
@@ -666,6 +673,9 @@ export default function Schedule() {
                   <td style={{ padding: '0.5rem' }}><PriorityBadge priority={wo.priority} /></td>
                   <td style={{ padding: '0.5rem', fontSize: '0.8rem' }}>
                     {wo.line?.name || <em style={{ color: 'var(--warning)', fontWeight: 600, fontSize: '0.75rem' }}>⚠️</em>}
+                  </td>
+                  <td style={{ padding: '0.5rem', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
+                    {wo.min_start_date ? format(new Date(wo.min_start_date), 'MM/dd/yy') : '-'}
                   </td>
                   <td style={{ padding: '0.5rem', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
                     {wo.cetec_ship_date ? format(new Date(wo.cetec_ship_date), 'MM/dd/yy') : '-'}
