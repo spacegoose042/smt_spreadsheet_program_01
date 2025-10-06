@@ -27,7 +27,6 @@ export default function CetecImport() {
     assembly: '',
     revision: '',
     customer: '',
-    lastCustomer: '',
     quantity: '',
     time: '',
     shipDate: '',
@@ -1260,7 +1259,6 @@ export default function CetecImport() {
     const assembly = (line.prcpart || '').toLowerCase()
     const revision = (line.revision || '').toLowerCase()
     const customer = (line.customer || '').toLowerCase()
-    const lastCustomer = (line._last_customer || '').toLowerCase()
     const quantity = String(line.balancedue || line.release_qty || line.orig_order_qty || '')
     const time = line._calculated_time_minutes ? String(Math.round(line._calculated_time_minutes)) : ''
     const shipDate = (line.promisedate || line.target_ship_date || '').toLowerCase()
@@ -1281,7 +1279,6 @@ export default function CetecImport() {
       assembly.includes(columnFilters.assembly.toLowerCase()) &&
       revision.includes(columnFilters.revision.toLowerCase()) &&
       customer.includes(columnFilters.customer.toLowerCase()) &&
-      lastCustomer.includes(columnFilters.lastCustomer.toLowerCase()) &&
       quantity.includes(columnFilters.quantity) &&
       time.includes(columnFilters.time) &&
       shipDate.includes(columnFilters.shipDate.toLowerCase()) &&
@@ -1298,7 +1295,6 @@ export default function CetecImport() {
       assembly: '',
       revision: '',
       customer: '',
-      lastCustomer: '',
       quantity: '',
       time: '',
       shipDate: '',
@@ -1836,7 +1832,6 @@ export default function CetecImport() {
                     <th style={{ minWidth: '180px' }}>Assembly</th>
                     <th>Rev</th>
                     <th style={{ minWidth: '150px' }}>Customer</th>
-                    <th style={{ minWidth: '150px' }}>Last Customer</th>
                     <th>Quantity</th>
                     <th>Time (min)</th>
                     <th>Ship Date</th>
@@ -1880,15 +1875,6 @@ export default function CetecImport() {
                         placeholder="Filter..."
                         value={columnFilters.customer}
                         onChange={(e) => handleColumnFilterChange('customer', e.target.value)}
-                        style={{ width: '100%', padding: '0.25rem', fontSize: '0.75rem', border: '1px solid #ced4da', borderRadius: '4px' }}
-                      />
-                    </th>
-                    <th>
-                      <input
-                        type="text"
-                        placeholder="Filter..."
-                        value={columnFilters.lastCustomer}
-                        onChange={(e) => handleColumnFilterChange('lastCustomer', e.target.value)}
                         style={{ width: '100%', padding: '0.25rem', fontSize: '0.75rem', border: '1px solid #ced4da', borderRadius: '4px' }}
                       />
                     </th>
@@ -2027,9 +2013,6 @@ export default function CetecImport() {
                         </td>
                         <td>{line.revision || '—'}</td>
                         <td style={{ fontSize: '0.875rem' }}>{line.customer || '—'}</td>
-                        <td style={{ fontSize: '0.875rem', color: line._last_customer ? '#495057' : '#999' }}>
-                          {line._last_customer || '—'}
-                        </td>
                         <td>
                           <strong>{line.balancedue || line.release_qty || line.orig_order_qty || '—'}</strong>
                         </td>
