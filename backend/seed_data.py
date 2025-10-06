@@ -281,6 +281,7 @@ def main():
         print("Continuing with seed...")
     
     # Add Cetec integration columns to work_orders table if they don't exist
+    print("🔍 Checking for Cetec integration columns...")
     try:
         with engine.begin() as conn:
             # Check for cetec_ordline_id column
@@ -293,17 +294,38 @@ def main():
             column_exists = result.scalar()
             
             if not column_exists:
-                print("Adding Cetec integration columns to work_orders...")
-                conn.execute(text("ALTER TABLE work_orders ADD COLUMN cetec_ordline_id INTEGER"))
-                conn.execute(text("ALTER TABLE work_orders ADD COLUMN current_location VARCHAR"))
-                conn.execute(text("ALTER TABLE work_orders ADD COLUMN material_status VARCHAR"))
-                conn.execute(text("ALTER TABLE work_orders ADD COLUMN last_cetec_sync TIMESTAMP"))
-                print("✓ Added Cetec integration columns to work_orders")
+                print("⚙️  Adding Cetec integration columns to work_orders...")
+                try:
+                    conn.execute(text("ALTER TABLE work_orders ADD COLUMN cetec_ordline_id INTEGER"))
+                    print("   ✓ Added cetec_ordline_id")
+                except Exception as e:
+                    print(f"   ⚠️  cetec_ordline_id: {e}")
+                
+                try:
+                    conn.execute(text("ALTER TABLE work_orders ADD COLUMN current_location VARCHAR"))
+                    print("   ✓ Added current_location")
+                except Exception as e:
+                    print(f"   ⚠️  current_location: {e}")
+                
+                try:
+                    conn.execute(text("ALTER TABLE work_orders ADD COLUMN material_status VARCHAR"))
+                    print("   ✓ Added material_status")
+                except Exception as e:
+                    print(f"   ⚠️  material_status: {e}")
+                
+                try:
+                    conn.execute(text("ALTER TABLE work_orders ADD COLUMN last_cetec_sync TIMESTAMP"))
+                    print("   ✓ Added last_cetec_sync")
+                except Exception as e:
+                    print(f"   ⚠️  last_cetec_sync: {e}")
+                
+                print("✅ Cetec integration columns migration complete")
             else:
-                print("✓ Cetec integration columns already exist in work_orders")
+                print("✅ Cetec integration columns already exist in work_orders")
     except Exception as e:
-        print(f"Note: Cetec column check/add: {e}")
-        print("Continuing with seed...")
+        print(f"❌ ERROR during Cetec column migration: {e}")
+        print(f"   This may cause issues with Cetec integration features.")
+        print("   Continuing with seed...")
     
     # Add all role values to userrole enum if they don't exist
     try:
