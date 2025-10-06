@@ -2202,7 +2202,7 @@ def import_from_cetec(
                         material_status=material_status,
                         last_cetec_sync=sync_time,
                         priority=Priority.FACTORY_DEFAULT,
-                        status=WorkOrderStatus.CLEAR_TO_BUILD,  # Database requires status (can be changed later)
+                        status=WorkOrderStatus.UNASSIGNED,  # New WOs from Cetec start as Unassigned
                         is_complete=False
                     )
                     
