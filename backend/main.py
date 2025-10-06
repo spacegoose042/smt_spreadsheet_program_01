@@ -1809,13 +1809,10 @@ def get_cetec_customers_list(
     """
     # Try multiple possible endpoints
     endpoints_to_try = [
-        "/goapis/api/v1/custvendor/list",  # Often customers and vendors combined
+        "/goapis/api/v1/customer/lite_list",  # Correct endpoint from docs
+        "/goapis/api/v1/custvendor/list",
         "/goapis/api/v1/customer/list",
-        "/goapis/api/v1/customers/list",
-        "/api/v1/customer/list",
-        "/api/v1/customers/list",
-        "/goapis/customer/list",
-        "/customer/list"
+        "/goapis/api/v1/customers/list"
     ]
     
     for endpoint in endpoints_to_try:
