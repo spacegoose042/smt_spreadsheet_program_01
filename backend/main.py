@@ -1914,6 +1914,16 @@ def import_from_cetec(
         
         print(f"Fetched {len(all_order_lines)} order lines from Cetec")
         
+        # Debug: Check what fields are in the first order line
+        if len(all_order_lines) > 0:
+            sample_fields = list(all_order_lines[0].keys())
+            print(f"Sample order line fields: {sample_fields}")
+            # Check for location-related fields
+            location_fields = [f for f in sample_fields if 'location' in f.lower() or 'work' in f.lower()]
+            print(f"Location-related fields: {location_fields}")
+            if 'work_location' in all_order_lines[0]:
+                print(f"  work_location value: {all_order_lines[0]['work_location']}")
+        
         # Fetch ordline statuses (work locations) for mapping
         ordline_status_map = {}
         try:
