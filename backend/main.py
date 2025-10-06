@@ -2206,6 +2206,7 @@ def import_from_cetec(
                         material_status=material_status,
                         last_cetec_sync=sync_time,
                         priority=Priority.FACTORY_DEFAULT,
+                        status=WorkOrderStatus.CLEAR_TO_BUILD,  # Default status for imported WOs
                         is_complete=False
                     )
                     db.add(new_wo)
