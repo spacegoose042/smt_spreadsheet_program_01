@@ -1199,7 +1199,7 @@ export default function CetecImport() {
     const customer = (line.customer || '').toLowerCase()
     const quantity = String(line.balancedue || line.release_qty || line.orig_order_qty || '')
     const time = line._calculated_time_minutes ? String(Math.round(line._calculated_time_minutes)) : ''
-    const shipDate = (line.target_ship_date || line.target_wip_date || '').toLowerCase()
+    const shipDate = (line.promisedate || line.target_ship_date || '').toLowerCase()
     const location = (line._current_location || '').toLowerCase()
     
     // Material status
@@ -1278,7 +1278,7 @@ export default function CetecImport() {
       const woNumber = `${item.ordernum}-${item.lineitem}`
       const quantity = item.balancedue || item.release_qty || item.orig_order_qty || 0
       const timeMinutes = item._calculated_time_minutes ? Math.round(item._calculated_time_minutes) : 0
-      const shipDate = item.target_ship_date || item.target_wip_date || ''
+      const shipDate = item.promisedate || item.target_ship_date || ''
       const currentLocation = item._current_location || 'Unknown'
       const status = timeMinutes > 0 ? 'Ready' : 'Missing Data'
       
@@ -1960,7 +1960,7 @@ export default function CetecImport() {
                             <span style={{ color: '#dc3545' }}>⚠️ No data</span>
                           )}
                         </td>
-                        <td>{line.target_ship_date || line.target_wip_date || '—'}</td>
+                        <td>{line.promisedate || line.target_ship_date || '—'}</td>
                         <td>
                           {(() => {
                             // Color-code locations
