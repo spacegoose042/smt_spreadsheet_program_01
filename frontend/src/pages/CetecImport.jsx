@@ -32,7 +32,6 @@ export default function CetecImport() {
     shipDate: '',
     location: '',
     materialStatus: '',
-    materialDue: '',
     cetecOrder: '',
     status: ''
   })
@@ -1210,14 +1209,6 @@ export default function CetecImport() {
     if (shortAllocation && shortShelf) materialStatus = 'shortage'
     else if (shortAllocation || shortShelf) materialStatus = 'partial'
     
-    // Extract date from material_here_on
-    let materialDue = line.material_here_on || ''
-    if (materialDue) {
-      const dateMatch = materialDue.match(/\d{4}-\d{2}-\d{2}/)
-      materialDue = dateMatch ? dateMatch[0] : materialDue
-    }
-    materialDue = materialDue.toLowerCase()
-    
     const cetecOrder = (line.ordernum || '').toLowerCase()
     const status = (line._calculated_time_minutes > 0 ? 'ready' : 'missing').toLowerCase()
     
@@ -1231,7 +1222,6 @@ export default function CetecImport() {
       shipDate.includes(columnFilters.shipDate.toLowerCase()) &&
       location.includes(columnFilters.location.toLowerCase()) &&
       materialStatus.includes(columnFilters.materialStatus.toLowerCase()) &&
-      materialDue.includes(columnFilters.materialDue.toLowerCase()) &&
       cetecOrder.includes(columnFilters.cetecOrder.toLowerCase()) &&
       status.includes(columnFilters.status.toLowerCase())
     )
@@ -1248,7 +1238,6 @@ export default function CetecImport() {
       shipDate: '',
       location: '',
       materialStatus: '',
-      materialDue: '',
       cetecOrder: '',
       status: ''
     })
@@ -1783,7 +1772,6 @@ export default function CetecImport() {
                     <th>Ship Date</th>
                     <th style={{ minWidth: '120px' }}>Current Location</th>
                     <th style={{ minWidth: '120px' }}>Material Status</th>
-                    <th style={{ minWidth: '100px' }}>Material Due</th>
                     <th style={{ minWidth: '100px' }}>Cetec Order</th>
                     <th>Status</th>
                   </tr>
@@ -1867,15 +1855,6 @@ export default function CetecImport() {
                         placeholder="Filter..."
                         value={columnFilters.materialStatus}
                         onChange={(e) => handleColumnFilterChange('materialStatus', e.target.value)}
-                        style={{ width: '100%', padding: '0.25rem', fontSize: '0.75rem', border: '1px solid #ced4da', borderRadius: '4px' }}
-                      />
-                    </th>
-                    <th>
-                      <input
-                        type="text"
-                        placeholder="Filter..."
-                        value={columnFilters.materialDue}
-                        onChange={(e) => handleColumnFilterChange('materialDue', e.target.value)}
                         style={{ width: '100%', padding: '0.25rem', fontSize: '0.75rem', border: '1px solid #ced4da', borderRadius: '4px' }}
                       />
                     </th>
@@ -2026,7 +2005,7 @@ export default function CetecImport() {
                               target="_blank"
                               rel="noopener noreferrer"
                               style={{ textDecoration: 'none' }}
-                              title={`View allocation in Cetec ERP (Allocation Short: ${shortAllocation}, Shelf Short: ${shortShelf})`}
+                              title={`View allocation in Cetec ERP (Allocation Short: ${shortAllocation}, Shelf Short: ${shortShelf}${materialHereOn ? `, Material Due: ${materialHereOn}` : ''})`}
                             >
                               <span 
                                 className="badge" 
@@ -2057,14 +2036,11 @@ export default function CetecImport() {
                                 alignItems: 'center',
                                 gap: '0.25rem'
                               }}
-                              title={`Allocation Short: ${shortAllocation}, Shelf Short: ${shortShelf}`}
+                              title={`Allocation Short: ${shortAllocation}, Shelf Short: ${shortShelf}${materialHereOn ? `, Material Due: ${materialHereOn}` : ''}`}
                             >
                               {materialIcon} {materialStatus}
                             </span>
                           )}
-                        </td>
-                        <td style={{ fontSize: '0.875rem', color: materialHereOn ? '#495057' : '#6c757d' }}>
-                          {materialHereOn || '—'}
                         </td>
                         <td style={{ fontSize: '0.75rem' }}>
                           <code>{line.ordernum}</code>
