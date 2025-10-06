@@ -1807,40 +1807,53 @@ def get_cetec_customers_list(
     """
     Proxy endpoint to fetch list of all customers from Cetec API
     """
-    try:
-        params = {
-            "preshared_token": CETEC_CONFIG["token"],
-            "rows": "5000"  # Get a large number to ensure we get all customers
-        }
-        
-        url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/customers/list"
-        
-        print(f"Proxying Cetec customers list request: {url}")
-        
-        response = requests.get(url, params=params, timeout=30)
-        response.raise_for_status()
-        
-        data = response.json()
-        
-        # Handle potential nested structure
-        if isinstance(data, dict):
-            if 'data' in data:
-                data = data['data']
-            elif 'customers' in data:
-                data = data['customers']
-            elif 'rows' in data:
-                data = data['rows']
-        
-        print(f"Fetched {len(data) if isinstance(data, list) else 'unknown'} customers")
-        
-        return data
-        
-    except requests.exceptions.RequestException as e:
-        print(f"Cetec API error: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to fetch from Cetec: {str(e)}"
-        )
+    # Try multiple possible endpoints
+    endpoints_to_try = [
+        "/goapis/api/v1/customer/list",
+        "/goapis/api/v1/customers/list",
+        "/goapis/api/v1/customers",
+        "/goapis/api/v1/customer"
+    ]
+    
+    for endpoint in endpoints_to_try:
+        try:
+            params = {
+                "preshared_token": CETEC_CONFIG["token"],
+                "rows": "5000"
+            }
+            
+            url = f"https://{CETEC_CONFIG['domain']}{endpoint}"
+            
+            print(f"Trying Cetec customers endpoint: {url}")
+            
+            response = requests.get(url, params=params, timeout=30)
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Handle potential nested structure
+                if isinstance(data, dict):
+                    if 'data' in data:
+                        data = data['data']
+                    elif 'customers' in data:
+                        data = data['customers']
+                    elif 'rows' in data:
+                        data = data['rows']
+                
+                print(f"✓ Success! Fetched {len(data) if isinstance(data, list) else 'unknown'} customers from {endpoint}")
+                return data
+            else:
+                print(f"  {endpoint} returned {response.status_code}")
+                
+        except requests.exceptions.RequestException as e:
+            print(f"  {endpoint} failed: {str(e)}")
+            continue
+    
+    # If all endpoints failed
+    raise HTTPException(
+        status_code=500,
+        detail="Could not find valid Cetec customers endpoint. Tried: " + ", ".join(endpoints_to_try)
+    )
 
 
 @app.get("/api/cetec/sync-logs", response_model=List[schemas.CetecSyncLogResponse])
