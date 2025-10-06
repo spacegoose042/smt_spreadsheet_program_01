@@ -58,6 +58,8 @@ export default function Schedule() {
   const [filterStatus, setFilterStatus] = useState('')
   const [filterLocation, setFilterLocation] = useState('')
   const [filterMaterialStatus, setFilterMaterialStatus] = useState('')
+  const [sortColumn, setSortColumn] = useState('line_position')
+  const [sortDirection, setSortDirection] = useState('asc')
   const [draggedWO, setDraggedWO] = useState(null)
   const [dragOverWO, setDragOverWO] = useState(null)
   
@@ -72,26 +74,95 @@ export default function Schedule() {
     }),
   })
 
-  // Filter unscheduled if that option is selected
-  const filteredWorkOrders = workOrders?.data.filter(wo => {
-    if (filterLine === 'unscheduled') {
-      if (wo.line_id) return false
+  // Filter and sort work orders
+  const filteredAndSortedWorkOrders = workOrders?.data
+    .filter(wo => {
+      if (filterLine === 'unscheduled') {
+        if (wo.line_id) return false
+      }
+      
+      // Filter by current location
+      if (filterLocation) {
+        const woLocation = (wo.current_location || '').toLowerCase()
+        const filterLoc = filterLocation.toLowerCase()
+        if (!woLocation.includes(filterLoc)) return false
+      }
+      
+      // Filter by material status
+      if (filterMaterialStatus) {
+        if (wo.material_status !== filterMaterialStatus) return false
+      }
+      
+      return true
+    })
+    .sort((a, b) => {
+      let aVal, bVal
+      
+      switch (sortColumn) {
+        case 'customer':
+          aVal = a.customer || ''
+          bVal = b.customer || ''
+          break
+        case 'assembly':
+          aVal = `${a.assembly} ${a.revision}`
+          bVal = `${b.assembly} ${b.revision}`
+          break
+        case 'wo_number':
+          aVal = a.wo_number || ''
+          bVal = b.wo_number || ''
+          break
+        case 'quantity':
+          aVal = a.quantity || 0
+          bVal = b.quantity || 0
+          break
+        case 'status':
+          aVal = a.status_name || a.status || ''
+          bVal = b.status_name || b.status || ''
+          break
+        case 'material_status':
+          aVal = a.material_status || ''
+          bVal = b.material_status || ''
+          break
+        case 'priority':
+          aVal = a.priority || ''
+          bVal = b.priority || ''
+          break
+        case 'current_location':
+          aVal = a.current_location || ''
+          bVal = b.current_location || ''
+          break
+        case 'cetec_ship_date':
+          aVal = a.cetec_ship_date || ''
+          bVal = b.cetec_ship_date || ''
+          break
+        case 'time_minutes':
+          aVal = a.time_minutes || 0
+          bVal = b.time_minutes || 0
+          break
+        case 'line_position':
+        default:
+          aVal = a.line_position || 999
+          bVal = b.line_position || 999
+          break
+      }
+      
+      if (sortDirection === 'asc') {
+        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0
+      } else {
+        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0
+      }
+    })
+
+  const filteredWorkOrders = filteredAndSortedWorkOrders
+  
+  const handleSort = (column) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortColumn(column)
+      setSortDirection('asc')
     }
-    
-    // Filter by current location
-    if (filterLocation) {
-      const woLocation = (wo.current_location || '').toLowerCase()
-      const filterLoc = filterLocation.toLowerCase()
-      if (!woLocation.includes(filterLoc)) return false
-    }
-    
-    // Filter by material status
-    if (filterMaterialStatus) {
-      if (wo.material_status !== filterMaterialStatus) return false
-    }
-    
-    return true
-  })
+  }
 
   const { data: lines } = useQuery({
     queryKey: ['lines'],
