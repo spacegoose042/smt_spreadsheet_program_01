@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getStatuses } from '../api'
+import { getStatuses, getCetecCustomersList } from '../api'
 import { X, Plus, Edit2 } from 'lucide-react'
 
 export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, isSubmitting }) {
@@ -27,6 +27,8 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
     ...initialData
   })
 
+  const [showCetecCustomers, setShowCetecCustomers] = useState(false)
+
   // Fetch statuses
   const { data: statusesData } = useQuery({
     queryKey: ['statuses'],
@@ -34,6 +36,33 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
   })
 
   const statuses = statusesData || []
+
+  // Fetch Cetec customers (only when needed)
+  const { data: cetecCustomersData } = useQuery({
+    queryKey: ['cetec-customers'],
+    queryFn: async () => {
+      const response = await getCetecCustomersList()
+      let customers = response.data
+      
+      // Handle if response is not an array
+      if (!Array.isArray(customers)) {
+        if (customers?.data) customers = customers.data
+        else if (customers?.customers) customers = customers.customers
+        else if (customers?.rows) customers = customers.rows
+        else customers = []
+      }
+      
+      return customers
+    },
+    enabled: showCetecCustomers
+  })
+
+  const cetecCustomers = cetecCustomersData || []
+
+  // Check if customer is Internal Account
+  const isInternalAccount = formData.customer && 
+    (formData.customer.toLowerCase().includes('internal') || 
+     formData.customer.toLowerCase() === 'internal account')
 
   // Convert dates to YYYY-MM-DD format for input
   useEffect(() => {
@@ -180,15 +209,63 @@ export default function WorkOrderForm({ initialData, lines, onSubmit, onCancel, 
       <div className="grid grid-cols-3" style={{ gap: '0.75rem' }}>
         {/* Basic Info */}
         <div className="form-group">
-          <label className="form-label">Customer *</label>
-          <input
-            type="text"
-            name="customer"
-            className="form-input"
-            value={formData.customer}
-            onChange={handleChange}
-            required
-          />
+          <label className="form-label">
+            Customer *
+            {isInternalAccount && (
+              <button
+                type="button"
+                onClick={() => setShowCetecCustomers(!showCetecCustomers)}
+                style={{
+                  marginLeft: '0.5rem',
+                  padding: '0.25rem 0.5rem',
+                  fontSize: '0.75rem',
+                  background: showCetecCustomers ? '#dc3545' : '#007bff',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                {showCetecCustomers ? 'Cancel' : 'Select from Cetec'}
+              </button>
+            )}
+          </label>
+          
+          {isInternalAccount && showCetecCustomers ? (
+            <select
+              name="customer"
+              className="form-select"
+              value={formData.customer}
+              onChange={(e) => {
+                handleChange(e)
+                setShowCetecCustomers(false)
+              }}
+              required
+            >
+              <option value="">Select Customer...</option>
+              {cetecCustomers.map((cust, idx) => (
+                <option key={idx} value={cust.name || cust.custname}>
+                  {cust.name || cust.custname || cust.customer}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              name="customer"
+              className="form-input"
+              value={formData.customer}
+              onChange={handleChange}
+              required
+              disabled={!isInternalAccount && initialData}
+            />
+          )}
+          
+          {isInternalAccount && !showCetecCustomers && (
+            <small style={{ fontSize: '0.75rem', color: '#6c757d', marginTop: '0.25rem', display: 'block' }}>
+              This is an Internal Account order. Click "Select from Cetec" to choose the actual customer.
+            </small>
+          )}
         </div>
 
         <div className="form-group">

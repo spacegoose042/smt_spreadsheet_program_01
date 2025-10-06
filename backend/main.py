@@ -1800,6 +1800,49 @@ def get_cetec_customer(
         )
 
 
+@app.get("/api/cetec/customers/list")
+def get_cetec_customers_list(
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Proxy endpoint to fetch list of all customers from Cetec API
+    """
+    try:
+        params = {
+            "preshared_token": CETEC_CONFIG["token"],
+            "rows": "5000"  # Get a large number to ensure we get all customers
+        }
+        
+        url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/customers/list"
+        
+        print(f"Proxying Cetec customers list request: {url}")
+        
+        response = requests.get(url, params=params, timeout=30)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        # Handle potential nested structure
+        if isinstance(data, dict):
+            if 'data' in data:
+                data = data['data']
+            elif 'customers' in data:
+                data = data['customers']
+            elif 'rows' in data:
+                data = data['rows']
+        
+        print(f"Fetched {len(data) if isinstance(data, list) else 'unknown'} customers")
+        
+        return data
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Cetec API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch from Cetec: {str(e)}"
+        )
+
+
 @app.get("/api/cetec/sync-logs", response_model=List[schemas.CetecSyncLogResponse])
 def get_cetec_sync_logs(
     days: int = 30,
