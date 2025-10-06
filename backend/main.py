@@ -1926,8 +1926,12 @@ def import_from_cetec(
             status_response.raise_for_status()
             statuses_data = status_response.json()
             
+            print(f"Ordlinestatus response type: {type(statuses_data)}")
+            print(f"Ordlinestatus response (first 500 chars): {str(statuses_data)[:500]}")
+            
             # Handle if response is not an array
             if isinstance(statuses_data, dict):
+                print(f"Ordlinestatus keys: {list(statuses_data.keys())}")
                 if 'data' in statuses_data:
                     statuses_data = statuses_data['data']
                 elif 'ordlinestatus' in statuses_data:
@@ -1938,9 +1942,15 @@ def import_from_cetec(
             if isinstance(statuses_data, list):
                 for status in statuses_data:
                     ordline_status_map[status.get('id')] = status.get('description', 'Unknown')
-                print(f"Fetched {len(ordline_status_map)} work locations")
+                print(f"✓ Fetched {len(ordline_status_map)} work locations")
+                if len(ordline_status_map) > 0:
+                    # Show sample mapping
+                    sample = list(ordline_status_map.items())[:3]
+                    print(f"  Sample locations: {sample}")
+            else:
+                print(f"ERROR: statuses_data is not a list after extraction: {type(statuses_data)}")
         except Exception as e:
-            print(f"Warning: Could not fetch work locations: {e}")
+            print(f"WARNING: Could not fetch work locations: {e}")
         
         # Process each order line
         for order_line in all_order_lines:
@@ -2004,6 +2014,10 @@ def import_from_cetec(
                 # Get current location (work_location field contains the status ID)
                 work_location_id = order_line.get('work_location')
                 current_location = ordline_status_map.get(work_location_id, 'Unknown') if work_location_id else 'Unknown'
+                
+                # Debug logging for first few records
+                if created_count + updated_count < 3:
+                    print(f"  WO {wo_number}: work_location_id={work_location_id}, mapped to '{current_location}'")
                 
                 # Prepare WO data
                 prcpart = order_line.get('prcpart', '')
