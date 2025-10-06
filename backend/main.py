@@ -2177,6 +2177,14 @@ def import_from_cetec(
                     
                     if has_changes:
                         existing_wo.last_cetec_sync = sync_time
+                        
+                        # Recalculate min_start_date if ship date or time changed
+                        if existing_wo.line_id:
+                            line = db.query(SMTLine).filter(SMTLine.id == existing_wo.line_id).first()
+                            existing_wo = sched.update_work_order_calculations(existing_wo, line)
+                        else:
+                            existing_wo = sched.update_work_order_calculations(existing_wo, None)
+                        
                         updated_count += 1
                 
                 else:
@@ -2194,8 +2202,13 @@ def import_from_cetec(
                         material_status=material_status,
                         last_cetec_sync=sync_time,
                         priority=Priority.FACTORY_DEFAULT,
+                        status=WorkOrderStatus.CLEAR_TO_BUILD,
                         is_complete=False
                     )
+                    
+                    # Calculate min_start_date, actual_ship_date, setup_time
+                    new_wo = sched.update_work_order_calculations(new_wo, None)
+                    
                     db.add(new_wo)
                     
                     # Log creation
