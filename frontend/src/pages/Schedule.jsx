@@ -654,19 +654,29 @@ export default function Schedule() {
                       <span 
                         className="badge" 
                         style={{ 
-                          background: wo.current_location.toUpperCase().includes('SMT PRODUCTION') ? '#28a745' : 
-                                     wo.current_location.toUpperCase().includes('KITTING') ? '#007bff' :
-                                     wo.current_location.toUpperCase().includes('DEPANEL') ? '#6610f2' :
-                                     wo.current_location.toUpperCase().includes('ASSEMBLY') ? '#6610f2' :
-                                     wo.current_location.toUpperCase().includes('INSPECTION') ? '#fd7e14' :
-                                     wo.current_location.toUpperCase().includes('SHIPPING') ? '#20c997' :
-                                     '#6c757d',
+                          background: wo.current_location.toUpperCase().includes('SMT PRODUCTION') ? '#28a745' :        // Green
+                                     wo.current_location.toUpperCase().includes('KIT SHORT SHELF') ? '#fd7e14' :        // Orange
+                                     wo.current_location.toUpperCase().includes('KITTING') ? '#007bff' :                // Blue
+                                     wo.current_location.toUpperCase().includes('WAREHOUSE') ? '#17a2b8' :              // Cyan
+                                     wo.current_location.toUpperCase().includes('DOC CONTROL') ? '#6c757d' :            // Gray
+                                     wo.current_location.toUpperCase().includes('UNRELEASED') ? '#6c757d' :             // Gray
+                                     wo.current_location.toUpperCase().includes('DEPANEL') ? '#6610f2' :                // Purple
+                                     wo.current_location.toUpperCase().includes('ASSEMBLY') ? '#e83e8c' :               // Pink
+                                     wo.current_location.toUpperCase().includes('COATING') ? '#6f42c1' :                // Indigo
+                                     wo.current_location.toUpperCase().includes('POTTING') ? '#6f42c1' :                // Indigo
+                                     wo.current_location.toUpperCase().includes('INSPECTION') ? '#ffc107' :             // Yellow
+                                     wo.current_location.toUpperCase().includes('QC') ? '#ffc107' :                     // Yellow
+                                     wo.current_location.toUpperCase().includes('SHIPPING') ? '#20c997' :               // Teal
+                                     wo.current_location.toUpperCase().includes('RECEIVING') ? '#17a2b8' :              // Cyan
+                                     wo.current_location.toUpperCase().includes('HOLD') ? '#dc3545' :                   // Red
+                                     wo.current_location.toUpperCase().includes('REWORK') ? '#dc3545' :                 // Red
+                                     '#6c757d',                                                                         // Default Gray
                           color: 'white',
                           fontSize: '0.7rem',
                           padding: '0.2rem 0.4rem'
                         }}
                       >
-                        {wo.current_location.replace('SMT PRODUCTION', 'SMT').replace('ASSEMBLY', 'ASSY').substring(0, 12)}
+                        {wo.current_location.replace('SMT PRODUCTION', 'SMT').replace('ASSEMBLY', 'ASSY').replace('COATING AND POTTING', 'COAT/POT').substring(0, 12)}
                       </span>
                     )}
                   </td>

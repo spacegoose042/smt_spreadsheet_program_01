@@ -2128,16 +2128,28 @@ export default function CetecImport() {
                             
                             if (location.toUpperCase().includes('SMT PRODUCTION')) {
                               locationColor = '#28a745' // Green
+                            } else if (location.toUpperCase().includes('KIT SHORT SHELF')) {
+                              locationColor = '#fd7e14' // Orange
                             } else if (location.toUpperCase().includes('KITTING') || location.toUpperCase().includes('PICK')) {
                               locationColor = '#007bff' // Blue
-                            } else if (location.toUpperCase().includes('DEPANEL') || location.toUpperCase().includes('ASSEMBLY')) {
+                            } else if (location.toUpperCase().includes('WAREHOUSE')) {
+                              locationColor = '#17a2b8' // Cyan
+                            } else if (location.toUpperCase().includes('DOC CONTROL') || location.toUpperCase().includes('UNRELEASED')) {
+                              locationColor = '#6c757d' // Gray
+                            } else if (location.toUpperCase().includes('DEPANEL')) {
                               locationColor = '#6610f2' // Purple
+                            } else if (location.toUpperCase().includes('ASSEMBLY')) {
+                              locationColor = '#e83e8c' // Pink
+                            } else if (location.toUpperCase().includes('COATING') || location.toUpperCase().includes('POTTING')) {
+                              locationColor = '#6f42c1' // Indigo
                             } else if (location.toUpperCase().includes('INSPECTION') || location.toUpperCase().includes('QC')) {
-                              locationColor = '#fd7e14' // Orange
+                              locationColor = '#ffc107' // Yellow
                             } else if (location.toUpperCase().includes('SHIPPING') || location.toUpperCase().includes('SHIP')) {
                               locationColor = '#20c997' // Teal
                             } else if (location.toUpperCase().includes('RECEIVING') || location.toUpperCase().includes('RECEIVE')) {
                               locationColor = '#17a2b8' // Cyan
+                            } else if (location.toUpperCase().includes('HOLD') || location.toUpperCase().includes('REWORK')) {
+                              locationColor = '#dc3545' // Red
                             } else if (location !== 'Unknown') {
                               locationColor = '#6c757d' // Default for known locations
                             }
