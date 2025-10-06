@@ -165,6 +165,9 @@ def update_work_order_calculations(wo: WorkOrder, line: Optional[SMTLine] = None
     """
     Update all calculated fields for a work order.
     This should be called whenever relevant fields change.
+    
+    NOTE: These calculations work for ANY work order status.
+    Status does NOT affect min_start_date, actual_ship_date, or setup_time calculations.
     """
     # Calculate actual ship date
     wo.actual_ship_date = calculate_actual_ship_date(wo.cetec_ship_date, wo.th_kit_status)
@@ -173,6 +176,7 @@ def update_work_order_calculations(wo: WorkOrder, line: Optional[SMTLine] = None
     wo.setup_time_hours = calculate_setup_time_hours(wo.trolley_count)
     
     # Calculate minimum start date (with Line 1 2x multiplier if applicable)
+    # This calculation works regardless of work order status
     line_hours = line.hours_per_day if line else 8.0
     line_name = line.name if line else None
     wo.min_start_date = calculate_min_start_date(

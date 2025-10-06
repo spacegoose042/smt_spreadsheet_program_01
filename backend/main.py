@@ -2202,11 +2202,12 @@ def import_from_cetec(
                         material_status=material_status,
                         last_cetec_sync=sync_time,
                         priority=Priority.FACTORY_DEFAULT,
-                        status=WorkOrderStatus.CLEAR_TO_BUILD,
+                        status=WorkOrderStatus.CLEAR_TO_BUILD,  # Database requires status (can be changed later)
                         is_complete=False
                     )
                     
                     # Calculate min_start_date, actual_ship_date, setup_time
+                    # Note: Calculations work for ANY status - status doesn't affect the calculation
                     new_wo = sched.update_work_order_calculations(new_wo, None)
                     
                     db.add(new_wo)
