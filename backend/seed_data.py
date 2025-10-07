@@ -359,6 +359,25 @@ def main():
         print(f"Error adding enum values: {e}")
         raise
     
+    # Add UNASSIGNED to workorderstatus enum if it doesn't exist
+    print("\n🔧 Adding UNASSIGNED to workorderstatus enum...")
+    try:
+        with engine.begin() as conn:
+            # Check if UNASSIGNED exists
+            result = conn.execute(text(
+                "SELECT EXISTS (SELECT 1 FROM pg_type t JOIN pg_enum e ON t.oid = e.enumtypid WHERE t.typname = 'workorderstatus' AND e.enumlabel = 'Unassigned')"
+            ))
+            exists = result.scalar()
+            
+            if not exists:
+                conn.execute(text("ALTER TYPE workorderstatus ADD VALUE 'Unassigned'"))
+                print("   ✓ Added 'Unassigned' to workorderstatus enum")
+            else:
+                print("   ✓ 'Unassigned' already exists in workorderstatus enum")
+    except Exception as e:
+        print(f"   ⚠️  Error adding UNASSIGNED to enum: {e}")
+        print("   Note: This may need manual intervention")
+    
     # Seed data
     db = SessionLocal()
     try:
