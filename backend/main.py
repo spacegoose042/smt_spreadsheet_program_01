@@ -2274,7 +2274,10 @@ def import_from_cetec(
                     created_count += 1
                 
             except Exception as e:
+                import traceback
                 print(f"Error processing ordline {ordline_id}: {str(e)}")
+                print(f"Full traceback:")
+                traceback.print_exc()
                 error_count += 1
                 continue
         
