@@ -180,7 +180,9 @@ export default function VisualScheduler() {
   }
 
   const lines = dashboard?.data?.lines || []
-  const unscheduledWOs = allWorkOrders?.data?.filter(wo => !wo.line_id) || []
+  const unscheduledWOs = allWorkOrders?.data?.filter(wo => 
+    !wo.line_id && wo.current_location === 'SMT PRODUCTION'
+  ) || []
 
   return (
     <div className="container">
