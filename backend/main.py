@@ -310,7 +310,11 @@ def get_work_orders(
     db: Session = Depends(get_db)
 ):
     """Get all work orders with optional filters"""
-    query = db.query(WorkOrder)
+    from sqlalchemy.orm import joinedload
+    query = db.query(WorkOrder).options(
+        joinedload(WorkOrder.status_obj),
+        joinedload(WorkOrder.line)
+    )
     
     if not include_complete:
         query = query.filter(WorkOrder.is_complete == False)
@@ -1931,6 +1935,13 @@ def import_from_cetec(
     updated_count = 0
     error_count = 0
     
+    # Look up "Unassigned" status ONCE at the start
+    unassigned_status = db.query(Status).filter(Status.name == "Unassigned").first()
+    if not unassigned_status:
+        raise HTTPException(status_code=500, detail="'Unassigned' status not found in database. Please check Status Management.")
+    
+    print(f"✓ Found 'Unassigned' status (id={unassigned_status.id})")
+    
     try:
         # Fetch all order lines from Cetec using date range strategy
         all_order_lines = []
@@ -2130,6 +2141,12 @@ def import_from_cetec(
                     # UPDATE existing WO
                     has_changes = False
                     
+                    # If existing WO has no status_id, set it to Unassigned
+                    if existing_wo.status_id is None:
+                        existing_wo.status_id = unassigned_status.id
+                        has_changes = True
+                        print(f"  WO {wo_number}: Setting null status_id to Unassigned (id={unassigned_status.id})")
+                    
                     # Track changes
                     if existing_wo.quantity != quantity:
                         changes.append(CetecSyncLog(
@@ -2200,10 +2217,7 @@ def import_from_cetec(
                         updated_count += 1
                 
                 else:
-                    # CREATE new WO
-                    # Look up "Unassigned" status from Status table (more flexible than enum)
-                    unassigned_status = db.query(Status).filter(Status.name == "Unassigned").first()
-                    
+                    # CREATE new WO with Unassigned status
                     new_wo = WorkOrder(
                         wo_number=wo_number,
                         assembly=prcpart,
@@ -2217,7 +2231,7 @@ def import_from_cetec(
                         material_status=material_status,
                         last_cetec_sync=sync_time,
                         priority=Priority.FACTORY_DEFAULT,
-                        status_id=unassigned_status.id if unassigned_status else None,  # Use new Status table FK
+                        status_id=unassigned_status.id,  # Use Status table (looked up at start)
                         status=None,  # Leave legacy enum as None
                         is_complete=False
                     )
