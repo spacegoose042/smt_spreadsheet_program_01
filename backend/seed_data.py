@@ -1,5 +1,6 @@
 """
 Script to seed the database with initial data (lines, sample work orders) - Fixed Status import
+PRODUCTION FIX: Added missing Status import to prevent startup crashes
 """
 from sqlalchemy.orm import Session
 from sqlalchemy import text
