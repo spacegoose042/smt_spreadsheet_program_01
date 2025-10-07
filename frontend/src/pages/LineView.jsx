@@ -68,6 +68,15 @@ export default function LineView() {
     refetchInterval: 10000, // Refresh every 10 seconds for operators
   })
 
+  // Filter work orders to only show SMT PRODUCTION for visual scheduling
+  const filteredWorkOrders = workOrders?.data?.filter(wo => {
+    // If viewing a specific line, show all work orders for that line
+    if (lineId) return true
+    
+    // For visual scheduling (no lineId), only show SMT PRODUCTION work orders
+    return wo.current_location === 'SMT PRODUCTION'
+  }) || []
+
   const completeMutation = useMutation({
     mutationFn: ({ id, data }) => completeWorkOrder(id, data),
     onSuccess: () => {
@@ -83,10 +92,10 @@ export default function LineView() {
   }
 
   // Group work orders by line if no specific line selected
-  const groupedByLine = !lineId && workOrders?.data && lines?.data
+  const groupedByLine = !lineId && filteredWorkOrders && lines?.data
     ? lines.data.map(line => ({
         line,
-        workOrders: workOrders.data
+        workOrders: filteredWorkOrders
           .filter(wo => wo.line_id === line.id)
           .sort((a, b) => (a.line_position || 999) - (b.line_position || 999))
       }))
@@ -96,8 +105,8 @@ export default function LineView() {
     ? lines.data.find(l => l.id === parseInt(lineId))
     : null
 
-  const filteredWOs = lineId && workOrders?.data
-    ? workOrders.data.sort((a, b) => (a.line_position || 999) - (b.line_position || 999))
+  const filteredWOs = lineId && filteredWorkOrders
+    ? filteredWorkOrders.sort((a, b) => (a.line_position || 999) - (b.line_position || 999))
     : []
 
   if (isLoading) {
