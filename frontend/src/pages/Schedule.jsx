@@ -56,7 +56,7 @@ export default function Schedule() {
   const [reportingIssueWO, setReportingIssueWO] = useState(null)
   const [filterLine, setFilterLine] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
-  const [filterLocation, setFilterLocation] = useState('')
+  const [filterLocation, setFilterLocation] = useState('SMT PRODUCTION')
   const [filterMaterialStatus, setFilterMaterialStatus] = useState('')
   const [searchText, setSearchText] = useState('')
   const [sortColumn, setSortColumn] = useState('line_position')
