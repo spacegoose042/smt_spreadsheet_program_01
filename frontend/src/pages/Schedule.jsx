@@ -78,12 +78,13 @@ export default function Schedule() {
   // Filter and sort work orders
   const filteredAndSortedWorkOrders = workOrders?.data
     .filter(wo => {
-      // Search by WO number or Assembly (assembly + revision)
+      // Search by WO number, Assembly (assembly + revision), or Customer
       if (searchText && searchText.trim()) {
         const q = searchText.toLowerCase()
         const woNum = (wo.wo_number || '').toLowerCase()
         const assy = `${wo.assembly || ''} ${wo.revision || ''}`.toLowerCase()
-        if (!woNum.includes(q) && !assy.includes(q)) return false
+        const customer = (wo.customer || '').toLowerCase()
+        if (!woNum.includes(q) && !assy.includes(q) && !customer.includes(q)) return false
       }
       if (filterLine === 'unscheduled') {
         if (wo.line_id) return false
@@ -442,7 +443,7 @@ export default function Schedule() {
           <div style={{ flex: 2, minWidth: '240px' }}>
             <input
               className="form-input"
-              placeholder="Search WO# or Assembly"
+              placeholder="Search WO#, Assembly, or Customer"
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
             />
