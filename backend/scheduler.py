@@ -98,6 +98,11 @@ def calculate_actual_ship_date(cetec_ship_date: date, th_kit_status: THKitStatus
     Calculate the actual ship date based on TH KIT status.
     If SMT ONLY, subtract 7 days to account for no dependent through-hole work.
     """
+    # Handle None ship date
+    if cetec_ship_date is None:
+        from datetime import date as date_class
+        cetec_ship_date = date_class.today()
+    
     if th_kit_status == THKitStatus.SMT_ONLY:
         # Subtract 7 calendar days
         return cetec_ship_date - timedelta(days=7)
