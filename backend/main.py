@@ -2117,10 +2117,10 @@ def import_from_cetec(
                     if avg_secs > 0 and repetitions > 0 and balance_due > 0:
                         time_minutes = round((avg_secs * repetitions * balance_due) / 60)
                 
-                # Skip if no time calculated
+                # Import ALL work orders, even without SMT time calculations
+                # Time will be 0 for non-SMT work orders, which is fine
                 if time_minutes == 0:
-                    print(f"  ⚠️  WO {wo_number}: Skipping - no time calculated (avg_secs={avg_secs}, reps={repetitions}, qty={balance_due})")
-                    continue
+                    print(f"  ℹ️  WO {wo_number}: No SMT time calculated (avg_secs={avg_secs}, reps={repetitions}, qty={balance_due}) - importing anyway")
                 
                 # Determine material status
                 short_allocation = order_line.get('short_per_allocation', False)
