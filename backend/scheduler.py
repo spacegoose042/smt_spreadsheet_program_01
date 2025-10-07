@@ -148,8 +148,12 @@ def calculate_min_start_date(
     # Line 1 (1-EURO 264) takes twice as long
     time_multiplier = 2.0 if line_name == "1-EURO 264" else 1.0
     
+    # Handle None values safely
+    safe_time_minutes = time_minutes or 0
+    safe_setup_hours = setup_time_hours or 0
+    
     # Convert everything to minutes (with multiplier)
-    total_minutes = (time_minutes + (setup_time_hours * 60)) * time_multiplier
+    total_minutes = (safe_time_minutes + (safe_setup_hours * 60)) * time_multiplier
     minutes_per_day = line_hours_per_day * 60
     
     # Calculate number of business days needed
