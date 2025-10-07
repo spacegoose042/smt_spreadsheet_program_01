@@ -58,6 +58,7 @@ export default function Schedule() {
   const [filterStatus, setFilterStatus] = useState('')
   const [filterLocation, setFilterLocation] = useState('')
   const [filterMaterialStatus, setFilterMaterialStatus] = useState('')
+  const [searchText, setSearchText] = useState('')
   const [sortColumn, setSortColumn] = useState('line_position')
   const [sortDirection, setSortDirection] = useState('asc')
   const [draggedWO, setDraggedWO] = useState(null)
@@ -77,6 +78,13 @@ export default function Schedule() {
   // Filter and sort work orders
   const filteredAndSortedWorkOrders = workOrders?.data
     .filter(wo => {
+      // Search by WO number or Assembly (assembly + revision)
+      if (searchText && searchText.trim()) {
+        const q = searchText.toLowerCase()
+        const woNum = (wo.wo_number || '').toLowerCase()
+        const assy = `${wo.assembly || ''} ${wo.revision || ''}`.toLowerCase()
+        if (!woNum.includes(q) && !assy.includes(q)) return false
+      }
       if (filterLine === 'unscheduled') {
         if (wo.line_id) return false
       }
@@ -111,6 +119,10 @@ export default function Schedule() {
           aVal = a.wo_number || ''
           bVal = b.wo_number || ''
           break
+        case 'line_name':
+          aVal = (a.line && a.line.name) ? a.line.name : ''
+          bVal = (b.line && b.line.name) ? b.line.name : ''
+          break
         case 'quantity':
           aVal = a.quantity || 0
           bVal = b.quantity || 0
@@ -122,6 +134,10 @@ export default function Schedule() {
         case 'material_status':
           aVal = a.material_status || ''
           bVal = b.material_status || ''
+          break
+        case 'th_kit_status':
+          aVal = a.th_kit_status || ''
+          bVal = b.th_kit_status || ''
           break
         case 'priority':
           aVal = a.priority || ''
@@ -138,6 +154,10 @@ export default function Schedule() {
         case 'time_minutes':
           aVal = a.time_minutes || 0
           bVal = b.time_minutes || 0
+          break
+        case 'trolley_count':
+          aVal = a.trolley_count || 0
+          bVal = b.trolley_count || 0
           break
         case 'line_position':
         default:
@@ -419,6 +439,14 @@ export default function Schedule() {
       {/* Filters and Actions */}
       <div className="card">
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ flex: 2, minWidth: '240px' }}>
+            <input
+              className="form-input"
+              placeholder="Search WO# or Assembly"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+            />
+          </div>
           <div style={{ flex: 1, minWidth: '200px' }}>
             <select 
               className="form-select"
@@ -572,7 +600,13 @@ export default function Schedule() {
                 >
                   Pri {sortColumn === 'priority' && (sortDirection === 'asc' ? '↑' : '↓')}
                 </th>
-                <th style={{ padding: '0.5rem', maxWidth: '80px' }} title="SMT Line">Line</th>
+                <th 
+                  onClick={() => handleSort('line_name')}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', maxWidth: '80px' }}
+                  title="SMT Line"
+                >
+                  Line {sortColumn === 'line_name' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
                 <th 
                   onClick={() => handleSort('min_start_date')}
                   style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', whiteSpace: 'nowrap' }}
@@ -594,17 +628,25 @@ export default function Schedule() {
                 >
                   Hrs {sortColumn === 'time_minutes' && (sortDirection === 'asc' ? '↑' : '↓')}
                 </th>
-                <th style={{ padding: '0.5rem' }} title="Trolleys">Trl</th>
+                <th 
+                  onClick={() => handleSort('trolley_count')}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem' }}
+                  title="Trolleys"
+                >
+                  Trl {sortColumn === 'trolley_count' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  onClick={() => handleSort('th_kit_status')}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', maxWidth: '100px' }}
+                  title="TH Work Order Status"
+                >
+                  TH Stat {sortColumn === 'th_kit_status' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
                 <th style={{ padding: '0.5rem', whiteSpace: 'nowrap' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredWorkOrders
-                .sort((a, b) => {
-                  // Sort by line, then position
-                  if (a.line_id !== b.line_id) return (a.line_id || 999) - (b.line_id || 999)
-                  return (a.line_position || 999) - (b.line_position || 999)
-                })
                 .map((wo) => (
                 <tr 
                   key={wo.id} 
@@ -692,6 +734,9 @@ export default function Schedule() {
                   </td>
                   <td style={{ padding: '0.5rem', whiteSpace: 'nowrap', textAlign: 'right' }}>{(wo.time_minutes / 60).toFixed(1)}</td>
                   <td style={{ padding: '0.5rem', textAlign: 'center' }}>{wo.trolley_count}</td>
+                  <td style={{ padding: '0.5rem', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={wo.th_kit_status || ''}>
+                    {wo.th_kit_status || '-'}
+                  </td>
                   <td style={{ padding: '0.5rem' }}>
                     <div style={{ display: 'flex', gap: '0.25rem', justifyContent: 'center' }}>
                       <button 
