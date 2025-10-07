@@ -2104,7 +2104,7 @@ def import_from_cetec(
                                 break
                         break
                 
-                # Calculate time (rounded to nearest minute)
+                # Calculate time (rounded to nearest minute) - Fixed None handling
                 time_minutes = 0
                 if smt_location and smt_operation:
                     # Safely convert None values to numbers

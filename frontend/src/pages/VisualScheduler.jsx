@@ -181,7 +181,7 @@ export default function VisualScheduler() {
 
   const lines = dashboard?.data?.lines || []
   const unscheduledWOs = allWorkOrders?.data?.filter(wo => 
-    !wo.line_id && wo.current_location === 'SMT PRODUCTION'
+    !wo.line_id && wo.current_location === 'SMT PRODUCTION' // Only SMT PRODUCTION for scheduling
   ) || []
 
   return (
