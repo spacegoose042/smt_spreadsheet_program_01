@@ -19,8 +19,8 @@ function PriorityBadge({ priority }) {
 }
 
 function StatusBadge({ status, statusName, statusColor }) {
-  // Use new status system if available, fallback to legacy
-  const name = statusName || (status ? status : 'Unknown')
+  // Use new status system if available, fallback to legacy, default to Unassigned
+  const name = statusName || (status ? status : 'Unassigned')
   const color = statusColor
   
   // Legacy fallback colors if no color provided
@@ -58,6 +58,7 @@ export default function Schedule() {
   const [filterStatus, setFilterStatus] = useState('')
   const [filterLocation, setFilterLocation] = useState('')
   const [filterMaterialStatus, setFilterMaterialStatus] = useState('')
+  const [searchText, setSearchText] = useState('')
   const [sortColumn, setSortColumn] = useState('line_position')
   const [sortDirection, setSortDirection] = useState('asc')
   const [draggedWO, setDraggedWO] = useState(null)
@@ -77,6 +78,14 @@ export default function Schedule() {
   // Filter and sort work orders
   const filteredAndSortedWorkOrders = workOrders?.data
     .filter(wo => {
+      // Search by WO number, Assembly (assembly + revision), or Customer
+      if (searchText && searchText.trim()) {
+        const q = searchText.toLowerCase()
+        const woNum = (wo.wo_number || '').toLowerCase()
+        const assy = `${wo.assembly || ''} ${wo.revision || ''}`.toLowerCase()
+        const customer = (wo.customer || '').toLowerCase()
+        if (!woNum.includes(q) && !assy.includes(q) && !customer.includes(q)) return false
+      }
       if (filterLine === 'unscheduled') {
         if (wo.line_id) return false
       }
@@ -111,6 +120,10 @@ export default function Schedule() {
           aVal = a.wo_number || ''
           bVal = b.wo_number || ''
           break
+        case 'line_name':
+          aVal = (a.line && a.line.name) ? a.line.name : ''
+          bVal = (b.line && b.line.name) ? b.line.name : ''
+          break
         case 'quantity':
           aVal = a.quantity || 0
           bVal = b.quantity || 0
@@ -122,6 +135,10 @@ export default function Schedule() {
         case 'material_status':
           aVal = a.material_status || ''
           bVal = b.material_status || ''
+          break
+        case 'th_kit_status':
+          aVal = a.th_kit_status || ''
+          bVal = b.th_kit_status || ''
           break
         case 'priority':
           aVal = a.priority || ''
@@ -135,9 +152,17 @@ export default function Schedule() {
           aVal = a.cetec_ship_date || ''
           bVal = b.cetec_ship_date || ''
           break
+        case 'min_start_date':
+          aVal = a.min_start_date ? new Date(a.min_start_date).getTime() : 0
+          bVal = b.min_start_date ? new Date(b.min_start_date).getTime() : 0
+          break
         case 'time_minutes':
           aVal = a.time_minutes || 0
           bVal = b.time_minutes || 0
+          break
+        case 'trolley_count':
+          aVal = a.trolley_count || 0
+          bVal = b.trolley_count || 0
           break
         case 'line_position':
         default:
@@ -419,6 +444,14 @@ export default function Schedule() {
       {/* Filters and Actions */}
       <div className="card">
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ flex: 2, minWidth: '240px' }}>
+            <input
+              className="form-input"
+              placeholder="Search WO#, Assembly, or Customer"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+            />
+          </div>
           <div style={{ flex: 1, minWidth: '200px' }}>
             <select 
               className="form-select"
@@ -572,7 +605,20 @@ export default function Schedule() {
                 >
                   Pri {sortColumn === 'priority' && (sortDirection === 'asc' ? '↑' : '↓')}
                 </th>
-                <th style={{ padding: '0.5rem', maxWidth: '80px' }} title="SMT Line">Line</th>
+                <th 
+                  onClick={() => handleSort('line_name')}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', maxWidth: '80px' }}
+                  title="SMT Line"
+                >
+                  Line {sortColumn === 'line_name' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  onClick={() => handleSort('min_start_date')}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', whiteSpace: 'nowrap' }}
+                  title="Minimum Start Date (calculated)"
+                >
+                  Min Start {sortColumn === 'min_start_date' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
                 <th 
                   onClick={() => handleSort('cetec_ship_date')}
                   style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', whiteSpace: 'nowrap' }}
@@ -587,17 +633,25 @@ export default function Schedule() {
                 >
                   Hrs {sortColumn === 'time_minutes' && (sortDirection === 'asc' ? '↑' : '↓')}
                 </th>
-                <th style={{ padding: '0.5rem' }} title="Trolleys">Trl</th>
+                <th 
+                  onClick={() => handleSort('trolley_count')}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem' }}
+                  title="Trolleys"
+                >
+                  Trl {sortColumn === 'trolley_count' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  onClick={() => handleSort('th_kit_status')}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', maxWidth: '100px' }}
+                  title="TH Work Order Status"
+                >
+                  TH Stat {sortColumn === 'th_kit_status' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
                 <th style={{ padding: '0.5rem', whiteSpace: 'nowrap' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredWorkOrders
-                .sort((a, b) => {
-                  // Sort by line, then position
-                  if (a.line_id !== b.line_id) return (a.line_id || 999) - (b.line_id || 999)
-                  return (a.line_position || 999) - (b.line_position || 999)
-                })
                 .map((wo) => (
                 <tr 
                   key={wo.id} 
@@ -614,14 +668,33 @@ export default function Schedule() {
                   }}
                 >
                   <td style={{ padding: '0.5rem', textAlign: 'center' }}>{wo.line_position || '-'}</td>
-                  <td style={{ padding: '0.5rem', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={wo.customer}>
+                  <td style={{ 
+                    padding: '0.5rem', 
+                    maxWidth: '120px', 
+                    overflow: 'hidden', 
+                    textOverflow: 'ellipsis', 
+                    whiteSpace: 'nowrap',
+                    backgroundColor: wo.is_new_rev_assembly ? '#e6e6ff' : 'transparent'
+                  }} title={wo.customer}>
                     {wo.customer}
                   </td>
-                  <td style={{ padding: '0.5rem', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${wo.assembly} ${wo.revision}`}>
+                  <td style={{ 
+                    padding: '0.5rem', 
+                    maxWidth: '140px', 
+                    overflow: 'hidden', 
+                    textOverflow: 'ellipsis', 
+                    whiteSpace: 'nowrap',
+                    backgroundColor: wo.is_new_rev_assembly ? '#e6e6ff' : 'transparent'
+                  }} title={`${wo.assembly} ${wo.revision}`}>
                     {wo.assembly} {wo.revision}
                     {wo.is_new_rev_assembly && <span style={{ color: 'var(--danger)', marginLeft: '0.25rem' }}>*</span>}
                   </td>
-                  <td style={{ padding: '0.5rem' }}><code style={{ fontSize: '0.75rem' }}>{wo.wo_number}</code></td>
+                  <td style={{ 
+                    padding: '0.5rem',
+                    backgroundColor: wo.is_new_rev_assembly ? '#e6e6ff' : 'transparent'
+                  }}>
+                    <code style={{ fontSize: '0.75rem' }}>{wo.wo_number}</code>
+                  </td>
                   <td style={{ padding: '0.5rem', textAlign: 'center' }}>{wo.quantity}</td>
                   <td style={{ padding: '0.5rem' }}><StatusBadge status={wo.status} statusName={wo.status_name} statusColor={wo.status_color} /></td>
                   <td style={{ padding: '0.5rem', textAlign: 'center' }} title={wo.material_status}>
@@ -647,19 +720,29 @@ export default function Schedule() {
                       <span 
                         className="badge" 
                         style={{ 
-                          background: wo.current_location.toUpperCase().includes('SMT PRODUCTION') ? '#28a745' : 
-                                     wo.current_location.toUpperCase().includes('KITTING') ? '#007bff' :
-                                     wo.current_location.toUpperCase().includes('DEPANEL') ? '#6610f2' :
-                                     wo.current_location.toUpperCase().includes('ASSEMBLY') ? '#6610f2' :
-                                     wo.current_location.toUpperCase().includes('INSPECTION') ? '#fd7e14' :
-                                     wo.current_location.toUpperCase().includes('SHIPPING') ? '#20c997' :
-                                     '#6c757d',
+                          background: wo.current_location.toUpperCase().includes('SMT PRODUCTION') ? '#28a745' :        // Green
+                                     wo.current_location.toUpperCase().includes('KIT SHORT SHELF') ? '#fd7e14' :        // Orange
+                                     wo.current_location.toUpperCase().includes('KITTING') ? '#007bff' :                // Blue
+                                     wo.current_location.toUpperCase().includes('WAREHOUSE') ? '#17a2b8' :              // Cyan
+                                     wo.current_location.toUpperCase().includes('DOC CONTROL') ? '#6c757d' :            // Gray
+                                     wo.current_location.toUpperCase().includes('UNRELEASED') ? '#6c757d' :             // Gray
+                                     wo.current_location.toUpperCase().includes('DEPANEL') ? '#6610f2' :                // Purple
+                                     wo.current_location.toUpperCase().includes('ASSEMBLY') ? '#e83e8c' :               // Pink
+                                     wo.current_location.toUpperCase().includes('COATING') ? '#6f42c1' :                // Indigo
+                                     wo.current_location.toUpperCase().includes('POTTING') ? '#6f42c1' :                // Indigo
+                                     wo.current_location.toUpperCase().includes('INSPECTION') ? '#ffc107' :             // Yellow
+                                     wo.current_location.toUpperCase().includes('QC') ? '#ffc107' :                     // Yellow
+                                     wo.current_location.toUpperCase().includes('SHIPPING') ? '#20c997' :               // Teal
+                                     wo.current_location.toUpperCase().includes('RECEIVING') ? '#17a2b8' :              // Cyan
+                                     wo.current_location.toUpperCase().includes('HOLD') ? '#dc3545' :                   // Red
+                                     wo.current_location.toUpperCase().includes('REWORK') ? '#dc3545' :                 // Red
+                                     '#6c757d',                                                                         // Default Gray
                           color: 'white',
                           fontSize: '0.7rem',
                           padding: '0.2rem 0.4rem'
                         }}
                       >
-                        {wo.current_location.replace('SMT PRODUCTION', 'SMT').replace('ASSEMBLY', 'ASSY').substring(0, 12)}
+                        {wo.current_location.replace('SMT PRODUCTION', 'SMT').replace('ASSEMBLY', 'ASSY').replace('COATING AND POTTING', 'COAT/POT').substring(0, 12)}
                       </span>
                     )}
                   </td>
@@ -668,10 +751,16 @@ export default function Schedule() {
                     {wo.line?.name || <em style={{ color: 'var(--warning)', fontWeight: 600, fontSize: '0.75rem' }}>⚠️</em>}
                   </td>
                   <td style={{ padding: '0.5rem', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
+                    {wo.min_start_date ? format(new Date(wo.min_start_date), 'MM/dd/yy') : '-'}
+                  </td>
+                  <td style={{ padding: '0.5rem', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
                     {wo.cetec_ship_date ? format(new Date(wo.cetec_ship_date), 'MM/dd/yy') : '-'}
                   </td>
                   <td style={{ padding: '0.5rem', whiteSpace: 'nowrap', textAlign: 'right' }}>{(wo.time_minutes / 60).toFixed(1)}</td>
                   <td style={{ padding: '0.5rem', textAlign: 'center' }}>{wo.trolley_count}</td>
+                  <td style={{ padding: '0.5rem', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={wo.th_kit_status || ''}>
+                    {wo.th_kit_status || '-'}
+                  </td>
                   <td style={{ padding: '0.5rem' }}>
                     <div style={{ display: 'flex', gap: '0.25rem', justifyContent: 'center' }}>
                       <button 

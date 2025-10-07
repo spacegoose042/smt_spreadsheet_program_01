@@ -14,6 +14,7 @@ class UserRole(str, enum.Enum):
 
 # Legacy enum - keeping for migration compatibility
 class WorkOrderStatus(str, enum.Enum):
+    UNASSIGNED = "Unassigned"
     CLEAR_TO_BUILD = "Clear to Build"
     CLEAR_TO_BUILD_NEW = "Clear to Build *"
     RUNNING = "Running"

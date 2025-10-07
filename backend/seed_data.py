@@ -196,6 +196,39 @@ def seed_issue_types(db: Session):
     print("✓ Seeded default issue types")
 
 
+def seed_statuses(db: Session):
+    """Create default work order statuses (only if none exist)"""
+    # Check if statuses already exist
+    from models import Status
+    existing = db.query(Status).count()
+    if existing > 0:
+        print(f"✓ Statuses already exist ({existing} statuses) - skipping seed")
+        return
+    
+    default_statuses = [
+        {"name": "Unassigned", "color": "#6c757d", "display_order": 1, "is_system": True},
+        {"name": "Clear to Build", "color": "#28a745", "display_order": 2, "is_system": True},
+        {"name": "Clear to Build *", "color": "#17a2b8", "display_order": 3, "is_system": True},
+        {"name": "Running", "color": "#007bff", "display_order": 4, "is_system": True},
+        {"name": "2nd Side Running", "color": "#0056b3", "display_order": 5, "is_system": True},
+        {"name": "On Hold", "color": "#ffc107", "display_order": 6, "is_system": True},
+        {"name": "Program/Stencil", "color": "#fd7e14", "display_order": 7, "is_system": True},
+    ]
+    
+    for status_data in default_statuses:
+        status = Status(
+            name=status_data["name"],
+            color=status_data["color"],
+            display_order=status_data["display_order"],
+            is_active=True,
+            is_system=status_data["is_system"]
+        )
+        db.add(status)
+    
+    db.commit()
+    print("✓ Seeded default statuses")
+
+
 def seed_resolution_types(db: Session):
     """Create default resolution types (only if none exist)"""
     # Check if resolution types already exist
@@ -354,8 +387,41 @@ def main():
         seed_lines(db)
         seed_users(db)
         seed_shifts_and_config(db)
+        seed_statuses(db)
         seed_issue_types(db)
         seed_resolution_types(db)
+        
+        # Fix existing work orders with null status
+        print("\n🔧 Checking for work orders with null status...")
+        try:
+            from models import WorkOrder
+            # Find "Unassigned" status in Status table
+            unassigned_status = db.query(Status).filter(Status.name == "Unassigned").first()
+            
+            if unassigned_status:
+                # Count WOs with both status and status_id as null
+                null_status_count = db.query(WorkOrder).filter(
+                    WorkOrder.status_id.is_(None)
+                ).count()
+                
+                if null_status_count > 0:
+                    print(f"   Found {null_status_count} work orders with null status")
+                    print(f"   Setting them to UNASSIGNED (id={unassigned_status.id})...")
+                    db.query(WorkOrder).filter(
+                        WorkOrder.status_id.is_(None)
+                    ).update(
+                        {WorkOrder.status_id: unassigned_status.id},
+                        synchronize_session=False
+                    )
+                    db.commit()
+                    print(f"   ✓ Updated {null_status_count} work orders to UNASSIGNED")
+                else:
+                    print("   ✓ All work orders have a status assigned")
+            else:
+                print("   ⚠️  'Unassigned' status not found in Status table")
+        except Exception as e:
+            print(f"   Note: Status check: {e}")
+        
         print("\n✅ Database seeded successfully!")
         print("\nDefault users:")
         print("  admin / admin123 (Admin - full system access)")

@@ -304,13 +304,17 @@ def update_line(
 @app.get("/api/work-orders", response_model=List[schemas.WorkOrderResponse])
 def get_work_orders(
     line_id: Optional[int] = None,
-    status: Optional[WorkOrderStatus] = None,
+    status: Optional[str] = None,  # Changed from enum to string (status name)
     priority: Optional[Priority] = None,
     include_complete: bool = False,
     db: Session = Depends(get_db)
 ):
     """Get all work orders with optional filters"""
-    query = db.query(WorkOrder)
+    from sqlalchemy.orm import joinedload
+    query = db.query(WorkOrder).options(
+        joinedload(WorkOrder.status_obj),
+        joinedload(WorkOrder.line)
+    )
     
     if not include_complete:
         query = query.filter(WorkOrder.is_complete == False)
@@ -319,7 +323,10 @@ def get_work_orders(
         query = query.filter(WorkOrder.line_id == line_id)
     
     if status:
-        query = query.filter(WorkOrder.status == status)
+        # Filter by status name (using new Status table)
+        status_obj = db.query(Status).filter(Status.name == status).first()
+        if status_obj:
+            query = query.filter(WorkOrder.status_id == status_obj.id)
     
     if priority:
         query = query.filter(WorkOrder.priority == priority)
@@ -578,17 +585,21 @@ def get_dashboard(db: Session = Depends(get_db)):
     line_summaries = []
     
     for line in lines:
-        work_orders = db.query(WorkOrder).filter(
+        from sqlalchemy.orm import joinedload
+        work_orders = db.query(WorkOrder).options(
+            joinedload(WorkOrder.status_obj)
+        ).filter(
             WorkOrder.line_id == line.id,
             WorkOrder.is_complete == False
         ).order_by(WorkOrder.line_position).all()
         
-        line_trolleys = sum(wo.trolley_count for wo in work_orders if wo.status in [
-            WorkOrderStatus.RUNNING,
-            WorkOrderStatus.SECOND_SIDE_RUNNING,
-            WorkOrderStatus.CLEAR_TO_BUILD,
-            WorkOrderStatus.CLEAR_TO_BUILD_NEW
-        ])
+        # Count trolleys for active statuses (using status_obj relationship)
+        line_trolleys = sum(
+            wo.trolley_count for wo in work_orders 
+            if wo.status_obj and wo.status_obj.name in [
+                'Running', '2nd Side Running', 'Clear to Build', 'Clear to Build *'
+            ]
+        )
         
         # Calculate job dates AND times for this line
         job_dates = sched.calculate_job_dates(db, line.id, line.hours_per_day)
@@ -1931,6 +1942,13 @@ def import_from_cetec(
     updated_count = 0
     error_count = 0
     
+    # Look up "Unassigned" status ONCE at the start
+    unassigned_status = db.query(Status).filter(Status.name == "Unassigned").first()
+    if not unassigned_status:
+        raise HTTPException(status_code=500, detail="'Unassigned' status not found in database. Please check Status Management.")
+    
+    print(f"✓ Found 'Unassigned' status (id={unassigned_status.id})")
+    
     try:
         # Fetch all order lines from Cetec using date range strategy
         all_order_lines = []
@@ -2086,13 +2104,13 @@ def import_from_cetec(
                                 break
                         break
                 
-                # Calculate time
+                # Calculate time (rounded to nearest minute)
                 time_minutes = 0
                 if smt_location and smt_operation:
                     avg_secs = smt_operation.get('avg_secs', 0)
                     repetitions = smt_operation.get('repetitions', 1)
                     balance_due = order_line.get('balancedue') or order_line.get('release_qty') or order_line.get('orig_order_qty') or 0
-                    time_minutes = (avg_secs * repetitions * balance_due) / 60
+                    time_minutes = round((avg_secs * repetitions * balance_due) / 60)
                 
                 # Skip if no time calculated
                 if time_minutes == 0:
@@ -2129,6 +2147,12 @@ def import_from_cetec(
                 if existing_wo:
                     # UPDATE existing WO
                     has_changes = False
+                    
+                    # If existing WO has no status_id, set it to Unassigned
+                    if existing_wo.status_id is None:
+                        existing_wo.status_id = unassigned_status.id
+                        has_changes = True
+                        print(f"  WO {wo_number}: Setting null status_id to Unassigned (id={unassigned_status.id})")
                     
                     # Track changes
                     if existing_wo.quantity != quantity:
@@ -2189,10 +2213,18 @@ def import_from_cetec(
                     
                     if has_changes:
                         existing_wo.last_cetec_sync = sync_time
+                        
+                        # Recalculate min_start_date if ship date or time changed
+                        if existing_wo.line_id:
+                            line = db.query(SMTLine).filter(SMTLine.id == existing_wo.line_id).first()
+                            existing_wo = sched.update_work_order_calculations(existing_wo, line)
+                        else:
+                            existing_wo = sched.update_work_order_calculations(existing_wo, None)
+                        
                         updated_count += 1
                 
                 else:
-                    # CREATE new WO
+                    # CREATE new WO with Unassigned status
                     new_wo = WorkOrder(
                         wo_number=wo_number,
                         assembly=prcpart,
@@ -2206,9 +2238,15 @@ def import_from_cetec(
                         material_status=material_status,
                         last_cetec_sync=sync_time,
                         priority=Priority.FACTORY_DEFAULT,
-                        status=WorkOrderStatus.CLEAR_TO_BUILD,  # Default status for imported WOs
+                        status_id=unassigned_status.id,  # Use Status table (looked up at start)
+                        status=None,  # Leave legacy enum as None
                         is_complete=False
                     )
+                    
+                    # Calculate min_start_date, actual_ship_date, setup_time
+                    # Note: Calculations work for ANY status - status doesn't affect the calculation
+                    new_wo = sched.update_work_order_calculations(new_wo, None)
+                    
                     db.add(new_wo)
                     
                     # Log creation
