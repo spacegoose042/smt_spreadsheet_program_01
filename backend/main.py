@@ -2130,12 +2130,6 @@ def import_from_cetec(
                     # UPDATE existing WO
                     has_changes = False
                     
-                    # If existing WO has no status, set it to UNASSIGNED
-                    if existing_wo.status is None:
-                        existing_wo.status = WorkOrderStatus.UNASSIGNED
-                        has_changes = True
-                        print(f"  WO {wo_number}: Setting null status to UNASSIGNED")
-                    
                     # Track changes
                     if existing_wo.quantity != quantity:
                         changes.append(CetecSyncLog(
@@ -2207,6 +2201,9 @@ def import_from_cetec(
                 
                 else:
                     # CREATE new WO
+                    # Look up "Unassigned" status from Status table (more flexible than enum)
+                    unassigned_status = db.query(Status).filter(Status.name == "Unassigned").first()
+                    
                     new_wo = WorkOrder(
                         wo_number=wo_number,
                         assembly=prcpart,
@@ -2220,7 +2217,8 @@ def import_from_cetec(
                         material_status=material_status,
                         last_cetec_sync=sync_time,
                         priority=Priority.FACTORY_DEFAULT,
-                        status=WorkOrderStatus.UNASSIGNED,  # New WOs from Cetec start as Unassigned
+                        status_id=unassigned_status.id if unassigned_status else None,  # Use new Status table FK
+                        status=None,  # Leave legacy enum as None
                         is_complete=False
                     )
                     

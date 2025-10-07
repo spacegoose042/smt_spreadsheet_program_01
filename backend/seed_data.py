@@ -359,25 +359,6 @@ def main():
         print(f"Error adding enum values: {e}")
         raise
     
-    # Add UNASSIGNED to workorderstatus enum if it doesn't exist
-    print("\n🔧 Adding UNASSIGNED to workorderstatus enum...")
-    try:
-        with engine.begin() as conn:
-            # Check if UNASSIGNED exists
-            result = conn.execute(text(
-                "SELECT EXISTS (SELECT 1 FROM pg_type t JOIN pg_enum e ON t.oid = e.enumtypid WHERE t.typname = 'workorderstatus' AND e.enumlabel = 'Unassigned')"
-            ))
-            exists = result.scalar()
-            
-            if not exists:
-                conn.execute(text("ALTER TYPE workorderstatus ADD VALUE 'Unassigned'"))
-                print("   ✓ Added 'Unassigned' to workorderstatus enum")
-            else:
-                print("   ✓ 'Unassigned' already exists in workorderstatus enum")
-    except Exception as e:
-        print(f"   ⚠️  Error adding UNASSIGNED to enum: {e}")
-        print("   Note: This may need manual intervention")
-    
     # Seed data
     db = SessionLocal()
     try:
@@ -391,20 +372,31 @@ def main():
         # Fix existing work orders with null status
         print("\n🔧 Checking for work orders with null status...")
         try:
-            from models import WorkOrder, WorkOrderStatus
-            null_status_count = db.query(WorkOrder).filter(WorkOrder.status.is_(None)).count()
+            from models import WorkOrder
+            # Find "Unassigned" status in Status table
+            unassigned_status = db.query(Status).filter(Status.name == "Unassigned").first()
             
-            if null_status_count > 0:
-                print(f"   Found {null_status_count} work orders with null status")
-                print(f"   Setting them to UNASSIGNED...")
-                db.query(WorkOrder).filter(WorkOrder.status.is_(None)).update(
-                    {WorkOrder.status: WorkOrderStatus.UNASSIGNED},
-                    synchronize_session=False
-                )
-                db.commit()
-                print(f"   ✓ Updated {null_status_count} work orders to UNASSIGNED")
+            if unassigned_status:
+                # Count WOs with both status and status_id as null
+                null_status_count = db.query(WorkOrder).filter(
+                    WorkOrder.status_id.is_(None)
+                ).count()
+                
+                if null_status_count > 0:
+                    print(f"   Found {null_status_count} work orders with null status")
+                    print(f"   Setting them to UNASSIGNED (id={unassigned_status.id})...")
+                    db.query(WorkOrder).filter(
+                        WorkOrder.status_id.is_(None)
+                    ).update(
+                        {WorkOrder.status_id: unassigned_status.id},
+                        synchronize_session=False
+                    )
+                    db.commit()
+                    print(f"   ✓ Updated {null_status_count} work orders to UNASSIGNED")
+                else:
+                    print("   ✓ All work orders have a status assigned")
             else:
-                print("   ✓ All work orders have a status assigned")
+                print("   ⚠️  'Unassigned' status not found in Status table")
         except Exception as e:
             print(f"   Note: Status check: {e}")
         
