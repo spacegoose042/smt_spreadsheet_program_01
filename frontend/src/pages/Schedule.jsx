@@ -152,6 +152,10 @@ export default function Schedule() {
           aVal = a.cetec_ship_date || ''
           bVal = b.cetec_ship_date || ''
           break
+        case 'min_start_date':
+          aVal = a.min_start_date ? new Date(a.min_start_date).getTime() : 0
+          bVal = b.min_start_date ? new Date(b.min_start_date).getTime() : 0
+          break
         case 'time_minutes':
           aVal = a.time_minutes || 0
           bVal = b.time_minutes || 0
@@ -664,14 +668,33 @@ export default function Schedule() {
                   }}
                 >
                   <td style={{ padding: '0.5rem', textAlign: 'center' }}>{wo.line_position || '-'}</td>
-                  <td style={{ padding: '0.5rem', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={wo.customer}>
+                  <td style={{ 
+                    padding: '0.5rem', 
+                    maxWidth: '120px', 
+                    overflow: 'hidden', 
+                    textOverflow: 'ellipsis', 
+                    whiteSpace: 'nowrap',
+                    backgroundColor: wo.is_new_rev_assembly ? '#e6e6ff' : 'transparent'
+                  }} title={wo.customer}>
                     {wo.customer}
                   </td>
-                  <td style={{ padding: '0.5rem', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${wo.assembly} ${wo.revision}`}>
+                  <td style={{ 
+                    padding: '0.5rem', 
+                    maxWidth: '140px', 
+                    overflow: 'hidden', 
+                    textOverflow: 'ellipsis', 
+                    whiteSpace: 'nowrap',
+                    backgroundColor: wo.is_new_rev_assembly ? '#e6e6ff' : 'transparent'
+                  }} title={`${wo.assembly} ${wo.revision}`}>
                     {wo.assembly} {wo.revision}
                     {wo.is_new_rev_assembly && <span style={{ color: 'var(--danger)', marginLeft: '0.25rem' }}>*</span>}
                   </td>
-                  <td style={{ padding: '0.5rem' }}><code style={{ fontSize: '0.75rem' }}>{wo.wo_number}</code></td>
+                  <td style={{ 
+                    padding: '0.5rem',
+                    backgroundColor: wo.is_new_rev_assembly ? '#e6e6ff' : 'transparent'
+                  }}>
+                    <code style={{ fontSize: '0.75rem' }}>{wo.wo_number}</code>
+                  </td>
                   <td style={{ padding: '0.5rem', textAlign: 'center' }}>{wo.quantity}</td>
                   <td style={{ padding: '0.5rem' }}><StatusBadge status={wo.status} statusName={wo.status_name} statusColor={wo.status_color} /></td>
                   <td style={{ padding: '0.5rem', textAlign: 'center' }} title={wo.material_status}>
