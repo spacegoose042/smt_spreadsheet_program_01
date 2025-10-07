@@ -1,6 +1,6 @@
 """
 Main FastAPI application - Updated with None value fixes
-Production deployment fix - $(date)
+Production deployment fix - Force redeploy to match dev environment
 """
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
