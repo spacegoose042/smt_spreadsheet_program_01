@@ -2177,7 +2177,10 @@ def import_from_cetec(
                         existing_wo.quantity = quantity
                         has_changes = True
                     
-                    if existing_wo.cetec_ship_date != cetec_ship_date:
+                    # Compare dates safely (handle None)
+                    old_date = existing_wo.cetec_ship_date
+                    new_date = cetec_ship_date
+                    if (old_date is None and new_date is not None) or (old_date is not None and new_date is None) or (old_date is not None and new_date is not None and old_date != new_date):
                         changes.append(CetecSyncLog(
                             sync_date=sync_time,
                             wo_number=wo_number,
