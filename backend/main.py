@@ -1,6 +1,8 @@
 """
-Main FastAPI application - Updated with None value fixes
-Production deployment fix - Force redeploy to match dev environment
+Main FastAPI application - CRITICAL FIX FOR PRODUCTION
+- Fixed None value handling in time calculations
+- Import ALL work orders regardless of location
+- Railway deployment issue - forcing new deployment
 """
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,6 +32,7 @@ app = FastAPI(
 @app.on_event("startup")
 def startup_event():
     """Run database migrations and seed initial data"""
+    print("🚀 CRITICAL FIX DEPLOYED - None value handling fixed!")
     print("🚀 Running database migrations and seed...")
     try:
         from seed_data import main as seed_main
