@@ -2105,10 +2105,10 @@ def import_from_cetec(
                                 break
                         break
                 
-                # Calculate time (rounded to nearest minute) - Fixed None handling
+                # Calculate time (rounded to nearest minute) - PRODUCTION FIX FOR NONE VALUES
                 time_minutes = 0
                 if smt_location and smt_operation:
-                    # Safely convert None values to numbers
+                    # Safely convert None values to numbers - THIS FIXES THE IMPORT ERRORS
                     avg_secs = int(smt_operation.get('avg_secs') or 0)
                     repetitions = int(smt_operation.get('repetitions') or 1)
                     balance_due = int(order_line.get('balancedue') or order_line.get('release_qty') or order_line.get('orig_order_qty') or 0)
@@ -2119,6 +2119,7 @@ def import_from_cetec(
                 
                 # Skip if no time calculated
                 if time_minutes == 0:
+                    print(f"  ⚠️  WO {wo_number}: Skipping - no time calculated (avg_secs={avg_secs}, reps={repetitions}, qty={balance_due})")
                     continue
                 
                 # Determine material status
