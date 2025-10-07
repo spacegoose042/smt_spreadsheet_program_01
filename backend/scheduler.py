@@ -120,7 +120,8 @@ def calculate_setup_time_hours(trolley_count: int) -> float:
     - 5-6 trolleys: 3 hours
     - 7-8 trolleys: 4 hours
     """
-    if trolley_count <= 2:
+    # Handle None trolley_count
+    if trolley_count is None or trolley_count <= 2:
         return 1.0
     elif trolley_count <= 4:
         return 2.0
