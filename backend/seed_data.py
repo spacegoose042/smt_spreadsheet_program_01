@@ -394,7 +394,7 @@ def main():
         # Fix existing work orders with null status
         print("\n🔧 Checking for work orders with null status...")
         try:
-            from models import WorkOrder
+            from models import WorkOrder, Status
             # Find "Unassigned" status in Status table
             unassigned_status = db.query(Status).filter(Status.name == "Unassigned").first()
             
