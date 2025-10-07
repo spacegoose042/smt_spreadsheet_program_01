@@ -2250,8 +2250,8 @@ def import_from_cetec(
                         material_status=material_status,
                         last_cetec_sync=sync_time,
                         priority=Priority.FACTORY_DEFAULT,
-                        status_id=unassigned_status.id,  # Use Status table (looked up at start)
-                        status=None,  # Leave legacy enum as None
+                        status_id=unassigned_status.id,  # Use Status table
+                        # Don't set status column at all - let it use the database default or remove the column
                         is_complete=False
                     )
                     
