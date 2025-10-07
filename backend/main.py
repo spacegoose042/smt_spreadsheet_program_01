@@ -2104,13 +2104,13 @@ def import_from_cetec(
                                 break
                         break
                 
-                # Calculate time
+                # Calculate time (rounded to nearest minute)
                 time_minutes = 0
                 if smt_location and smt_operation:
                     avg_secs = smt_operation.get('avg_secs', 0)
                     repetitions = smt_operation.get('repetitions', 1)
                     balance_due = order_line.get('balancedue') or order_line.get('release_qty') or order_line.get('orig_order_qty') or 0
-                    time_minutes = (avg_secs * repetitions * balance_due) / 60
+                    time_minutes = round((avg_secs * repetitions * balance_due) / 60)
                 
                 # Skip if no time calculated
                 if time_minutes == 0:

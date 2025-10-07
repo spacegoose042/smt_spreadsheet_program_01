@@ -8,8 +8,8 @@ import CompleteJobModal from '../components/CompleteJobModal'
 import ReportIssueModal from '../components/ReportIssueModal'
 
 function StatusBadge({ status, statusName, statusColor }) {
-  // Use new status system if available, fallback to legacy
-  const name = statusName || (status ? status : 'Unknown')
+  // Use new status system if available, fallback to legacy, default to Unassigned
+  const name = statusName || (status ? status : 'Unassigned')
   const color = statusColor
   
   // Legacy fallback colors if no color provided
