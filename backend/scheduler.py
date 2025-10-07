@@ -196,17 +196,17 @@ def get_trolley_count_in_use(session, exclude_wo_id: Optional[int] = None) -> in
     Counts trolleys for work orders with status "Running" or "Clear to Build" (with or without *)
     """
     from sqlalchemy import and_
-    from models import WorkOrderStatus
+    from models import Status
+    
+    # Get status IDs for Running, Clear to Build, etc.
+    status_names = ['Running', '2nd Side Running', 'Clear to Build', 'Clear to Build *']
+    status_ids = session.query(Status.id).filter(Status.name.in_(status_names)).all()
+    status_id_list = [s[0] for s in status_ids]
     
     query = session.query(WorkOrder).filter(
         and_(
             WorkOrder.is_complete == False,
-            WorkOrder.status.in_([
-                WorkOrderStatus.RUNNING,
-                WorkOrderStatus.SECOND_SIDE_RUNNING,
-                WorkOrderStatus.CLEAR_TO_BUILD,
-                WorkOrderStatus.CLEAR_TO_BUILD_NEW
-            ])
+            WorkOrder.status_id.in_(status_id_list)
         )
     )
     

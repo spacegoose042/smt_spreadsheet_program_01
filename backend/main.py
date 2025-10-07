@@ -304,7 +304,7 @@ def update_line(
 @app.get("/api/work-orders", response_model=List[schemas.WorkOrderResponse])
 def get_work_orders(
     line_id: Optional[int] = None,
-    status: Optional[WorkOrderStatus] = None,
+    status: Optional[str] = None,  # Changed from enum to string (status name)
     priority: Optional[Priority] = None,
     include_complete: bool = False,
     db: Session = Depends(get_db)
@@ -323,7 +323,10 @@ def get_work_orders(
         query = query.filter(WorkOrder.line_id == line_id)
     
     if status:
-        query = query.filter(WorkOrder.status == status)
+        # Filter by status name (using new Status table)
+        status_obj = db.query(Status).filter(Status.name == status).first()
+        if status_obj:
+            query = query.filter(WorkOrder.status_id == status_obj.id)
     
     if priority:
         query = query.filter(WorkOrder.priority == priority)
@@ -582,17 +585,21 @@ def get_dashboard(db: Session = Depends(get_db)):
     line_summaries = []
     
     for line in lines:
-        work_orders = db.query(WorkOrder).filter(
+        from sqlalchemy.orm import joinedload
+        work_orders = db.query(WorkOrder).options(
+            joinedload(WorkOrder.status_obj)
+        ).filter(
             WorkOrder.line_id == line.id,
             WorkOrder.is_complete == False
         ).order_by(WorkOrder.line_position).all()
         
-        line_trolleys = sum(wo.trolley_count for wo in work_orders if wo.status in [
-            WorkOrderStatus.RUNNING,
-            WorkOrderStatus.SECOND_SIDE_RUNNING,
-            WorkOrderStatus.CLEAR_TO_BUILD,
-            WorkOrderStatus.CLEAR_TO_BUILD_NEW
-        ])
+        # Count trolleys for active statuses (using status_obj relationship)
+        line_trolleys = sum(
+            wo.trolley_count for wo in work_orders 
+            if wo.status_obj and wo.status_obj.name in [
+                'Running', '2nd Side Running', 'Clear to Build', 'Clear to Build *'
+            ]
+        )
         
         # Calculate job dates AND times for this line
         job_dates = sched.calculate_job_dates(db, line.id, line.hours_per_day)
