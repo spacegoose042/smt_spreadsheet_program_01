@@ -2163,15 +2163,15 @@ def import_from_cetec(
                         has_changes = True
                         print(f"  WO {wo_number}: Setting null status_id to Unassigned (id={unassigned_status.id})")
                     
-                    # Track changes
-                    if existing_wo.quantity != quantity:
+                    # Track changes (handle None values safely)
+                    if (existing_wo.quantity or 0) != (quantity or 0):
                         changes.append(CetecSyncLog(
                             sync_date=sync_time,
                             wo_number=wo_number,
                             change_type="qty_changed",
                             field_name="quantity",
-                            old_value=str(existing_wo.quantity),
-                            new_value=str(quantity),
+                            old_value=str(existing_wo.quantity or 0),
+                            new_value=str(quantity or 0),
                             cetec_ordline_id=ordline_id
                         ))
                         existing_wo.quantity = quantity
@@ -2183,38 +2183,38 @@ def import_from_cetec(
                             wo_number=wo_number,
                             change_type="date_changed",
                             field_name="cetec_ship_date",
-                            old_value=str(existing_wo.cetec_ship_date),
-                            new_value=str(cetec_ship_date),
+                            old_value=str(existing_wo.cetec_ship_date or ''),
+                            new_value=str(cetec_ship_date or ''),
                             cetec_ordline_id=ordline_id
                         ))
                         existing_wo.cetec_ship_date = cetec_ship_date
                         has_changes = True
                     
-                    if existing_wo.time_minutes != time_minutes:
+                    if (existing_wo.time_minutes or 0) != (time_minutes or 0):
                         existing_wo.time_minutes = time_minutes
                         has_changes = True
                     
-                    if existing_wo.current_location != current_location:
+                    if (existing_wo.current_location or '') != (current_location or ''):
                         changes.append(CetecSyncLog(
                             sync_date=sync_time,
                             wo_number=wo_number,
                             change_type="location_changed",
                             field_name="current_location",
-                            old_value=existing_wo.current_location,
-                            new_value=current_location,
+                            old_value=existing_wo.current_location or '',
+                            new_value=current_location or '',
                             cetec_ordline_id=ordline_id
                         ))
                         existing_wo.current_location = current_location
                         has_changes = True
                     
-                    if existing_wo.material_status != material_status:
+                    if (existing_wo.material_status or '') != (material_status or ''):
                         changes.append(CetecSyncLog(
                             sync_date=sync_time,
                             wo_number=wo_number,
                             change_type="material_changed",
                             field_name="material_status",
-                            old_value=existing_wo.material_status,
-                            new_value=material_status,
+                            old_value=existing_wo.material_status or '',
+                            new_value=material_status or '',
                             cetec_ordline_id=ordline_id
                         ))
                         existing_wo.material_status = material_status
