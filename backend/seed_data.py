@@ -1,5 +1,5 @@
 """
-Script to seed the database with initial data (lines, sample work orders)
+Script to seed the database with initial data (lines, sample work orders) - Fixed Status import
 """
 from sqlalchemy.orm import Session
 from sqlalchemy import text

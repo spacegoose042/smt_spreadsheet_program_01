@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState } from 'react' // Updated with SMT PRODUCTION filter
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getWorkOrders, getLines, createWorkOrder, updateWorkOrder, deleteWorkOrder, completeWorkOrder, getDashboard, getStatuses } from '../api'
 import { Plus, Edit2, Trash2, Lock, Unlock, CheckCircle, Calendar, AlertTriangle } from 'lucide-react'
