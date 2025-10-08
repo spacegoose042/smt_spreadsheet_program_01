@@ -6,10 +6,16 @@ import axios from 'axios'
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 async function autoSchedule({ mode, dryRun }) {
+  const token = localStorage.getItem('token')
   const response = await axios.post(
     `${API_URL}/api/auto-schedule?mode=${mode}&dry_run=${dryRun}`,
     {},
-    { withCredentials: true }
+    {
+      withCredentials: true,
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    }
   )
   return response.data
 }
