@@ -111,24 +111,27 @@ def calculate_actual_ship_date(cetec_ship_date: date, th_kit_status: THKitStatus
 
 def calculate_setup_time_hours(trolley_count: int) -> float:
     """
-    Calculate setup time based on trolley count.
-    This is a simplified version - adjust based on your actual formula.
+    Calculate setup time based on trolley count using linear formula.
     
-    Assuming:
-    - 1-2 trolleys: 1 hour
-    - 3-4 trolleys: 2 hours
-    - 5-6 trolleys: 3 hours
-    - 7-8 trolleys: 4 hours
+    Formula: 1 hour base + 0.33 hours (20 minutes) per trolley after the first 2
+    
+    Examples:
+    - 1-2 trolleys: 1.0 hour
+    - 3 trolleys: 1.33 hours
+    - 4 trolleys: 1.67 hours
+    - 5 trolleys: 2.0 hours
+    - 8 trolleys: 3.0 hours
     """
     # Handle None trolley_count
-    if trolley_count is None or trolley_count <= 2:
+    if trolley_count is None:
+        trolley_count = 1
+    
+    # Base time (1 hour) + 20 minutes (0.33 hours) per trolley after 2
+    if trolley_count <= 2:
         return 1.0
-    elif trolley_count <= 4:
-        return 2.0
-    elif trolley_count <= 6:
-        return 3.0
     else:
-        return 4.0
+        additional_trolleys = trolley_count - 2
+        return 1.0 + (additional_trolleys * 0.33)
 
 
 def calculate_min_start_date(

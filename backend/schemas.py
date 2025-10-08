@@ -156,6 +156,12 @@ class WorkOrderResponse(WorkOrderBase):
     calculated_end_datetime: Optional[datetime] = None
     wo_start_datetime: Optional[datetime] = None
     
+    # Optimizer date fields (promise date tracking)
+    earliest_completion_date: Optional[date] = None
+    scheduled_start_date: Optional[date] = None
+    scheduled_end_date: Optional[date] = None
+    promise_date_variance_days: Optional[int] = None
+    
     # Cetec Integration
     cetec_ordline_id: Optional[int] = None
     current_location: Optional[str] = None

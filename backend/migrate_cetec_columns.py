@@ -86,3 +86,5 @@ def add_cetec_columns():
 if __name__ == "__main__":
     add_cetec_columns()
 
+
+

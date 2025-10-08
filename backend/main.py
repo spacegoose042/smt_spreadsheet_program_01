@@ -2309,6 +2309,161 @@ def import_from_cetec(
         raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
 
 
+# ============================================================================
+# OPTIMIZER ENDPOINTS - Auto-Scheduling
+# ============================================================================
+
+@app.post("/api/auto-schedule")
+def auto_schedule_jobs(
+    mode: str = "balanced",
+    dry_run: bool = True,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Run the auto-scheduler to optimize work order assignments.
+    
+    Args:
+        mode: Optimization mode ('balanced', 'promise_focused', or 'throughput_max')
+        dry_run: If True, return proposed changes without saving
+    
+    Returns:
+        Summary of scheduling results including:
+        - jobs_scheduled: Total jobs processed
+        - jobs_at_risk: Jobs that might miss promise dates
+        - jobs_will_be_late: Jobs currently scheduled to be late
+        - line_assignments: Distribution across lines
+        - trolley_utilization: Trolley counts per line
+        - changes: List of proposed changes (if dry_run=True)
+    """
+    from optimizer import optimize_for_throughput
+    
+    try:
+        result = optimize_for_throughput(db, mode=mode, dry_run=dry_run)
+        return result
+    except Exception as e:
+        print(f"Auto-schedule error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Auto-schedule failed: {str(e)}")
+
+
+@app.get("/api/schedule-analysis")
+def get_schedule_analysis(db: Session = Depends(get_db)):
+    """
+    Get current schedule statistics and performance metrics.
+    
+    Returns:
+        - promise_date_stats: Hit rate, average variance
+        - jobs_at_risk_count: Number of jobs that might miss promise dates
+        - jobs_late_count: Number of jobs currently scheduled to be late
+        - trolley_utilization: Current trolley usage
+        - line_loads: Current workload per line
+    """
+    from optimizer import get_schedulable_jobs, get_general_lines, get_mci_line, get_line_current_load
+    from sqlalchemy import and_
+    
+    try:
+        # Get all jobs with scheduled dates
+        all_jobs = db.query(WorkOrder).filter(
+            and_(
+                WorkOrder.is_complete == False,
+                WorkOrder.scheduled_end_date.isnot(None)
+            )
+        ).all()
+        
+        if not all_jobs:
+            return {
+                'promise_date_stats': {
+                    'total_jobs': 0,
+                    'on_time': 0,
+                    'at_risk': 0,
+                    'will_be_late': 0,
+                    'hit_rate_percent': 0,
+                    'average_variance_days': 0
+                },
+                'jobs_at_risk_count': 0,
+                'jobs_late_count': 0,
+                'trolley_utilization': {},
+                'line_loads': {}
+            }
+        
+        # Calculate stats
+        on_time_jobs = [j for j in all_jobs if not j.will_be_late()]
+        at_risk_jobs = [j for j in all_jobs if j.is_at_risk()]
+        late_jobs = [j for j in all_jobs if j.will_be_late()]
+        
+        hit_rate = (len(on_time_jobs) / len(all_jobs)) * 100 if all_jobs else 0
+        
+        # Calculate average variance
+        variances = [j.promise_date_variance_days for j in all_jobs if j.promise_date_variance_days is not None]
+        avg_variance = sum(variances) / len(variances) if variances else 0
+        
+        # Get line loads
+        general_lines = get_general_lines(db)
+        mci_line = get_mci_line(db)
+        all_lines = general_lines + ([mci_line] if mci_line else [])
+        
+        line_loads = {}
+        trolley_util = {}
+        for line in all_lines:
+            load = get_line_current_load(db, line.id)
+            line_loads[line.name] = {
+                'job_count': load['job_count'],
+                'total_hours': round(load['total_hours'], 2),
+                'completion_date': load['completion_date'].isoformat()
+            }
+            trolley_util[line.name] = {
+                'positions_1_2': load['trolleys_in_p1_p2'],
+                'limit': 24,
+                'exceeds_limit': load['trolleys_in_p1_p2'] > 24
+            }
+        
+        return {
+            'promise_date_stats': {
+                'total_jobs': len(all_jobs),
+                'on_time': len(on_time_jobs),
+                'at_risk': len(at_risk_jobs),
+                'will_be_late': len(late_jobs),
+                'hit_rate_percent': round(hit_rate, 1),
+                'average_variance_days': round(avg_variance, 1)
+            },
+            'jobs_at_risk_count': len(at_risk_jobs),
+            'jobs_late_count': len(late_jobs),
+            'trolley_utilization': trolley_util,
+            'line_loads': line_loads
+        }
+    except Exception as e:
+        print(f"Schedule analysis error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+
+@app.get("/api/capacity-forecast")
+def get_capacity_forecast_endpoint(weeks: int = 8, db: Session = Depends(get_db)):
+    """
+    Get capacity forecast for the next N weeks.
+    
+    Args:
+        weeks: Number of weeks to forecast (default: 8)
+    
+    Returns:
+        - weeks: Array of weekly capacity data
+        - pipeline: Summary of work not yet in SMT PRODUCTION
+    """
+    from optimizer import get_capacity_forecast
+    
+    try:
+        forecast = get_capacity_forecast(db, weeks=weeks)
+        return forecast
+    except Exception as e:
+        print(f"Capacity forecast error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Forecast failed: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

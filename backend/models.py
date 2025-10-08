@@ -201,9 +201,13 @@ class WorkOrder(Base):
     is_complete = Column(Boolean, default=False)
     
     # Timing (Dates)
-    cetec_ship_date = Column(Date, nullable=False)
-    actual_ship_date = Column(Date)  # Calculated
-    min_start_date = Column(Date)  # Calculated (date only)
+    cetec_ship_date = Column(Date, nullable=False)  # Original customer promise from Cetec (NEVER CHANGE)
+    actual_ship_date = Column(Date)  # Calculated (adjusted for SMT-only)
+    min_start_date = Column(Date)  # Calculated (earliest we can start)
+    earliest_completion_date = Column(Date, nullable=True)  # Calculated (earliest we can finish based on capacity)
+    scheduled_start_date = Column(Date, nullable=True)  # Optimizer's planned start date
+    scheduled_end_date = Column(Date, nullable=True)  # Optimizer's planned completion date
+    promise_date_variance_days = Column(Integer, nullable=True)  # Days early/late vs cetec_ship_date (negative = early, positive = late)
     time_minutes = Column(Float, nullable=False)  # Build time in minutes
     setup_time_hours = Column(Float, default=0.0)  # Setup time based on trolleys
     
@@ -245,6 +249,64 @@ class WorkOrder(Base):
     status_obj = relationship("Status", back_populates="work_orders")
     completed_record = relationship("CompletedWorkOrder", back_populates="work_order", uselist=False)
     issues = relationship("Issue", back_populates="work_order", cascade="all, delete-orphan")
+    
+    # Helper Methods for Optimizer
+    def calculate_promise_date_variance(self) -> int:
+        """
+        Calculate days early/late vs Cetec promise date.
+        Returns:
+            int: Days variance (negative = early, positive = late)
+        """
+        if not self.scheduled_end_date or not self.cetec_ship_date:
+            return None
+        delta = (self.scheduled_end_date - self.cetec_ship_date).days
+        return delta
+    
+    def is_at_risk(self) -> bool:
+        """
+        Check if job might miss promise date based on earliest completion date.
+        Returns:
+            bool: True if earliest completion is after promise date
+        """
+        if not self.earliest_completion_date or not self.cetec_ship_date:
+            return False
+        return self.earliest_completion_date > self.cetec_ship_date
+    
+    def will_be_late(self) -> bool:
+        """
+        Check if currently scheduled job will be late.
+        Returns:
+            bool: True if scheduled end date is after promise date
+        """
+        if not self.scheduled_end_date or not self.cetec_ship_date:
+            return False
+        return self.scheduled_end_date > self.cetec_ship_date
+    
+    def get_priority_rank(self) -> int:
+        """
+        Numeric rank for sorting (lower = higher priority).
+        Used by optimizer for job sequencing.
+        Returns:
+            int: Priority rank (1 = highest priority)
+        """
+        priority_map = {
+            Priority.CRITICAL_MASS: 1,
+            Priority.OVERCLOCKED: 2,
+            Priority.FACTORY_DEFAULT: 3,
+            Priority.TRICKLE_CHARGE: 4,
+            Priority.POWER_DOWN: 5
+        }
+        return priority_map.get(self.priority, 999)
+    
+    def is_mci_job(self) -> bool:
+        """
+        Check if this is an MCI job (should go to Line 4).
+        Returns:
+            bool: True if customer contains "MCI"
+        """
+        if not self.customer:
+            return False
+        return "MCI" in self.customer.upper() or "MIDCONTINENT" in self.customer.upper()
 
 
 class CetecSyncLog(Base):

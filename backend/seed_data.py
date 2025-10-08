@@ -382,6 +382,27 @@ def main():
         print(f"Error adding enum values: {e}")
         raise
     
+    # Add optimizer date columns for promise date management
+    print("\n🔧 Adding optimizer date columns for promise date tracking...")
+    try:
+        with engine.connect() as conn:
+            # Add new columns for optimizer (safe if already exist)
+            new_columns = [
+                "ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS earliest_completion_date DATE",
+                "ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS scheduled_start_date DATE",
+                "ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS scheduled_end_date DATE",
+                "ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS promise_date_variance_days INTEGER"
+            ]
+            for sql in new_columns:
+                try:
+                    conn.execute(text(sql))
+                except Exception as col_error:
+                    print(f"   Note: {str(col_error)}")
+            conn.commit()
+            print("   ✓ Optimizer date columns added/verified")
+    except Exception as e:
+        print(f"   Note: Optimizer columns migration: {str(e)}")
+    
     # Seed data
     db = SessionLocal()
     try:

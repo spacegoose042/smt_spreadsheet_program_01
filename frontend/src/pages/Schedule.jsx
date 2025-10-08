@@ -1,11 +1,12 @@
 import { useState } from 'react' // Updated with SMT PRODUCTION filter - PRODUCTION FIX
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getWorkOrders, getLines, createWorkOrder, updateWorkOrder, deleteWorkOrder, completeWorkOrder, getDashboard, getStatuses } from '../api'
-import { Plus, Edit2, Trash2, Lock, Unlock, CheckCircle, Calendar, AlertTriangle } from 'lucide-react'
+import { Plus, Edit2, Trash2, Lock, Unlock, CheckCircle, Calendar, AlertTriangle, Zap } from 'lucide-react'
 import { format } from 'date-fns'
 import WorkOrderForm from '../components/WorkOrderForm'
 import CompleteJobModal from '../components/CompleteJobModal'
 import ReportIssueModal from '../components/ReportIssueModal'
+import AutoScheduleModal from '../components/AutoScheduleModal'
 
 function PriorityBadge({ priority }) {
   const colors = {
@@ -54,6 +55,7 @@ export default function Schedule() {
   const [editingWO, setEditingWO] = useState(null)
   const [completingWO, setCompletingWO] = useState(null)
   const [reportingIssueWO, setReportingIssueWO] = useState(null)
+  const [showAutoSchedule, setShowAutoSchedule] = useState(false)
   const [filterLine, setFilterLine] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterLocation, setFilterLocation] = useState('SMT PRODUCTION') // Default to SMT PRODUCTION
@@ -151,6 +153,10 @@ export default function Schedule() {
         case 'cetec_ship_date':
           aVal = a.cetec_ship_date || ''
           bVal = b.cetec_ship_date || ''
+          break
+        case 'promise_date_variance_days':
+          aVal = a.promise_date_variance_days !== undefined && a.promise_date_variance_days !== null ? a.promise_date_variance_days : 999
+          bVal = b.promise_date_variance_days !== undefined && b.promise_date_variance_days !== null ? b.promise_date_variance_days : 999
           break
         case 'min_start_date':
           aVal = a.min_start_date ? new Date(a.min_start_date).getTime() : 0
@@ -354,6 +360,10 @@ export default function Schedule() {
 
   return (
     <div className="container">
+      {showAutoSchedule && (
+        <AutoScheduleModal onClose={() => setShowAutoSchedule(false)} />
+      )}
+      
       {showForm && (
         <WorkOrderForm
           initialData={editingWO}
@@ -512,6 +522,14 @@ export default function Schedule() {
             <Plus size={18} />
             Add Work Order
           </button>
+          <button 
+            onClick={() => setShowAutoSchedule(true)} 
+            className="btn btn-success"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+          >
+            <Zap size={16} />
+            Auto-Schedule
+          </button>
         </div>
         
         {/* Drag and drop hint */}
@@ -622,9 +640,16 @@ export default function Schedule() {
                 <th 
                   onClick={() => handleSort('cetec_ship_date')}
                   style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', whiteSpace: 'nowrap' }}
-                  title="Ship Date"
+                  title="Customer Promise Date (from Cetec)"
                 >
-                  Ship {sortColumn === 'cetec_ship_date' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  Promise {sortColumn === 'cetec_ship_date' && (sortDirection === 'asc' ? '↑' : '↓')}
+                </th>
+                <th 
+                  onClick={() => handleSort('promise_date_variance_days')}
+                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.5rem', whiteSpace: 'nowrap' }}
+                  title="Days Early/Late vs Promise Date (negative = early)"
+                >
+                  Var {sortColumn === 'promise_date_variance_days' && (sortDirection === 'asc' ? '↑' : '↓')}
                 </th>
                 <th 
                   onClick={() => handleSort('time_minutes')}
@@ -755,6 +780,28 @@ export default function Schedule() {
                   </td>
                   <td style={{ padding: '0.5rem', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
                     {wo.cetec_ship_date ? format(new Date(wo.cetec_ship_date), 'MM/dd/yy') : '-'}
+                  </td>
+                  <td style={{ padding: '0.5rem', textAlign: 'center' }}>
+                    {wo.promise_date_variance_days !== undefined && wo.promise_date_variance_days !== null ? (
+                      <span 
+                        className="badge"
+                        style={{
+                          background: wo.promise_date_variance_days > 0 
+                            ? '#dc3545'  // Red for late
+                            : wo.promise_date_variance_days < -7
+                            ? '#28a745'  // Green for >7 days early
+                            : '#ffc107',  // Yellow for on-time or slightly early
+                          color: 'white',
+                          padding: '0.25rem 0.5rem',
+                          fontSize: '0.75rem',
+                          fontWeight: 600
+                        }}
+                      >
+                        {wo.promise_date_variance_days > 0 ? '+' : ''}{wo.promise_date_variance_days}d
+                      </span>
+                    ) : (
+                      <span style={{ color: '#999', fontSize: '0.75rem' }}>-</span>
+                    )}
                   </td>
                   <td style={{ padding: '0.5rem', whiteSpace: 'nowrap', textAlign: 'right' }}>{(wo.time_minutes / 60).toFixed(1)}</td>
                   <td style={{ padding: '0.5rem', textAlign: 'center' }}>{wo.trolley_count}</td>
