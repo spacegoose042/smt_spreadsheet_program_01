@@ -379,6 +379,18 @@ def optimize_for_throughput(
                     job.scheduled_end_date = dates['end_date']
                     job.promise_date_variance_days = job.calculate_promise_date_variance()
     
+    # Step 6b: Update variance for ALL jobs that have scheduled_end_date (including ones that weren't moved)
+    if not dry_run:
+        all_scheduled_jobs = session.query(WorkOrder).filter(
+            and_(
+                WorkOrder.is_complete == False,
+                WorkOrder.scheduled_end_date.isnot(None)
+            )
+        ).all()
+        
+        for job in all_scheduled_jobs:
+            job.promise_date_variance_days = job.calculate_promise_date_variance()
+    
     # Step 7: Compile results
     if not dry_run:
         session.commit()
