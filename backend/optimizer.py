@@ -172,6 +172,10 @@ def get_line_current_load(session: Session, line_id: int) -> Dict:
         if job.line_position in [1, 2]
     )
     
+    # Get highest position used (handle case where all positions are None)
+    positions = [job.line_position for job in jobs if job.line_position is not None]
+    positions_used = max(positions) if positions else 0
+    
     # Get completion date of last job
     job_dates = calculate_job_dates(session, line_id)
     completion_date = date.today()
@@ -182,7 +186,7 @@ def get_line_current_load(session: Session, line_id: int) -> Dict:
     return {
         'job_count': len(jobs),
         'total_hours': total_hours,
-        'positions_used': max(job.line_position for job in jobs if job.line_position),
+        'positions_used': positions_used,
         'trolleys_in_p1_p2': trolleys_p1_p2,
         'completion_date': completion_date
     }
