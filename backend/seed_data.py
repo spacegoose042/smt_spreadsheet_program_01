@@ -382,6 +382,18 @@ def main():
         print(f"Error adding enum values: {e}")
         raise
     
+    # CRITICAL: Ensure status column is nullable (matches model definition)
+    print("\n🔧 Ensuring database schema matches model definitions...")
+    try:
+        with engine.connect() as conn:
+            # Make status column nullable if it isn't already
+            conn.execute(text("ALTER TABLE work_orders ALTER COLUMN status DROP NOT NULL"))
+            conn.commit()
+            print("   ✓ Status column is now nullable (matches model: nullable=True)")
+    except Exception as e:
+        # Column might already be nullable, that's fine
+        print(f"   Note: Status column migration: {str(e)}")
+    
     # Seed data
     db = SessionLocal()
     try:
