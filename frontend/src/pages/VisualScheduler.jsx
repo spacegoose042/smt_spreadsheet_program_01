@@ -139,15 +139,18 @@ export default function VisualScheduler() {
 
   // Fetch capacity overrides to show line downtime
   // Use Monday start date to match capacity calendar (add 1 day to Sunday start)
-  const capacityStartDate = addDays(startDate, 1) // Monday instead of Sunday
   const { data: capacityOverrides } = useQuery({
     queryKey: ['capacityOverrides', weekOffset],
-    queryFn: () => getCapacityOverrides(capacityStartDate.toISOString().split('T')[0], 4),
+    queryFn: () => {
+      const capacityStartDate = addDays(startDate, 1) // Monday instead of Sunday
+      return getCapacityOverrides(capacityStartDate.toISOString().split('T')[0], 4)
+    },
     refetchInterval: 30000,
   })
 
   // Debug logging for capacity overrides
   if (capacityOverrides) {
+    const capacityStartDate = addDays(startDate, 1)
     console.log('Visual Scheduler Start Date:', startDate.toISOString().split('T')[0])
     console.log('Capacity Overrides Start Date:', capacityStartDate.toISOString().split('T')[0])
     console.log('Capacity Overrides Data:', JSON.stringify(capacityOverrides.data, null, 2))
