@@ -164,14 +164,16 @@ def simple_auto_schedule(
         jobs.extend(all_scheduled_jobs)
         print(f"📦 Cleared {len(all_scheduled_jobs)} existing jobs for redistribution")
     
-    # Step 4: Sort jobs by minimum start date (simple and reliable)
+    # Step 4: Sort jobs by priority, then minimum start date (simple and reliable)
     def sort_key(job):
+        # Get priority rank (lower number = higher priority)
+        priority_rank = job.get_priority_rank()
         # Use min_start_date if available, otherwise cetec_ship_date, otherwise today
         min_start = job.min_start_date or job.cetec_ship_date or date.today()
-        return min_start
+        return (priority_rank, min_start)
     
     sorted_jobs = sorted(jobs, key=sort_key)
-    print(f"📅 Sorted {len(sorted_jobs)} jobs by minimum start date")
+    print(f"📅 Sorted {len(sorted_jobs)} jobs by priority, then minimum start date")
     
     # Step 5: Initialize line tracking
     line_tracker = {}
@@ -214,7 +216,9 @@ def simple_auto_schedule(
         old_line_id = job.line_id
         old_position = job.line_position
         
-        print(f"🔍 Assigning job {job.wo_number} (min start: {sort_key(job)})")
+        priority_rank = job.get_priority_rank()
+        min_start = job.min_start_date or job.cetec_ship_date or date.today()
+        print(f"🔍 Assigning job {job.wo_number} (priority: {priority_rank}, min start: {min_start})")
         
         # Find best line for this job
         best_line_id = None
