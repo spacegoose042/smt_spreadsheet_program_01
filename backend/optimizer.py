@@ -342,11 +342,23 @@ def find_best_line_for_job(
             
             print(f"🔍 Comparing Line {line.id} ({line.name}): {this_job_count} jobs vs Line {best_line}: {current_job_count} jobs")
             
-            if mode == 'balanced' and this_job_count < current_job_count:
-                print(f"✅ Balanced mode: Line {line.id} has fewer jobs ({this_job_count} < {current_job_count}) - selecting it")
-                best_line = line.id
-                best_position = proposed_position
-                earliest_completion = line_completion
+            if mode == 'balanced':
+                if this_job_count < current_job_count:
+                    print(f"✅ Balanced mode: Line {line.id} has fewer jobs ({this_job_count} < {current_job_count}) - selecting it")
+                    best_line = line.id
+                    best_position = proposed_position
+                    earliest_completion = line_completion
+                elif this_job_count == current_job_count:
+                    # Tiebreaker: choose line with earlier completion date for better load distribution
+                    if line_completion < earliest_completion:
+                        print(f"✅ Balanced mode: Tiebreaker - Line {line.id} has earlier completion ({line_completion} < {earliest_completion}) - selecting it")
+                        best_line = line.id
+                        best_position = proposed_position
+                        earliest_completion = line_completion
+                    else:
+                        print(f"❌ Balanced mode: Tiebreaker - keeping Line {best_line} with earlier completion")
+                else:
+                    print(f"❌ Balanced mode: Line {line.id} has more jobs ({this_job_count} > {current_job_count}) - keeping Line {best_line}")
             elif mode != 'balanced' and line_completion < earliest_completion:
                 print(f"✅ Throughput mode: Line {line.id} has earlier completion ({line_completion} < {earliest_completion}) - selecting it")
                 best_line = line.id
