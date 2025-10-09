@@ -144,6 +144,11 @@ export default function VisualScheduler() {
     refetchInterval: 30000,
   })
 
+  // Debug logging for capacity overrides
+  if (capacityOverrides) {
+    console.log('Capacity Overrides Data:', capacityOverrides.data)
+  }
+
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => updateWorkOrder(id, data),
     onSuccess: () => {
@@ -202,11 +207,21 @@ export default function VisualScheduler() {
     if (!capacityOverrides?.data?.overrides_by_line?.[lineId]) return false
     
     const overrides = capacityOverrides.data.overrides_by_line[lineId]
-    return overrides.some(override => {
+    const isDown = overrides.some(override => {
       const startDate = new Date(override.start_date)
       const endDate = new Date(override.end_date)
-      return checkDate >= startDate && checkDate <= endDate && override.is_down
+      const inRange = checkDate >= startDate && checkDate <= endDate
+      const isDownDay = override.is_down
+      
+      // Debug logging
+      if (inRange && isDownDay) {
+        console.log(`Line ${lineId} is down on ${checkDate.toDateString()}`, override)
+      }
+      
+      return inRange && isDownDay
     })
+    
+    return isDown
   }
 
   const getWOPosition = (wo, lineStartDate) => {
