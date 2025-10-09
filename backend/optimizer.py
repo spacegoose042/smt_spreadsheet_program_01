@@ -333,20 +333,27 @@ def find_best_line_for_job(
             best_line = line.id
             best_position = proposed_position
             earliest_completion = line_completion
+            print(f"🎯 First line selected: Line {line.id} ({line.name}) with {load['job_count']} jobs")
         else:
             # For balanced mode, prefer line with fewer jobs
             # For throughput mode, prefer line with earliest completion
             current_job_count = line_loads[best_line]['job_count']
             this_job_count = load['job_count']
             
+            print(f"🔍 Comparing Line {line.id} ({line.name}): {this_job_count} jobs vs Line {best_line}: {current_job_count} jobs")
+            
             if mode == 'balanced' and this_job_count < current_job_count:
+                print(f"✅ Balanced mode: Line {line.id} has fewer jobs ({this_job_count} < {current_job_count}) - selecting it")
                 best_line = line.id
                 best_position = proposed_position
                 earliest_completion = line_completion
             elif mode != 'balanced' and line_completion < earliest_completion:
+                print(f"✅ Throughput mode: Line {line.id} has earlier completion ({line_completion} < {earliest_completion}) - selecting it")
                 best_line = line.id
                 best_position = proposed_position
                 earliest_completion = line_completion
+            else:
+                print(f"❌ Keeping current best line {best_line}")
     
     if best_line is None:
         # Fallback: assign to first line (shouldn't happen often)
