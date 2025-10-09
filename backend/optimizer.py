@@ -158,9 +158,9 @@ def move_jobs_off_down_lines(session: Session, general_lines: List[SMTLine], mci
         
         for job in line_jobs:
             # Check if job is scheduled during downtime
-            if job.calculated_start_date and job.calculated_end_date:
-                job_start = datetime.strptime(job.calculated_start_date, '%Y-%m-%d').date()
-                job_end = datetime.strptime(job.calculated_end_date, '%Y-%m-%d').date()
+            if job.calculated_start_datetime and job.calculated_end_datetime:
+                job_start = job.calculated_start_datetime.date()
+                job_end = job.calculated_end_datetime.date()
                 
                 # Check each day the job is scheduled
                 current_date = job_start
@@ -181,8 +181,6 @@ def move_jobs_off_down_lines(session: Session, general_lines: List[SMTLine], mci
                     # Remove from current line
                     job.line_id = None
                     job.line_position = None
-                    job.calculated_start_date = None
-                    job.calculated_end_date = None
                     job.calculated_start_datetime = None
                     job.calculated_end_datetime = None
                     
