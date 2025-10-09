@@ -2375,6 +2375,7 @@ def import_from_cetec(
 def auto_schedule_jobs(
     mode: str = "balanced",
     dry_run: bool = True,
+    clear_existing: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(auth.get_current_user)
 ):
@@ -2384,6 +2385,7 @@ def auto_schedule_jobs(
     Args:
         mode: Optimization mode ('balanced', 'promise_focused', or 'throughput_max')
         dry_run: If True, return proposed changes without saving
+        clear_existing: If True, clear all existing schedules before redistributing (balanced mode only)
     
     Returns:
         Summary of scheduling results including:
@@ -2397,7 +2399,7 @@ def auto_schedule_jobs(
     from optimizer import optimize_for_throughput
     
     try:
-        result = optimize_for_throughput(db, mode=mode, dry_run=dry_run)
+        result = optimize_for_throughput(db, mode=mode, dry_run=dry_run, clear_existing=clear_existing)
         return result
     except Exception as e:
         print(f"Auto-schedule error: {str(e)}")

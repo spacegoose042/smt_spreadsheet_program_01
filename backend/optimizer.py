@@ -359,7 +359,8 @@ def find_best_line_for_job(
 def optimize_for_throughput(
     session: Session,
     mode: str = 'balanced',
-    dry_run: bool = False
+    dry_run: bool = False,
+    clear_existing: bool = False
 ) -> Dict:
     """
     Main optimizer function - THROUGHPUT FOCUSED.
@@ -398,6 +399,28 @@ def optimize_for_throughput(
     # Add moved jobs to the schedulable jobs list
     jobs.extend(moved_jobs)
     
+    # Step 1.6: Clear existing schedules if requested (for true balanced mode)
+    if clear_existing and not dry_run:
+        print("🧹 Clearing existing schedules for balanced redistribution...")
+        # Get all currently scheduled jobs (including the ones we just got)
+        all_scheduled_jobs = session.query(WorkOrder).filter(
+            and_(
+                WorkOrder.line_id.isnot(None),
+                WorkOrder.is_complete == False,
+                WorkOrder.is_locked == False  # Don't clear locked jobs
+            )
+        ).all()
+        
+        for job in all_scheduled_jobs:
+            job.line_id = None
+            job.line_position = None
+            job.calculated_start_datetime = None
+            job.calculated_end_datetime = None
+        
+        # Add all cleared jobs to our schedulable list
+        jobs.extend(all_scheduled_jobs)
+        print(f"📦 Cleared {len(all_scheduled_jobs)} existing jobs for redistribution")
+    
     if not jobs:
         return {
             'jobs_scheduled': 0,
@@ -425,8 +448,12 @@ def optimize_for_throughput(
     line_loads = {}
     for line in general_lines:
         line_loads[line.id] = get_line_current_load(session, line.id)
+        load = line_loads[line.id]
+        print(f"📊 Line {line.id} ({line.name}): {load['job_count']} jobs, completion: {load['completion_date']}")
     if mci_line:
         line_loads[mci_line.id] = get_line_current_load(session, mci_line.id)
+        load = line_loads[mci_line.id]
+        print(f"📊 MCI Line {mci_line.id} ({mci_line.name}): {load['job_count']} jobs, completion: {load['completion_date']}")
     
     # Step 5: Assign jobs to lines
     changes = []

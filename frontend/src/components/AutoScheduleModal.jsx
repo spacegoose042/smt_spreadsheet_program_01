@@ -5,10 +5,10 @@ import axios from 'axios'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
-async function autoSchedule({ mode, dryRun }) {
+async function autoSchedule({ mode, dryRun, clearExisting = false }) {
   const token = localStorage.getItem('token')
   const response = await axios.post(
-    `${API_URL}/api/auto-schedule?mode=${mode}&dry_run=${dryRun}`,
+    `${API_URL}/api/auto-schedule?mode=${mode}&dry_run=${dryRun}&clear_existing=${clearExisting}`,
     {},
     {
       withCredentials: true,
@@ -22,12 +22,13 @@ async function autoSchedule({ mode, dryRun }) {
 
 export default function AutoScheduleModal({ onClose }) {
   const [mode, setMode] = useState('balanced')
+  const [clearExisting, setClearExisting] = useState(false)
   const [results, setResults] = useState(null)
   const [isPreview, setIsPreview] = useState(true)
   const queryClient = useQueryClient()
 
   const previewMutation = useMutation({
-    mutationFn: () => autoSchedule({ mode, dryRun: true }),
+    mutationFn: () => autoSchedule({ mode, dryRun: true, clearExisting }),
     onSuccess: (data) => {
       setResults(data)
       setIsPreview(true)
@@ -35,7 +36,7 @@ export default function AutoScheduleModal({ onClose }) {
   })
 
   const applyMutation = useMutation({
-    mutationFn: () => autoSchedule({ mode, dryRun: false }),
+    mutationFn: () => autoSchedule({ mode, dryRun: false, clearExisting }),
     onSuccess: (data) => {
       setResults(data)
       setIsPreview(false)
@@ -156,6 +157,32 @@ export default function AutoScheduleModal({ onClose }) {
               {mode === 'throughput_max' && '🚀 Prioritizes maximum jobs/day, may have uneven line loading'}
               {mode === 'promise_focused' && '📅 Slight bias toward hitting promise dates, lower throughput'}
             </div>
+            
+            {/* Clear Existing Schedules - Only for Balanced Mode */}
+            {mode === 'balanced' && (
+              <div style={{ marginTop: '1rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={clearExisting}
+                    onChange={(e) => setClearExisting(e.target.checked)}
+                    disabled={previewMutation.isPending || applyMutation.isPending}
+                    style={{ transform: 'scale(1.2)' }}
+                  />
+                  <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>
+                    🧹 Clear existing schedules for true load balancing
+                  </span>
+                </label>
+                <div style={{ 
+                  fontSize: '0.75rem', 
+                  color: '#6c757d', 
+                  marginTop: '0.25rem',
+                  marginLeft: '1.5rem'
+                }}>
+                  ⚠️ This will unschedule ALL jobs and redistribute them evenly across lines
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Preview Results */}
