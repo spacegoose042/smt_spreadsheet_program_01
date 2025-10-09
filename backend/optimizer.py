@@ -360,6 +360,14 @@ def find_best_line_for_job(
                         best_line = line.id
                         best_position = proposed_position
                         earliest_completion = line_completion
+                    elif line_completion == earliest_completion:
+                        # Second tiebreaker: choose line with lower ID for consistency
+                        if line.id < best_line:
+                            print(f"✅ Balanced mode: Second tiebreaker - Line {line.id} has lower ID than Line {best_line} - selecting it")
+                            best_line = line.id
+                            best_position = proposed_position
+                        else:
+                            print(f"❌ Balanced mode: Second tiebreaker - keeping Line {best_line} with lower ID")
                     else:
                         print(f"❌ Balanced mode: Tiebreaker - keeping Line {best_line} with earlier completion")
                 else:
@@ -509,6 +517,13 @@ def optimize_for_throughput(
     for job in sorted_jobs:
         old_line_id = job.line_id
         old_position = job.line_position
+        
+        # Debug: Show current line loads before assigning this job
+        print(f"🔍 Assigning job {job.wo_number} - Current line loads:")
+        for line_id, load in line_loads.items():
+            if line_id in [line.id for line in all_lines_for_balancing]:
+                line_name = next((line.name for line in all_lines_for_balancing if line.id == line_id), f"Line {line_id}")
+                print(f"  {line_name}: {load['job_count']} jobs, completion: {load['completion_date']}")
         
         # MCI jobs go to Line 4 (if line has capacity and MCI jobs remain)
         if job.is_mci_job() and mci_line:
