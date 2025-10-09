@@ -477,7 +477,7 @@ def optimize_for_throughput(
         # Check if all MCI jobs are already scheduled
         unscheduled_mci_jobs = session.query(WorkOrder).filter(
             and_(
-                WorkOrder.is_mci_job() == True,
+                WorkOrder.customer_name == "Midcontinent Instruments",
                 WorkOrder.is_complete == False,
                 WorkOrder.is_locked == False,
                 WorkOrder.is_manual_schedule == False,
@@ -500,7 +500,7 @@ def optimize_for_throughput(
         old_position = job.line_position
         
         # MCI jobs go to Line 4 (if line has capacity and MCI jobs remain)
-        if job.is_mci_job() and mci_line:
+        if job.customer_name == "Midcontinent Instruments" and mci_line:
             load = line_loads[mci_line.id]
             line_completion = load['completion_date']
             
