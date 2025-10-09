@@ -391,7 +391,8 @@ def main():
                 "ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS earliest_completion_date DATE",
                 "ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS scheduled_start_date DATE",
                 "ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS scheduled_end_date DATE",
-                "ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS promise_date_variance_days INTEGER"
+                "ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS promise_date_variance_days INTEGER",
+                "ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS is_manual_schedule BOOLEAN DEFAULT FALSE"
             ]
             for sql in new_columns:
                 try:

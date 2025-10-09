@@ -1,7 +1,7 @@
 import { useState } from 'react' // Updated with SMT PRODUCTION filter - PRODUCTION FIX
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getWorkOrders, getLines, createWorkOrder, updateWorkOrder, deleteWorkOrder, completeWorkOrder, getDashboard, getStatuses } from '../api'
-import { Plus, Edit2, Trash2, Lock, Unlock, CheckCircle, Calendar, AlertTriangle, Zap } from 'lucide-react'
+import { Plus, Edit2, Trash2, Lock, Unlock, CheckCircle, Calendar, AlertTriangle, Zap, HandMetal } from 'lucide-react'
 import { format } from 'date-fns'
 import WorkOrderForm from '../components/WorkOrderForm'
 import CompleteJobModal from '../components/CompleteJobModal'
@@ -254,6 +254,13 @@ export default function Schedule() {
     updateMutation.mutate({
       id: wo.id,
       data: { is_locked: !wo.is_locked }
+    })
+  }
+
+  const toggleManualSchedule = (wo) => {
+    updateMutation.mutate({
+      id: wo.id,
+      data: { is_manual_schedule: !wo.is_manual_schedule }
     })
   }
 
@@ -831,6 +838,14 @@ export default function Schedule() {
                         title={wo.is_locked ? 'Unlock' : 'Lock'}
                       >
                         {wo.is_locked ? <Unlock size={14} /> : <Lock size={14} />}
+                      </button>
+                      <button 
+                        className={`btn btn-sm ${wo.is_manual_schedule ? 'btn-warning' : 'btn-secondary'}`}
+                        onClick={() => toggleManualSchedule(wo)}
+                        title={wo.is_manual_schedule ? 'Allow Auto-Schedule' : 'Manual Schedule Only'}
+                        style={{ opacity: wo.is_manual_schedule ? 1 : 0.6 }}
+                      >
+                        <HandMetal size={14} />
                       </button>
                       <button 
                         className="btn btn-sm btn-secondary" 

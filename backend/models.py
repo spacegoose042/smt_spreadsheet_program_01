@@ -197,6 +197,7 @@ class WorkOrder(Base):
     status_id = Column(Integer, ForeignKey("statuses.id"), nullable=True)  # New FK to Status table
     priority = Column(SQLEnum(Priority), default=Priority.FACTORY_DEFAULT)
     is_locked = Column(Boolean, default=False)  # "Locked if Highlighted"
+    is_manual_schedule = Column(Boolean, default=False)  # Exclude from auto-scheduler (hand-built schedules)
     is_new_rev_assembly = Column(Boolean, default=False)  # Replaces asterisk
     is_complete = Column(Boolean, default=False)
     

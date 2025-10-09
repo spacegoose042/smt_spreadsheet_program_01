@@ -92,6 +92,7 @@ class WorkOrderBase(BaseModel):
     status: Optional[WorkOrderStatus] = None  # Legacy: for backward compatibility
     priority: Priority = Priority.FACTORY_DEFAULT
     is_locked: bool = False
+    is_manual_schedule: bool = False
     is_new_rev_assembly: bool = False
     cetec_ship_date: date
     time_minutes: float
@@ -118,6 +119,7 @@ class WorkOrderUpdate(BaseModel):
     status: Optional[WorkOrderStatus] = None  # Legacy: for backward compatibility
     priority: Optional[Priority] = None
     is_locked: Optional[bool] = None
+    is_manual_schedule: Optional[bool] = None
     is_new_rev_assembly: Optional[bool] = None
     cetec_ship_date: Optional[date] = None
     time_minutes: Optional[float] = None

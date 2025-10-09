@@ -41,6 +41,7 @@ def get_schedulable_jobs(session: Session) -> List[WorkOrder]:
     - In 'SMT PRODUCTION' location (material ready)
     - Not complete
     - Not locked (user has manually positioned)
+    - Not manual schedule (hand-built schedules excluded)
     
     Returns:
         List of WorkOrder objects ready for scheduling
@@ -49,6 +50,7 @@ def get_schedulable_jobs(session: Session) -> List[WorkOrder]:
         and_(
             WorkOrder.is_complete == False,
             WorkOrder.is_locked == False,
+            WorkOrder.is_manual_schedule == False,
             WorkOrder.current_location == 'SMT PRODUCTION'
         )
     ).all()
