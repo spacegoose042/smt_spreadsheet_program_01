@@ -24,7 +24,7 @@ def get_schedulable_jobs(session: Session) -> List[WorkOrder]:
     """Get all jobs that can be auto-scheduled."""
     return session.query(WorkOrder).filter(
         and_(
-            WorkOrder.location == "SMT PRODUCTION",
+            WorkOrder.current_location == "SMT PRODUCTION",
             WorkOrder.is_complete == False,
             WorkOrder.is_locked == False,
             WorkOrder.is_manual_schedule == False
