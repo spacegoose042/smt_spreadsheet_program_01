@@ -1,8 +1,8 @@
 import { useState } from 'react' // Updated with SMT PRODUCTION filter - PRODUCTION FIX
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getDashboard, getWorkOrders, updateWorkOrder } from '../api'
+import { getDashboard, getWorkOrders, updateWorkOrder, getCapacityOverrides } from '../api'
 import { format, addDays, differenceInDays, differenceInMinutes, startOfWeek, isWeekend, startOfDay } from 'date-fns'
-import { Lock, AlertCircle, Clock } from 'lucide-react'
+import { Lock, AlertCircle, Clock, Wrench } from 'lucide-react'
 
 const PRIORITY_COLORS = {
   'Critical Mass': '#dc3545',
@@ -58,7 +58,7 @@ ${wo.notes ? `Notes: ${wo.notes}` : ''}${wo.is_locked ? '\n🔒 LOCKED' : ''}`;
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap',
-        minHeight: '3.2rem',
+        minHeight: '2.8rem',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'center',
@@ -137,6 +137,13 @@ export default function VisualScheduler() {
     refetchInterval: 30000,
   })
 
+  // Fetch capacity overrides to show line downtime
+  const { data: capacityOverrides } = useQuery({
+    queryKey: ['capacityOverrides', weekOffset],
+    queryFn: () => getCapacityOverrides(startDate.toISOString().split('T')[0], 4),
+    refetchInterval: 30000,
+  })
+
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => updateWorkOrder(id, data),
     onSuccess: () => {
@@ -188,6 +195,18 @@ export default function VisualScheduler() {
 
     updateMutation.mutate({ id: draggedWO.id, data: updates })
     setDraggedWO(null)
+  }
+
+  // Helper function to check if a line is down on a specific date
+  const isLineDownOnDate = (lineId, checkDate) => {
+    if (!capacityOverrides?.data?.overrides_by_line?.[lineId]) return false
+    
+    const overrides = capacityOverrides.data.overrides_by_line[lineId]
+    return overrides.some(override => {
+      const startDate = new Date(override.start_date)
+      const endDate = new Date(override.end_date)
+      return checkDate >= startDate && checkDate <= endDate && override.is_down
+    })
   }
 
   const getWOPosition = (wo, lineStartDate) => {
@@ -362,7 +381,7 @@ export default function VisualScheduler() {
                 borderBottom: '1px solid var(--border)',
                 background: dragOverLine === line.line.id ? '#e3f2fd' : 'white',
                 transition: 'background 0.2s',
-                minHeight: '4rem'
+                minHeight: '5rem'
               }}
             >
               {/* Line Name */}
@@ -371,10 +390,16 @@ export default function VisualScheduler() {
                 borderRight: '2px solid var(--border)',
                 display: 'flex',
                 flexDirection: 'column',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                background: isLineDownOnDate(line.line.id, new Date()) ? '#ffe6e6' : 'transparent',
+                border: isLineDownOnDate(line.line.id, new Date()) ? '2px solid #ff6b6b' : 'none',
+                borderRadius: '4px'
               }}>
-                <div style={{ fontWeight: 600, fontSize: '0.8rem' }}>
+                <div style={{ fontWeight: 600, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                   {line.line.name}
+                  {isLineDownOnDate(line.line.id, new Date()) && (
+                    <Wrench size={12} style={{ color: '#dc3545' }} title="Line Currently Down" />
+                  )}
                 </div>
                 <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
                   {line.total_jobs} jobs • {line.trolleys_in_use} trolleys
@@ -384,10 +409,45 @@ export default function VisualScheduler() {
                     → {format(new Date(line.completion_date), 'MMM d')}
                   </div>
                 )}
+                {isLineDownOnDate(line.line.id, new Date()) && (
+                  <div style={{ fontSize: '0.6rem', color: '#dc3545', fontWeight: 600 }}>
+                    ⚠️ DOWN
+                  </div>
+                )}
               </div>
 
               {/* Timeline */}
               <div style={{ position: 'relative', padding: '0.5rem 0' }}>
+                {/* Maintenance/Downtime indicators */}
+                {days.map((day, dayIndex) => {
+                  if (isLineDownOnDate(line.line.id, day)) {
+                    const leftPercent = (dayIndex / 28) * 100
+                    const widthPercent = (1 / 28) * 100
+                    
+                    return (
+                      <div
+                        key={`maintenance-${dayIndex}`}
+                        style={{
+                          position: 'absolute',
+                          left: `${leftPercent}%`,
+                          width: `${widthPercent}%`,
+                          height: '100%',
+                          background: 'repeating-linear-gradient(45deg, #ff6b6b, #ff6b6b 10px, #ff5252 10px, #ff5252 20px)',
+                          opacity: 0.7,
+                          zIndex: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          pointerEvents: 'none'
+                        }}
+                        title="Line Down for Maintenance"
+                      >
+                        <Wrench size={16} style={{ color: 'white', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.5))' }} />
+                      </div>
+                    )
+                  }
+                  return null
+                })}
                 {/* Weekend shading - make more visible */}
                 {days.map((day, i) => (
                   isWeekend(day) && (

@@ -398,6 +398,7 @@ def main():
     except Exception as e:
         print(f"   Note: is_manual_only column migration: {str(e)}")
     
+    
     # Add optimizer date columns for promise date management
     print("\n🔧 Adding optimizer date columns for promise date tracking...")
     try:

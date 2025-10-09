@@ -835,6 +835,53 @@ def get_capacity_calendar(
     }
 
 
+@app.get("/api/capacity/overrides")
+def get_capacity_overrides(
+    start_date: Optional[date] = None,
+    weeks: int = 8,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Get capacity overrides for all lines in a date range.
+    Used by visual scheduler to show maintenance/downtime.
+    """
+    # Default to current week's Sunday
+    if not start_date:
+        today = date.today()
+        days_since_sunday = (today.weekday() + 1) % 7
+        start_date = today - timedelta(days=days_since_sunday)
+    
+    end_date = start_date + timedelta(weeks=weeks)
+    
+    # Get all overrides in the date range
+    overrides = db.query(CapacityOverride).filter(
+        CapacityOverride.start_date <= end_date,
+        CapacityOverride.end_date >= start_date
+    ).all()
+    
+    # Group by line_id for easier frontend consumption
+    overrides_by_line = {}
+    for override in overrides:
+        if override.line_id not in overrides_by_line:
+            overrides_by_line[override.line_id] = []
+        overrides_by_line[override.line_id].append({
+            "id": override.id,
+            "start_date": override.start_date,
+            "end_date": override.end_date,
+            "total_hours": override.total_hours,
+            "reason": override.reason,
+            "shift_config": override.shift_config,
+            "is_down": override.total_hours == 0  # Line is down if 0 hours
+        })
+    
+    return {
+        "start_date": start_date,
+        "end_date": end_date,
+        "overrides_by_line": overrides_by_line
+    }
+
+
 @app.post("/api/capacity/overrides", dependencies=[Depends(auth.require_scheduler_or_admin)])
 def create_capacity_override(
     override: schemas.CapacityOverrideCreate,
