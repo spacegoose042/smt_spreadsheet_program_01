@@ -166,8 +166,8 @@ def simple_auto_schedule(
     
     # Step 4: Sort jobs by minimum start date (simple and reliable)
     def sort_key(job):
-        # Use calculated_min_start_date if available, otherwise cetec_ship_date, otherwise today
-        min_start = job.calculated_min_start_date or job.cetec_ship_date or date.today()
+        # Use min_start_date if available, otherwise cetec_ship_date, otherwise today
+        min_start = job.min_start_date or job.cetec_ship_date or date.today()
         return min_start
     
     sorted_jobs = sorted(jobs, key=sort_key)
