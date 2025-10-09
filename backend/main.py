@@ -2380,12 +2380,12 @@ def auto_schedule_jobs(
     current_user: User = Depends(auth.get_current_user)
 ):
     """
-    Run the auto-scheduler to optimize work order assignments.
+    Run the simple auto-scheduler to assign work orders to lines.
     
     Args:
-        mode: Optimization mode ('balanced', 'promise_focused', or 'throughput_max')
+        mode: Ignored - uses simple logic for all modes
         dry_run: If True, return proposed changes without saving
-        clear_existing: If True, clear all existing schedules before redistributing (balanced mode only)
+        clear_existing: If True, clear all existing schedules before redistributing
     
     Returns:
         Summary of scheduling results including:
@@ -2396,10 +2396,10 @@ def auto_schedule_jobs(
         - trolley_utilization: Trolley counts per line
         - changes: List of proposed changes (if dry_run=True)
     """
-    from optimizer import optimize_for_throughput
+    from simple_scheduler import simple_auto_schedule
     
     try:
-        result = optimize_for_throughput(db, mode=mode, dry_run=dry_run, clear_existing=clear_existing)
+        result = simple_auto_schedule(db, dry_run=dry_run, clear_existing=clear_existing)
         return result
     except Exception as e:
         print(f"Auto-schedule error: {str(e)}")
