@@ -91,7 +91,7 @@ export default function AutoScheduleModal({ onClose }) {
           style={{ 
             padding: '1.5rem 2rem',
             borderBottom: '2px solid #e9ecef',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: 'linear-gradient(135deg, #28a745 0%, #ffc107 100%)',
             color: 'white',
             borderRadius: '12px 12px 0 0'
           }}
@@ -117,7 +117,7 @@ export default function AutoScheduleModal({ onClose }) {
           </button>
         </div>
 
-        <div className="modal-body" style={{ padding: '2rem' }}>
+        <div className="modal-body" style={{ padding: '2rem', background: '#ffffff' }}>
           {/* Mode Selection */}
           <div className="form-group" style={{ marginBottom: '2rem' }}>
             <label className="form-label" style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.75rem' }}>
@@ -149,7 +149,7 @@ export default function AutoScheduleModal({ onClose }) {
                 padding: '0.75rem 1rem',
                 background: '#f8f9fa',
                 borderRadius: '8px',
-                borderLeft: '4px solid #667eea'
+                borderLeft: '4px solid #28a745'
               }}
             >
               {mode === 'balanced' && '⚖️ Distributes jobs evenly across lines while maximizing throughput'}
@@ -352,10 +352,11 @@ export default function AutoScheduleModal({ onClose }) {
           style={{ 
             padding: '1.5rem 2rem',
             borderTop: '2px solid #e9ecef',
-            background: '#f8f9fa',
+            background: '#ffffff',
             display: 'flex',
             gap: '1rem',
-            justifyContent: 'flex-end'
+            justifyContent: 'flex-end',
+            borderRadius: '0 0 12px 12px'
           }}
         >
           {!results && (
@@ -381,9 +382,9 @@ export default function AutoScheduleModal({ onClose }) {
                   fontSize: '1rem',
                   borderRadius: '8px',
                   fontWeight: 600,
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  background: 'linear-gradient(135deg, #28a745 0%, #ffc107 100%)',
                   border: 'none',
-                  boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
+                  boxShadow: '0 4px 12px rgba(40, 167, 69, 0.3)'
                 }}
               >
                 {previewMutation.isPending ? '⏳ Loading...' : '👁️ Preview Schedule'}
