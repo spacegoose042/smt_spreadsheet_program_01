@@ -217,19 +217,24 @@ export default function VisualScheduler() {
     }
     
     const overrides = capacityOverrides.data.overrides_by_line[lineId]
-    console.log(`Checking line ${lineId} on ${checkDate.toDateString()}, ${overrides.length} overrides`)
+    
+    // Normalize checkDate to date-only (YYYY-MM-DD string) to avoid timezone issues
+    const checkDateStr = format(checkDate, 'yyyy-MM-dd')
+    console.log(`Checking line ${lineId} on ${checkDateStr}, ${overrides.length} overrides`)
     
     const isDown = overrides.some(override => {
-      const startDate = new Date(override.start_date)
-      const endDate = new Date(override.end_date)
-      const inRange = checkDate >= startDate && checkDate <= endDate
+      const startDateStr = override.start_date
+      const endDateStr = override.end_date
       const isDownDay = override.is_down
       
-      console.log(`  Override: ${override.start_date} to ${override.end_date}, ${override.total_hours}h, down=${isDownDay}, inRange=${inRange}`)
+      // Compare date strings directly to avoid timezone issues
+      const inRange = checkDateStr >= startDateStr && checkDateStr <= endDateStr
+      
+      console.log(`  Override: ${startDateStr} to ${endDateStr}, ${override.total_hours}h, down=${isDownDay}, inRange=${inRange}`)
       
       // Debug logging
       if (inRange && isDownDay) {
-        console.log(`✅ Line ${lineId} is down on ${checkDate.toDateString()}`, override)
+        console.log(`✅ Line ${lineId} is down on ${checkDateStr}`, override)
       }
       
       return inRange && isDownDay
