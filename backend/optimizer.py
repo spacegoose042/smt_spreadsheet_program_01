@@ -540,6 +540,7 @@ def optimize_for_throughput(
         
         # Update line load (for next iteration)
         load = line_loads[new_line_id]
+        load['job_count'] += 1  # NEW LINE - increment job count for balanced mode
         load['positions_used'] = new_position
         if new_position <= 2:
             load['trolleys_in_p1_p2'] += (job.trolley_count or 0)
