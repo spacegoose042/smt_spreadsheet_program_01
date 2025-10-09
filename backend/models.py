@@ -173,6 +173,7 @@ class SMTLine(Base):
     is_active = Column(Boolean, default=True)
     is_special_customer = Column(Boolean, default=False)  # For MCI line
     special_customer_name = Column(String)  # e.g., "MCI"
+    is_manual_only = Column(Boolean, default=False)  # Hand-build line (no auto-scheduling)
     order_position = Column(Integer)  # For display ordering
     
     work_orders = relationship("WorkOrder", back_populates="line")
@@ -302,12 +303,18 @@ class WorkOrder(Base):
     def is_mci_job(self) -> bool:
         """
         Check if this is an MCI job (should go to Line 4).
+        Matches: "Midcontinent Instruments", "MCI", "MIDCONTINENT", etc.
         Returns:
-            bool: True if customer contains "MCI"
+            bool: True if customer is MCI/Midcontinent
         """
         if not self.customer:
             return False
-        return "MCI" in self.customer.upper() or "MIDCONTINENT" in self.customer.upper()
+        customer_upper = self.customer.upper()
+        return (
+            "MIDCONTINENT" in customer_upper or 
+            "MCI" in customer_upper or
+            "MID CONTINENT" in customer_upper  # Handle space variation
+        )
 
 
 class CetecSyncLog(Base):

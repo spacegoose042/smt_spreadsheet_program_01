@@ -113,16 +113,19 @@ def get_mci_line(session: Session) -> Optional[SMTLine]:
 
 def get_general_lines(session: Session) -> List[SMTLine]:
     """
-    Get Lines 1-3 (general purpose lines).
-    Excludes Line 4 (MCI dedicated).
+    Get general purpose lines available for auto-scheduling.
+    Excludes:
+    - MCI dedicated lines (is_special_customer=True)
+    - Manual-only/hand-build lines (is_manual_only=True)
     
     Returns:
-        List of SMTLine objects (Lines 1-3)
+        List of SMTLine objects available for auto-scheduling
     """
     return session.query(SMTLine).filter(
         and_(
             SMTLine.is_active == True,
-            SMTLine.is_special_customer == False
+            SMTLine.is_special_customer == False,
+            SMTLine.is_manual_only == False
         )
     ).order_by(SMTLine.order_position).all()
 

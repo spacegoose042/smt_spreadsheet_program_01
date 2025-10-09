@@ -102,10 +102,11 @@ def seed_lines(db: Session):
         ),
         SMTLine(
             name="Hand Build",
-            description="Manual assembly for small jobs",
+            description="Manual assembly for small jobs (no auto-scheduling)",
             hours_per_day=8.0,
             hours_per_week=40.0,
             is_active=True,
+            is_manual_only=True,  # Never auto-schedule to this line
             order_position=5
         )
     ]
@@ -114,6 +115,11 @@ def seed_lines(db: Session):
         existing = db.query(SMTLine).filter(SMTLine.name == line.name).first()
         if not existing:
             db.add(line)
+        else:
+            # Update existing lines with new properties
+            if line.name == "Hand Build":
+                existing.is_manual_only = True
+                existing.description = line.description
     
     db.commit()
     print("✓ Seeded SMT lines")
@@ -381,6 +387,16 @@ def main():
     except Exception as e:
         print(f"Error adding enum values: {e}")
         raise
+    
+    # Add is_manual_only column to smt_lines table
+    print("\n🔧 Adding is_manual_only column to smt_lines...")
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE smt_lines ADD COLUMN IF NOT EXISTS is_manual_only BOOLEAN DEFAULT FALSE"))
+            conn.commit()
+            print("   ✓ is_manual_only column added to smt_lines")
+    except Exception as e:
+        print(f"   Note: is_manual_only column migration: {str(e)}")
     
     # Add optimizer date columns for promise date management
     print("\n🔧 Adding optimizer date columns for promise date tracking...")
