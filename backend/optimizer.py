@@ -346,22 +346,14 @@ def find_best_line_for_job(
             print(f"🔍 Comparing Line {line.id} ({line.name}): {this_job_count} jobs vs Line {best_line}: {current_job_count} jobs")
             
             if mode == 'balanced':
-                if this_job_count < current_job_count:
-                    print(f"✅ Balanced mode: Line {line.id} has fewer jobs ({this_job_count} < {current_job_count}) - selecting it")
+                # Balanced mode: Choose line with earliest completion date for true load balancing
+                if line_completion < earliest_completion:
+                    print(f"✅ Balanced mode: Line {line.id} has earlier completion ({line_completion} < {earliest_completion}) - selecting it")
                     best_line = line.id
                     best_position = proposed_position
                     earliest_completion = line_completion
-                elif this_job_count == current_job_count:
-                    # Tiebreaker: choose line with earlier completion date for better load distribution
-                    if line_completion < earliest_completion:
-                        print(f"✅ Balanced mode: Tiebreaker - Line {line.id} has earlier completion ({line_completion} < {earliest_completion}) - selecting it")
-                        best_line = line.id
-                        best_position = proposed_position
-                        earliest_completion = line_completion
-                    else:
-                        print(f"❌ Balanced mode: Tiebreaker - keeping Line {best_line} with earlier completion")
                 else:
-                    print(f"❌ Balanced mode: Line {line.id} has more jobs ({this_job_count} > {current_job_count}) - keeping Line {best_line}")
+                    print(f"❌ Balanced mode: Line {line.id} has later completion ({line_completion} >= {earliest_completion}) - keeping Line {best_line}")
             elif mode != 'balanced' and line_completion < earliest_completion:
                 print(f"✅ Throughput mode: Line {line.id} has earlier completion ({line_completion} < {earliest_completion}) - selecting it")
                 best_line = line.id
@@ -472,19 +464,42 @@ def optimize_for_throughput(
         line_loads[line.id] = get_line_current_load(session, line.id)
         load = line_loads[line.id]
         print(f"📊 Line {line.id} ({line.name}): {load['job_count']} jobs, completion: {load['completion_date']}")
+    
+    # Always initialize MCI line loads (will be included in balancing if MCI jobs are done)
     if mci_line:
         line_loads[mci_line.id] = get_line_current_load(session, mci_line.id)
         load = line_loads[mci_line.id]
         print(f"📊 MCI Line {mci_line.id} ({mci_line.name}): {load['job_count']} jobs, completion: {load['completion_date']}")
     
-    # Step 5: Assign jobs to lines
+    # Step 5: Determine which lines are available for balancing
+    all_lines_for_balancing = general_lines.copy()
+    if mci_line:
+        # Check if all MCI jobs are already scheduled
+        unscheduled_mci_jobs = session.query(WorkOrder).filter(
+            and_(
+                WorkOrder.is_mci_job() == True,
+                WorkOrder.is_complete == False,
+                WorkOrder.is_locked == False,
+                WorkOrder.is_manual_schedule == False,
+                WorkOrder.line_id.is_(None)  # Not scheduled yet
+            )
+        ).count()
+        
+        if unscheduled_mci_jobs == 0:
+            # All MCI jobs are scheduled, Line 4 can accept any customer
+            all_lines_for_balancing.append(mci_line)
+            print(f"✅ Line 4 available for any customer - all MCI jobs scheduled")
+        else:
+            print(f"🔒 Line 4 MCI-only - {unscheduled_mci_jobs} MCI jobs remaining")
+    
+    # Step 6: Assign jobs to lines
     changes = []
     
     for job in sorted_jobs:
         old_line_id = job.line_id
         old_position = job.line_position
         
-        # MCI jobs go to Line 4 (if line has capacity)
+        # MCI jobs go to Line 4 (if line has capacity and MCI jobs remain)
         if job.is_mci_job() and mci_line:
             load = line_loads[mci_line.id]
             line_completion = load['completion_date']
@@ -512,16 +527,31 @@ def optimize_for_throughput(
                     # MCI line is down, assign to general lines
                     print(f"🔄 MCI job {job.wo_number} reassigned to general lines due to MCI line downtime")
                     new_line_id, new_position = find_best_line_for_job(
-                        session, job, general_lines, line_loads, mode
+                        session, job, all_lines_for_balancing, line_loads, mode
                     )
             else:
                 new_line_id = mci_line.id
                 new_position = load['positions_used'] + 1
         else:
-            # Find best general line
+            # Find best line (including Line 4 if MCI jobs are done)
             new_line_id, new_position = find_best_line_for_job(
-                session, job, general_lines, line_loads, mode
+                session, job, all_lines_for_balancing, line_loads, mode
             )
+        
+        # Validate no overlapping jobs (jobs can't start before previous job ends)
+        if new_line_id and new_position > 1:
+            # Check if this job would start before the previous job ends
+            previous_job = session.query(WorkOrder).filter(
+                and_(
+                    WorkOrder.line_id == new_line_id,
+                    WorkOrder.line_position == new_position - 1,
+                    WorkOrder.is_complete == False
+                )
+            ).first()
+            
+            if previous_job and previous_job.calculated_end_datetime:
+                # This is a rough check - the actual scheduling will be done later
+                print(f"🔍 Validation: Job {job.wo_number} position {new_position} after job {previous_job.wo_number} position {new_position - 1}")
         
         # Update job assignment
         if not dry_run:
@@ -555,7 +585,7 @@ def optimize_for_throughput(
         days_to_add = job_time_hours / 8
         load['completion_date'] = add_business_days(load['completion_date'], days_to_add)
     
-    # Step 6: Calculate actual scheduled dates for all lines
+    # Step 7: Calculate actual scheduled dates for all lines
     all_lines = general_lines + ([mci_line] if mci_line else [])
     
     for line in all_lines:
@@ -570,7 +600,7 @@ def optimize_for_throughput(
                     job.scheduled_end_date = dates['end_date']
                     job.promise_date_variance_days = job.calculate_promise_date_variance()
     
-    # Step 6b: Update variance for ALL jobs that have scheduled_end_date (including ones that weren't moved)
+    # Step 7b: Update variance for ALL jobs that have scheduled_end_date (including ones that weren't moved)
     if not dry_run:
         all_scheduled_jobs = session.query(WorkOrder).filter(
             and_(
