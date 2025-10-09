@@ -15,10 +15,30 @@ const PRIORITY_COLORS = {
 function WorkOrderBlock({ wo, onDragStart, isDragging, showTime = false }) {
   const canDrag = !wo.is_locked
   
+  // Calculate runtime and setup hours
+  const runtimeHours = wo.time_minutes ? Math.round(wo.time_minutes / 60 * 10) / 10 : 0;
+  const setupHours = wo.setup_time_hours || 1;
+  const totalHours = runtimeHours + setupHours;
+  
   // Format time range if available
   const timeRange = wo.calculated_start_datetime && wo.calculated_end_datetime
     ? `${format(new Date(wo.calculated_start_datetime), 'h:mm a')} - ${format(new Date(wo.calculated_end_datetime), 'h:mm a')}`
     : null
+  
+  // Format min start date
+  const minStartDate = wo.min_start_date ? format(new Date(wo.min_start_date), 'MMM d') : null;
+  
+  // Enhanced tooltip with all important info
+  const tooltipContent = `${wo.customer} - ${wo.assembly} ${wo.revision}
+WO: ${wo.wo_number}
+Qty: ${wo.quantity} units
+Runtime: ${runtimeHours}h + Setup: ${setupHours}h = ${totalHours}h total
+${minStartDate ? `Min Start: ${minStartDate}` : ''}
+Status: ${wo.status_name || wo.status || 'Unassigned'}
+Priority: ${wo.priority}
+Trolleys: ${wo.trolley_count}
+${timeRange ? `Scheduled: ${timeRange}` : ''}
+${wo.notes ? `Notes: ${wo.notes}` : ''}${wo.is_locked ? '\n🔒 LOCKED' : ''}`;
   
   return (
     <div
@@ -27,36 +47,70 @@ function WorkOrderBlock({ wo, onDragStart, isDragging, showTime = false }) {
       style={{
         background: PRIORITY_COLORS[wo.priority] || '#0066cc',
         color: 'white',
-        padding: '0.4rem 0.5rem',
-        borderRadius: '4px',
+        padding: '0.5rem 0.6rem',
+        borderRadius: '6px',
         cursor: canDrag ? 'grab' : 'not-allowed',
         fontSize: '0.7rem',
         border: '2px solid rgba(0,0,0,0.1)',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+        boxShadow: '0 3px 6px rgba(0,0,0,0.15)',
         opacity: isDragging ? 0.5 : 1,
         position: 'relative',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap',
-        minHeight: '2.5rem',
+        minHeight: '3.2rem',
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'center'
+        justifyContent: 'center',
+        transition: 'all 0.2s ease',
+        lineHeight: '1.2'
       }}
-      title={`${wo.customer} - ${wo.assembly} ${wo.revision}\nWO: ${wo.wo_number}\n${wo.quantity} units\n${wo.time_minutes} min${timeRange ? '\n' + timeRange : ''}${wo.is_locked ? '\n(LOCKED)' : ''}`}
+      title={tooltipContent}
+      onMouseEnter={(e) => {
+        if (!isDragging) {
+          e.currentTarget.style.transform = 'scale(1.02)';
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
+          e.currentTarget.style.zIndex = '10';
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!isDragging) {
+          e.currentTarget.style.transform = 'scale(1)';
+          e.currentTarget.style.boxShadow = '0 3px 6px rgba(0,0,0,0.15)';
+          e.currentTarget.style.zIndex = '1';
+        }
+      }}
     >
       {wo.is_locked && (
-        <Lock size={10} style={{ position: 'absolute', top: '2px', right: '2px' }} />
+        <Lock size={12} style={{ position: 'absolute', top: '3px', right: '3px' }} />
       )}
-      <div style={{ fontWeight: 600, fontSize: '0.75rem' }}>
+      
+      {/* Customer and Assembly */}
+      <div style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.1rem' }}>
         {wo.customer}
       </div>
-      <div style={{ fontSize: '0.65rem', opacity: 0.9 }}>
+      <div style={{ fontSize: '0.65rem', opacity: 0.9, marginBottom: '0.1rem' }}>
         {wo.assembly} • {wo.quantity}u
       </div>
+      
+      {/* Runtime Information */}
+      <div style={{ fontSize: '0.6rem', opacity: 0.85, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+        <Clock size={8} />
+        <span>{runtimeHours}h</span>
+        <span style={{ opacity: 0.7 }}>+{setupHours}h</span>
+        <span style={{ fontWeight: 600 }}>= {totalHours}h</span>
+      </div>
+      
+      {/* Min Start Date */}
+      {minStartDate && (
+        <div style={{ fontSize: '0.55rem', opacity: 0.8, marginTop: '0.1rem', fontWeight: 500 }}>
+          Min: {minStartDate}
+        </div>
+      )}
+      
+      {/* Time Range (if showTime is true) */}
       {showTime && timeRange && (
-        <div style={{ fontSize: '0.6rem', opacity: 0.85, marginTop: '0.15rem' }}>
-          <Clock size={8} style={{ display: 'inline', marginRight: '2px' }} />
+        <div style={{ fontSize: '0.55rem', opacity: 0.85, marginTop: '0.1rem', fontWeight: 500 }}>
           {timeRange}
         </div>
       )}

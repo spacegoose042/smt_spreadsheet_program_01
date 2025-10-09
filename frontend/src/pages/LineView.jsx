@@ -176,69 +176,111 @@ export default function LineView() {
               </tr>
               </thead>
               <tbody>
-                {filteredWOs.map((wo, idx) => (
-                  <tr key={wo.id} style={{ 
-                    background: wo.is_locked ? '#fff3cd' : idx === 0 ? '#d4edda' : 'transparent',
-                    fontWeight: idx === 0 ? 600 : 'normal'
-                  }}>
-                    <td>{wo.line_position}</td>
-                    <td>{wo.customer}</td>
-                    <td>
-                      {wo.assembly} {wo.revision}
-                      {wo.is_new_rev_assembly && <span style={{ color: 'var(--danger)' }}>*</span>}
-                    </td>
-                    <td><code>{wo.wo_number}</code></td>
-                    <td>{wo.quantity}</td>
-                    <td><StatusBadge status={wo.status} statusName={wo.status_name} statusColor={wo.status_color} /></td>
-                    <td><PriorityBadge priority={wo.priority} /></td>
-                    <td style={{ fontWeight: 600, color: 'var(--primary)' }}>
-                      {wo.calculated_start_datetime ? (
-                        <div>
-                          <div>{format(new Date(wo.calculated_start_datetime), 'MMM d, yyyy')}</div>
-                          <div style={{ fontSize: '0.7rem', opacity: 0.8 }}>
-                            {format(new Date(wo.calculated_start_datetime), 'h:mm a')}
+                {filteredWOs.map((wo, idx) => {
+                  const runtimeHours = wo.time_minutes ? Math.round(wo.time_minutes / 60 * 10) / 10 : 0;
+                  const setupHours = wo.setup_time_hours || 1;
+                  const totalHours = runtimeHours + setupHours;
+                  const minStartDate = wo.min_start_date ? format(new Date(wo.min_start_date), 'MMM d, yyyy') : '-';
+                  
+                  return (
+                    <tr 
+                      key={wo.id} 
+                      style={{ 
+                        background: wo.is_locked ? '#fff3cd' : idx === 0 ? '#d4edda' : 'transparent',
+                        fontWeight: idx === 0 ? 600 : 'normal',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = wo.is_locked ? '#ffeaa7' : idx === 0 ? '#a8e6cf' : '#f8f9fa';
+                        e.currentTarget.style.transform = 'scale(1.01)';
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = wo.is_locked ? '#fff3cd' : idx === 0 ? '#d4edda' : 'transparent';
+                        e.currentTarget.style.transform = 'scale(1)';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
+                      title={`${wo.customer} - ${wo.assembly} ${wo.revision}\nWO: ${wo.wo_number}\nQty: ${wo.quantity}\nRuntime: ${runtimeHours}h + Setup: ${setupHours}h = ${totalHours}h total\nMin Start: ${minStartDate}\nStatus: ${wo.status_name || wo.status || 'Unassigned'}\nPriority: ${wo.priority}\n${wo.notes ? `Notes: ${wo.notes}` : ''}`}
+                    >
+                      <td style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{wo.line_position}</td>
+                      <td style={{ fontWeight: 500 }}>{wo.customer}</td>
+                      <td style={{ fontWeight: 500 }}>
+                        {wo.assembly} {wo.revision}
+                        {wo.is_new_rev_assembly && <span style={{ color: 'var(--danger)', marginLeft: '0.25rem' }}>*</span>}
+                      </td>
+                      <td><code style={{ fontSize: '0.9rem', background: '#f8f9fa', padding: '0.25rem 0.5rem', borderRadius: '4px' }}>{wo.wo_number}</code></td>
+                      <td style={{ fontWeight: 500, textAlign: 'center' }}>{wo.quantity}</td>
+                      <td><StatusBadge status={wo.status} statusName={wo.status_name} statusColor={wo.status_color} /></td>
+                      <td><PriorityBadge priority={wo.priority} /></td>
+                      <td style={{ fontWeight: 600, color: 'var(--primary)' }}>
+                        {wo.calculated_start_datetime ? (
+                          <div>
+                            <div>{format(new Date(wo.calculated_start_datetime), 'MMM d, yyyy')}</div>
+                            <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>
+                              {format(new Date(wo.calculated_start_datetime), 'h:mm a')}
+                            </div>
+                          </div>
+                        ) : wo.calculated_start_date ? (
+                          format(new Date(wo.calculated_start_date), 'MMM d, yyyy')
+                        ) : '-'}
+                        {minStartDate !== '-' && (
+                          <div style={{ fontSize: '0.7rem', color: '#6c757d', marginTop: '0.25rem' }}>
+                            Min: {minStartDate}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ fontWeight: 600, color: 'var(--success)' }}>
+                        {wo.calculated_end_datetime ? (
+                          <div>
+                            <div>{format(new Date(wo.calculated_end_datetime), 'MMM d, yyyy')}</div>
+                            <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>
+                              {format(new Date(wo.calculated_end_datetime), 'h:mm a')}
+                            </div>
+                          </div>
+                        ) : wo.calculated_end_date ? (
+                          format(new Date(wo.calculated_end_date), 'MMM d, yyyy')
+                        ) : '-'}
+                      </td>
+                      <td style={{ color: wo.actual_ship_date && new Date(wo.actual_ship_date) < new Date() ? '#dc3545' : 'inherit' }}>
+                        {wo.actual_ship_date ? format(new Date(wo.actual_ship_date), 'MMM d') : '-'}
+                      </td>
+                      <td style={{ fontWeight: 500, textAlign: 'center' }}>
+                        <div style={{ fontSize: '0.9rem' }}>
+                          <div style={{ color: '#28a745' }}>{runtimeHours}h</div>
+                          <div style={{ fontSize: '0.75rem', color: '#6c757d' }}>
+                            +{setupHours}h setup
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: '#495057', fontWeight: 600 }}>
+                            = {totalHours}h total
                           </div>
                         </div>
-                      ) : wo.calculated_start_date ? (
-                        format(new Date(wo.calculated_start_date), 'MMM d, yyyy')
-                      ) : '-'}
-                    </td>
-                    <td style={{ fontWeight: 600, color: 'var(--success)' }}>
-                      {wo.calculated_end_datetime ? (
-                        <div>
-                          <div>{format(new Date(wo.calculated_end_datetime), 'MMM d, yyyy')}</div>
-                          <div style={{ fontSize: '0.7rem', opacity: 0.8 }}>
-                            {format(new Date(wo.calculated_end_datetime), 'h:mm a')}
-                          </div>
+                      </td>
+                      <td style={{ textAlign: 'center', fontWeight: 500 }}>{wo.trolley_count}</td>
+                      <td style={{ maxWidth: '150px', fontSize: '0.85rem' }}>{wo.notes}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <button 
+                            className="btn btn-sm btn-success" 
+                            onClick={() => setCompletingWO(wo)}
+                            title="Mark as Complete"
+                            style={{ padding: '0.4rem 0.6rem' }}
+                          >
+                            <CheckCircle size={14} />
+                          </button>
+                          <button 
+                            className="btn btn-sm btn-warning" 
+                            onClick={() => setReportingIssueWO(wo)}
+                            title="Report Issue"
+                            style={{ padding: '0.4rem 0.6rem' }}
+                          >
+                            <AlertTriangle size={14} />
+                          </button>
                         </div>
-                      ) : wo.calculated_end_date ? (
-                        format(new Date(wo.calculated_end_date), 'MMM d, yyyy')
-                      ) : '-'}
-                    </td>
-                    <td>{wo.actual_ship_date ? format(new Date(wo.actual_ship_date), 'MMM d') : '-'}</td>
-                    <td>{wo.time_minutes} min</td>
-                    <td>{wo.trolley_count}</td>
-                    <td>{wo.notes}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button 
-                          className="btn btn-sm btn-success" 
-                          onClick={() => setCompletingWO(wo)}
-                          title="Mark as Complete"
-                        >
-                          <CheckCircle size={14} />
-                        </button>
-                        <button 
-                          className="btn btn-sm btn-warning" 
-                          onClick={() => setReportingIssueWO(wo)}
-                          title="Report Issue"
-                        >
-                          <AlertTriangle size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
