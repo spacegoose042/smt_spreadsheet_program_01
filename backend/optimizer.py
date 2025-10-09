@@ -131,6 +131,70 @@ def get_general_lines(session: Session) -> List[SMTLine]:
     ).order_by(SMTLine.order_position).all()
 
 
+def move_jobs_off_down_lines(session: Session, general_lines: List[SMTLine], mci_line: Optional[SMTLine]) -> List[WorkOrder]:
+    """
+    Identify and move jobs that are scheduled during line downtime.
+    
+    Args:
+        session: Database session
+        general_lines: List of general lines available for scheduling
+        mci_line: MCI line (if available)
+    
+    Returns:
+        List of WorkOrder objects that were moved
+    """
+    moved_jobs = []
+    all_lines = general_lines + ([mci_line] if mci_line else [])
+    
+    for line in all_lines:
+        # Get all jobs currently scheduled on this line
+        line_jobs = session.query(WorkOrder).filter(
+            and_(
+                WorkOrder.line_id == line.id,
+                WorkOrder.is_complete == False,
+                WorkOrder.is_locked == False  # Don't move locked jobs
+            )
+        ).all()
+        
+        for job in line_jobs:
+            # Check if job is scheduled during downtime
+            if job.calculated_start_date and job.calculated_end_date:
+                job_start = datetime.strptime(job.calculated_start_date, '%Y-%m-%d').date()
+                job_end = datetime.strptime(job.calculated_end_date, '%Y-%m-%d').date()
+                
+                # Check each day the job is scheduled
+                current_date = job_start
+                job_conflicts_with_downtime = False
+                
+                while current_date <= job_end:
+                    day_capacity = get_capacity_for_date(session, line.id, current_date, 8.0)
+                    if day_capacity == 0:
+                        job_conflicts_with_downtime = True
+                        print(f"🚨 Job {job.wo_number} on Line {line.id} conflicts with downtime on {current_date}")
+                        break
+                    current_date += timedelta(days=1)
+                
+                if job_conflicts_with_downtime:
+                    # Move this job to another line
+                    print(f"🔄 Moving job {job.wo_number} off Line {line.id} due to downtime conflict")
+                    
+                    # Remove from current line
+                    job.line_id = None
+                    job.line_position = None
+                    job.calculated_start_date = None
+                    job.calculated_end_date = None
+                    job.calculated_start_datetime = None
+                    job.calculated_end_datetime = None
+                    
+                    moved_jobs.append(job)
+    
+    if moved_jobs:
+        print(f"📦 Moved {len(moved_jobs)} jobs off down lines: {[job.wo_number for job in moved_jobs]}")
+        session.commit()
+    
+    return moved_jobs
+
+
 def get_line_current_load(session: Session, line_id: int) -> Dict:
     """
     Calculate current workload on a line.
@@ -311,6 +375,14 @@ def optimize_for_throughput(
     # Step 1: Get schedulable jobs
     jobs = get_schedulable_jobs(session)
     
+    # Step 1.5: Move existing jobs off down lines
+    general_lines = get_general_lines(session)
+    mci_line = get_mci_line(session)
+    moved_jobs = move_jobs_off_down_lines(session, general_lines, mci_line)
+    
+    # Add moved jobs to the schedulable jobs list
+    jobs.extend(moved_jobs)
+    
     if not jobs:
         return {
             'jobs_scheduled': 0,
@@ -332,9 +404,7 @@ def optimize_for_throughput(
     
     sorted_jobs = sorted(jobs, key=sort_key)
     
-    # Step 4: Get lines
-    mci_line = get_mci_line(session)
-    general_lines = get_general_lines(session)
+    # Step 4: Lines already obtained in Step 1.5
     
     # Initialize line loads
     line_loads = {}
