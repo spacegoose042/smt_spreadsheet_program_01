@@ -264,21 +264,23 @@ def find_best_line_for_job(
     session: Session,
     job: WorkOrder,
     general_lines: List[SMTLine],
-    line_loads: Dict[int, Dict]
+    line_loads: Dict[int, Dict],
+    mode: str = 'balanced'
 ) -> Tuple[int, int]:
     """
     Find the best line and position for a job.
     
-    Strategy (Throughput Focused):
-    1. Pick line with earliest completion date (balance load)
-    2. Check trolley constraints
-    3. Append to end of queue (maximize throughput, minimize gaps)
+    Strategy:
+    - Balanced mode: Pick line with fewest jobs (load balancing)
+    - Throughput mode: Pick line with earliest completion date (maximize throughput)
+    - Always check trolley constraints and line capacity
     
     Args:
         session: Database session
         job: WorkOrder to assign
         general_lines: List of available lines (1-3)
         line_loads: Current load info for each line
+        mode: 'balanced' or 'throughput_max' or 'promise_focused'
     
     Returns:
         (line_id, position) tuple
@@ -326,10 +328,25 @@ def find_best_line_for_job(
                 print(f"❌ Skipping Line {line.id} for job {job.wo_number} - no capacity during scheduling period")
                 continue  # Skip this line if it's down during scheduling period
         
-        if best_line is None or line_completion < earliest_completion:
+        # Choose line based on mode
+        if best_line is None:
             best_line = line.id
             best_position = proposed_position
             earliest_completion = line_completion
+        else:
+            # For balanced mode, prefer line with fewer jobs
+            # For throughput mode, prefer line with earliest completion
+            current_job_count = line_loads[best_line]['job_count']
+            this_job_count = load['job_count']
+            
+            if mode == 'balanced' and this_job_count < current_job_count:
+                best_line = line.id
+                best_position = proposed_position
+                earliest_completion = line_completion
+            elif mode != 'balanced' and line_completion < earliest_completion:
+                best_line = line.id
+                best_position = proposed_position
+                earliest_completion = line_completion
     
     if best_line is None:
         # Fallback: assign to first line (shouldn't happen often)
@@ -446,7 +463,7 @@ def optimize_for_throughput(
                     # MCI line is down, assign to general lines
                     print(f"🔄 MCI job {job.wo_number} reassigned to general lines due to MCI line downtime")
                     new_line_id, new_position = find_best_line_for_job(
-                        session, job, general_lines, line_loads
+                        session, job, general_lines, line_loads, mode
                     )
             else:
                 new_line_id = mci_line.id
@@ -454,7 +471,7 @@ def optimize_for_throughput(
         else:
             # Find best general line
             new_line_id, new_position = find_best_line_for_job(
-                session, job, general_lines, line_loads
+                session, job, general_lines, line_loads, mode
             )
         
         # Update job assignment
