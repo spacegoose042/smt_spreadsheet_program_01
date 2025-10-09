@@ -138,15 +138,19 @@ export default function VisualScheduler() {
   })
 
   // Fetch capacity overrides to show line downtime
+  // Use Monday start date to match capacity calendar (add 1 day to Sunday start)
+  const capacityStartDate = addDays(startDate, 1) // Monday instead of Sunday
   const { data: capacityOverrides } = useQuery({
     queryKey: ['capacityOverrides', weekOffset],
-    queryFn: () => getCapacityOverrides(startDate.toISOString().split('T')[0], 4),
+    queryFn: () => getCapacityOverrides(capacityStartDate.toISOString().split('T')[0], 4),
     refetchInterval: 30000,
   })
 
   // Debug logging for capacity overrides
   if (capacityOverrides) {
-    console.log('Capacity Overrides Data:', capacityOverrides.data)
+    console.log('Visual Scheduler Start Date:', startDate.toISOString().split('T')[0])
+    console.log('Capacity Overrides Start Date:', capacityStartDate.toISOString().split('T')[0])
+    console.log('Capacity Overrides Data:', JSON.stringify(capacityOverrides.data, null, 2))
   }
 
   const updateMutation = useMutation({
@@ -204,23 +208,31 @@ export default function VisualScheduler() {
 
   // Helper function to check if a line is down on a specific date
   const isLineDownOnDate = (lineId, checkDate) => {
-    if (!capacityOverrides?.data?.overrides_by_line?.[lineId]) return false
+    if (!capacityOverrides?.data?.overrides_by_line?.[lineId]) {
+      console.log(`No overrides found for line ${lineId}`)
+      return false
+    }
     
     const overrides = capacityOverrides.data.overrides_by_line[lineId]
+    console.log(`Checking line ${lineId} on ${checkDate.toDateString()}, ${overrides.length} overrides`)
+    
     const isDown = overrides.some(override => {
       const startDate = new Date(override.start_date)
       const endDate = new Date(override.end_date)
       const inRange = checkDate >= startDate && checkDate <= endDate
       const isDownDay = override.is_down
       
+      console.log(`  Override: ${override.start_date} to ${override.end_date}, ${override.total_hours}h, down=${isDownDay}, inRange=${inRange}`)
+      
       // Debug logging
       if (inRange && isDownDay) {
-        console.log(`Line ${lineId} is down on ${checkDate.toDateString()}`, override)
+        console.log(`✅ Line ${lineId} is down on ${checkDate.toDateString()}`, override)
       }
       
       return inRange && isDownDay
     })
     
+    console.log(`Line ${lineId} down result: ${isDown}`)
     return isDown
   }
 

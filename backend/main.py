@@ -875,11 +875,22 @@ def get_capacity_overrides(
             "is_down": override.total_hours == 0  # Line is down if 0 hours
         })
     
-    return {
+    result = {
         "start_date": start_date,
         "end_date": end_date,
         "overrides_by_line": overrides_by_line
     }
+    
+    # Debug logging
+    print(f"🔍 Capacity Overrides API Response: {len(overrides)} overrides found for date range {start_date} to {end_date}")
+    if len(overrides) == 0:
+        print("   No capacity overrides found in this date range")
+    else:
+        for line_id, line_overrides in overrides_by_line.items():
+            for override in line_overrides:
+                print(f"   Line {line_id}: {override['start_date']} to {override['end_date']}, {override['total_hours']}h, down={override['is_down']}")
+    
+    return result
 
 
 @app.post("/api/capacity/overrides", dependencies=[Depends(auth.require_scheduler_or_admin)])
