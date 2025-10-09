@@ -59,74 +59,158 @@ export default function AutoScheduleModal({ onClose }) {
   }
 
   return (
-    <div className="modal-overlay">
-      <div className="modal" style={{ maxWidth: '900px', maxHeight: '90vh', overflow: 'auto' }}>
-        <div className="modal-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Zap size={24} />
-            <h2 style={{ margin: 0 }}>Auto-Schedule Jobs</h2>
+    <div className="modal-overlay" style={{ zIndex: 1000 }}>
+      <div 
+        className="modal" 
+        style={{ 
+          maxWidth: '1200px', 
+          width: '95%',
+          maxHeight: '95vh', 
+          overflow: 'auto',
+          borderRadius: '12px',
+          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)'
+        }}
+      >
+        <div 
+          className="modal-header" 
+          style={{ 
+            padding: '1.5rem 2rem',
+            borderBottom: '2px solid #e9ecef',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            color: 'white',
+            borderRadius: '12px 12px 0 0'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <Zap size={28} style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))' }} />
+            <div>
+              <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>Auto-Schedule Jobs</h2>
+              <p style={{ margin: 0, fontSize: '0.875rem', opacity: 0.9 }}>Optimize your production schedule</p>
+            </div>
           </div>
-          <button onClick={onClose} className="btn-icon">
+          <button 
+            onClick={onClose} 
+            className="btn-icon"
+            style={{
+              background: 'rgba(255, 255, 255, 0.2)',
+              color: 'white',
+              padding: '0.5rem',
+              borderRadius: '8px'
+            }}
+          >
             <X size={20} />
           </button>
         </div>
 
-        <div className="modal-body">
+        <div className="modal-body" style={{ padding: '2rem' }}>
           {/* Mode Selection */}
-          <div className="form-group">
-            <label className="form-label">Optimization Mode</label>
+          <div className="form-group" style={{ marginBottom: '2rem' }}>
+            <label className="form-label" style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.75rem' }}>
+              Optimization Mode
+            </label>
             <select
               className="form-input"
               value={mode}
               onChange={(e) => setMode(e.target.value)}
               disabled={previewMutation.isPending || applyMutation.isPending}
+              style={{
+                fontSize: '1rem',
+                padding: '0.75rem 1rem',
+                borderRadius: '8px',
+                border: '2px solid #e9ecef',
+                background: 'white',
+                cursor: 'pointer'
+              }}
             >
-              <option value="balanced">Balanced (Default)</option>
-              <option value="throughput_max">Maximum Throughput</option>
-              <option value="promise_focused">Promise Date Focused</option>
+              <option value="balanced">⚖️ Balanced (Recommended)</option>
+              <option value="throughput_max">🚀 Maximum Throughput</option>
+              <option value="promise_focused">📅 Promise Date Focused</option>
             </select>
-            <p style={{ fontSize: '0.875rem', color: '#666', marginTop: '0.5rem' }}>
-              {mode === 'balanced' && 'Distributes jobs evenly across lines while maximizing throughput'}
-              {mode === 'throughput_max' && 'Prioritizes maximum jobs/day, may have uneven line loading'}
-              {mode === 'promise_focused' && 'Slight bias toward hitting promise dates, lower throughput'}
-            </p>
+            <div 
+              style={{ 
+                fontSize: '0.875rem', 
+                color: '#6c757d', 
+                marginTop: '0.75rem',
+                padding: '0.75rem 1rem',
+                background: '#f8f9fa',
+                borderRadius: '8px',
+                borderLeft: '4px solid #667eea'
+              }}
+            >
+              {mode === 'balanced' && '⚖️ Distributes jobs evenly across lines while maximizing throughput'}
+              {mode === 'throughput_max' && '🚀 Prioritizes maximum jobs/day, may have uneven line loading'}
+              {mode === 'promise_focused' && '📅 Slight bias toward hitting promise dates, lower throughput'}
+            </div>
           </div>
 
           {/* Preview Results */}
           {results && (
-            <div style={{ marginTop: '1.5rem' }}>
-              <h3 style={{ marginBottom: '1rem' }}>
-                {isPreview ? '📋 Preview Results' : '✅ Applied Successfully!'}
-              </h3>
+            <div style={{ marginTop: '2rem' }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '0.75rem',
+                marginBottom: '1.5rem',
+                paddingBottom: '1rem',
+                borderBottom: '2px solid #e9ecef'
+              }}>
+                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700 }}>
+                  {isPreview ? '📋 Preview Results' : '✅ Applied Successfully!'}
+                </h3>
+              </div>
 
               {/* Summary Cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-                <div className="card" style={{ background: '#e3f2fd', padding: '1rem' }}>
-                  <div style={{ fontSize: '0.875rem', color: '#1976d2', marginBottom: '0.25rem' }}>Jobs Scheduled</div>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#1565c0' }}>{results.jobs_scheduled}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem', marginBottom: '2rem' }}>
+                <div style={{ 
+                  background: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)', 
+                  padding: '1.5rem', 
+                  borderRadius: '12px',
+                  border: '1px solid #90caf9',
+                  boxShadow: '0 4px 12px rgba(33, 150, 243, 0.1)'
+                }}>
+                  <div style={{ fontSize: '0.875rem', color: '#1565c0', marginBottom: '0.5rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Jobs Scheduled</div>
+                  <div style={{ fontSize: '2rem', fontWeight: 700, color: '#0d47a1' }}>{results.jobs_scheduled}</div>
                 </div>
 
-                <div className="card" style={{ background: '#fff3e0', padding: '1rem' }}>
-                  <div style={{ fontSize: '0.875rem', color: '#f57c00', marginBottom: '0.25rem' }}>At Risk</div>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#ef6c00' }}>{results.jobs_at_risk?.length || 0}</div>
+                <div style={{ 
+                  background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)', 
+                  padding: '1.5rem', 
+                  borderRadius: '12px',
+                  border: '1px solid #ffb74d',
+                  boxShadow: '0 4px 12px rgba(255, 152, 0, 0.1)'
+                }}>
+                  <div style={{ fontSize: '0.875rem', color: '#ef6c00', marginBottom: '0.5rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>At Risk</div>
+                  <div style={{ fontSize: '2rem', fontWeight: 700, color: '#e65100' }}>{results.jobs_at_risk?.length || 0}</div>
                 </div>
 
-                <div className="card" style={{ background: '#ffebee', padding: '1rem' }}>
-                  <div style={{ fontSize: '0.875rem', color: '#d32f2f', marginBottom: '0.25rem' }}>Will Be Late</div>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#c62828' }}>{results.jobs_will_be_late?.length || 0}</div>
+                <div style={{ 
+                  background: 'linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%)', 
+                  padding: '1.5rem', 
+                  borderRadius: '12px',
+                  border: '1px solid #ef5350',
+                  boxShadow: '0 4px 12px rgba(244, 67, 54, 0.1)'
+                }}>
+                  <div style={{ fontSize: '0.875rem', color: '#c62828', marginBottom: '0.5rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Will Be Late</div>
+                  <div style={{ fontSize: '2rem', fontWeight: 700, color: '#b71c1c' }}>{results.jobs_will_be_late?.length || 0}</div>
                 </div>
 
                 {isPreview && (
-                  <div className="card" style={{ background: '#f3e5f5', padding: '1rem' }}>
-                    <div style={{ fontSize: '0.875rem', color: '#7b1fa2', marginBottom: '0.25rem' }}>Changes</div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#6a1b9a' }}>{results.changes?.length || 0}</div>
+                  <div style={{ 
+                    background: 'linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%)', 
+                    padding: '1.5rem', 
+                    borderRadius: '12px',
+                    border: '1px solid #ba68c8',
+                    boxShadow: '0 4px 12px rgba(156, 39, 176, 0.1)'
+                  }}>
+                    <div style={{ fontSize: '0.875rem', color: '#6a1b9a', marginBottom: '0.5rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Changes</div>
+                    <div style={{ fontSize: '2rem', fontWeight: 700, color: '#4a148c' }}>{results.changes?.length || 0}</div>
                   </div>
                 )}
               </div>
 
               {/* Line Assignments */}
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h4 style={{ marginBottom: '0.75rem' }}>Line Distribution</h4>
+              <div style={{ marginBottom: '2rem' }}>
+                <h4 style={{ marginBottom: '1rem', fontSize: '1.1rem', fontWeight: 600, color: '#495057' }}>📊 Line Distribution</h4>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.75rem' }}>
                   {Object.entries(results.line_assignments || {}).map(([lineName, load]) => (
                     <div key={lineName} className="card" style={{ padding: '0.75rem' }}>
@@ -144,8 +228,8 @@ export default function AutoScheduleModal({ onClose }) {
               </div>
 
               {/* Trolley Utilization */}
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h4 style={{ marginBottom: '0.75rem' }}>Trolley Utilization (Positions 1+2)</h4>
+              <div style={{ marginBottom: '2rem' }}>
+                <h4 style={{ marginBottom: '1rem', fontSize: '1.1rem', fontWeight: 600, color: '#495057' }}>🛒 Trolley Utilization (Positions 1+2)</h4>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
                   {Object.entries(results.trolley_utilization || {}).map(([lineName, util]) => (
                     <div 
@@ -173,8 +257,8 @@ export default function AutoScheduleModal({ onClose }) {
 
               {/* Late Jobs List */}
               {results.jobs_will_be_late && results.jobs_will_be_late.length > 0 && (
-                <div>
-                  <h4 style={{ marginBottom: '0.75rem', color: '#d32f2f' }}>
+                <div style={{ marginBottom: '2rem' }}>
+                  <h4 style={{ marginBottom: '1rem', fontSize: '1.1rem', fontWeight: 600, color: '#d32f2f' }}>
                     ⚠️ Jobs That Will Miss Promise Dates
                   </h4>
                   <div className="card" style={{ padding: '0.5rem', maxHeight: '200px', overflowY: 'auto' }}>
@@ -248,47 +332,115 @@ export default function AutoScheduleModal({ onClose }) {
           )}
         </div>
 
-        <div className="modal-footer">
+        <div 
+          className="modal-footer" 
+          style={{ 
+            padding: '1.5rem 2rem',
+            borderTop: '2px solid #e9ecef',
+            background: '#f8f9fa',
+            display: 'flex',
+            gap: '1rem',
+            justifyContent: 'flex-end'
+          }}
+        >
           {!results && (
             <>
-              <button onClick={onClose} className="btn-secondary">
+              <button 
+                onClick={onClose} 
+                className="btn-secondary"
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  fontSize: '1rem',
+                  borderRadius: '8px',
+                  fontWeight: 600
+                }}
+              >
                 Cancel
               </button>
               <button 
                 onClick={handlePreview} 
                 className="btn-primary"
                 disabled={previewMutation.isPending}
+                style={{
+                  padding: '0.75rem 2rem',
+                  fontSize: '1rem',
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  border: 'none',
+                  boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
+                }}
               >
-                {previewMutation.isPending ? 'Loading...' : '👁️ Preview Schedule'}
+                {previewMutation.isPending ? '⏳ Loading...' : '👁️ Preview Schedule'}
               </button>
             </>
           )}
 
           {results && isPreview && (
             <>
-              <button onClick={onClose} className="btn-secondary">
+              <button 
+                onClick={onClose} 
+                className="btn-secondary"
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  fontSize: '1rem',
+                  borderRadius: '8px',
+                  fontWeight: 600
+                }}
+              >
                 Cancel
               </button>
               <button 
                 onClick={handlePreview} 
                 className="btn-secondary"
                 disabled={previewMutation.isPending}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  fontSize: '1rem',
+                  borderRadius: '8px',
+                  fontWeight: 600
+                }}
               >
                 🔄 Re-Preview
               </button>
               <button 
                 onClick={handleApply} 
-                className="btn-primary"
+                className="btn-success"
                 disabled={applyMutation.isPending}
+                style={{
+                  padding: '0.75rem 2rem',
+                  fontSize: '1rem',
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
+                  border: 'none',
+                  color: 'white',
+                  boxShadow: '0 4px 12px rgba(56, 239, 125, 0.3)'
+                }}
               >
-                {applyMutation.isPending ? 'Applying...' : '✅ Apply Schedule'}
+                {applyMutation.isPending ? '⏳ Applying...' : '✅ Apply Schedule'}
               </button>
             </>
           )}
 
           {results && !isPreview && (
-            <button onClick={onClose} className="btn-primary">
-              <CheckCircle2 size={16} style={{ marginRight: '0.5rem' }} />
+            <button 
+              onClick={onClose} 
+              className="btn-success"
+              style={{
+                padding: '0.75rem 2rem',
+                fontSize: '1rem',
+                borderRadius: '8px',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
+                border: 'none',
+                color: 'white'
+              }}
+            >
+              <CheckCircle2 size={18} />
               Done
             </button>
           )}
