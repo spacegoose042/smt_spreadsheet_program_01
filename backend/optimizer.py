@@ -297,6 +297,7 @@ def find_best_line_for_job(
         
         # Position will be at end of queue
         proposed_position = load['positions_used'] + 1
+        print(f"🔍 Line {line.id} proposed position: {proposed_position} (current positions_used: {load['positions_used']})")
         
         # Check trolley constraint if this would be position 1 or 2
         if proposed_position <= 2:
@@ -346,14 +347,23 @@ def find_best_line_for_job(
             print(f"🔍 Comparing Line {line.id} ({line.name}): {this_job_count} jobs vs Line {best_line}: {current_job_count} jobs")
             
             if mode == 'balanced':
-                # Balanced mode: Choose line with earliest completion date for true load balancing
-                if line_completion < earliest_completion:
-                    print(f"✅ Balanced mode: Line {line.id} has earlier completion ({line_completion} < {earliest_completion}) - selecting it")
+                # Balanced mode: Choose line with fewer jobs for true load balancing
+                if this_job_count < current_job_count:
+                    print(f"✅ Balanced mode: Line {line.id} has fewer jobs ({this_job_count} < {current_job_count}) - selecting it")
                     best_line = line.id
                     best_position = proposed_position
                     earliest_completion = line_completion
+                elif this_job_count == current_job_count:
+                    # Tiebreaker: choose line with earlier completion date
+                    if line_completion < earliest_completion:
+                        print(f"✅ Balanced mode: Tiebreaker - Line {line.id} has earlier completion ({line_completion} < {earliest_completion}) - selecting it")
+                        best_line = line.id
+                        best_position = proposed_position
+                        earliest_completion = line_completion
+                    else:
+                        print(f"❌ Balanced mode: Tiebreaker - keeping Line {best_line} with earlier completion")
                 else:
-                    print(f"❌ Balanced mode: Line {line.id} has later completion ({line_completion} >= {earliest_completion}) - keeping Line {best_line}")
+                    print(f"❌ Balanced mode: Line {line.id} has more jobs ({this_job_count} > {current_job_count}) - keeping Line {best_line}")
             elif mode != 'balanced' and line_completion < earliest_completion:
                 print(f"✅ Throughput mode: Line {line.id} has earlier completion ({line_completion} < {earliest_completion}) - selecting it")
                 best_line = line.id
@@ -571,8 +581,11 @@ def optimize_for_throughput(
         
         # Update line load (for next iteration)
         load = line_loads[new_line_id]
+        old_job_count = load['job_count']
+        old_positions_used = load['positions_used']
         load['job_count'] += 1  # NEW LINE - increment job count for balanced mode
         load['positions_used'] = new_position
+        print(f"📊 Updated Line {new_line_id}: jobs {old_job_count} → {load['job_count']}, positions {old_positions_used} → {load['positions_used']}")
         if new_position <= 2:
             load['trolleys_in_p1_p2'] += (job.trolley_count or 0)
         
