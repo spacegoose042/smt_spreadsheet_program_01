@@ -475,9 +475,10 @@ def optimize_for_throughput(
     all_lines_for_balancing = general_lines.copy()
     if mci_line:
         # Check if all MCI jobs are already scheduled
+        # Query for MCI jobs using SQLAlchemy OR to match any MCI variation
         unscheduled_mci_jobs = session.query(WorkOrder).filter(
             and_(
-                WorkOrder.customer_name == "Midcontinent Instruments",
+                WorkOrder.customer.ilike("%Midcontinent%"),
                 WorkOrder.is_complete == False,
                 WorkOrder.is_locked == False,
                 WorkOrder.is_manual_schedule == False,
@@ -500,7 +501,7 @@ def optimize_for_throughput(
         old_position = job.line_position
         
         # MCI jobs go to Line 4 (if line has capacity and MCI jobs remain)
-        if job.customer_name == "Midcontinent Instruments" and mci_line:
+        if job.is_mci_job() and mci_line:
             load = line_loads[mci_line.id]
             line_completion = load['completion_date']
             
