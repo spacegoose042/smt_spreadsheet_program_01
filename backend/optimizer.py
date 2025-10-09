@@ -253,12 +253,15 @@ def find_best_line_for_job(
             for day_offset in range(job_duration_days):
                 check_date = job_start_date + timedelta(days=day_offset)
                 day_capacity = get_capacity_for_date(session, line.id, check_date, 8.0)
+                print(f"🔍 Optimizer checking Line {line.id} capacity on {check_date}: {day_capacity}h")
                 if day_capacity == 0:
                     # Line is down on this date - skip this line
+                    print(f"❌ Line {line.id} is down on {check_date} - skipping for job {job.wo_number}")
                     has_capacity = False
                     break
             
             if not has_capacity:
+                print(f"❌ Skipping Line {line.id} for job {job.wo_number} - no capacity during scheduling period")
                 continue  # Skip this line if it's down during scheduling period
         
         if best_line is None or line_completion < earliest_completion:
@@ -361,15 +364,19 @@ def optimize_for_throughput(
                 for day_offset in range(job_duration_days):
                     check_date = job_start_date + timedelta(days=day_offset)
                     day_capacity = get_capacity_for_date(session, mci_line.id, check_date, 8.0)
+                    print(f"🔍 Optimizer checking MCI Line {mci_line.id} capacity on {check_date}: {day_capacity}h")
                     if day_capacity == 0:
+                        print(f"❌ MCI Line {mci_line.id} is down on {check_date} - assigning to general lines")
                         has_capacity = False
                         break
                 
                 if has_capacity:
                     new_line_id = mci_line.id
                     new_position = load['positions_used'] + 1
+                    print(f"✅ MCI job {job.wo_number} assigned to MCI Line {mci_line.id}")
                 else:
                     # MCI line is down, assign to general lines
+                    print(f"🔄 MCI job {job.wo_number} reassigned to general lines due to MCI line downtime")
                     new_line_id, new_position = find_best_line_for_job(
                         session, job, general_lines, line_loads
                     )
