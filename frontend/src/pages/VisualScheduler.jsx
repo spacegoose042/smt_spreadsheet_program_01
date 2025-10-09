@@ -124,6 +124,11 @@ export default function VisualScheduler() {
   const [dragOverLine, setDragOverLine] = useState(null)
   const [weekOffset, setWeekOffset] = useState(0)
   
+  // Calculate timeline (show 4 weeks starting from this week)
+  const today = new Date()
+  const startDate = addDays(startOfWeek(today), weekOffset * 7)
+  const days = Array.from({ length: 28 }, (_, i) => addDays(startDate, i))
+  
   const { data: dashboard, isLoading } = useQuery({
     queryKey: ['dashboard'],
     queryFn: getDashboard,
@@ -163,11 +168,6 @@ export default function VisualScheduler() {
       queryClient.invalidateQueries(['workOrders'])
     },
   })
-
-  // Calculate timeline (show 4 weeks starting from this week)
-  const today = new Date()
-  const startDate = addDays(startOfWeek(today), weekOffset * 7)
-  const days = Array.from({ length: 28 }, (_, i) => addDays(startDate, i))
 
   const handleDragStart = (e, wo) => {
     if (wo.is_locked) {
