@@ -66,6 +66,7 @@ def calculate_earliest_completion_dates(session: Session, jobs: List[WorkOrder] 
     
     Sets earliest_completion_date on each WorkOrder.
     This is used to flag jobs "at risk" of missing promise dates.
+    # Balanced mode load distribution fix applied
     
     Args:
         session: Database session
