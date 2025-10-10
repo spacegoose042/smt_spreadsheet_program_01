@@ -835,6 +835,64 @@ def get_capacity_calendar(
     }
 
 
+@app.get("/api/capacity/overrides")
+def get_capacity_overrides(
+    start_date: Optional[date] = None,
+    weeks: int = 8,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Get capacity overrides for all lines in a date range.
+    Used by visual scheduler to show maintenance/downtime.
+    """
+    # Default to current week's Sunday
+    if not start_date:
+        today = date.today()
+        days_since_sunday = (today.weekday() + 1) % 7
+        start_date = today - timedelta(days=days_since_sunday)
+    
+    end_date = start_date + timedelta(weeks=weeks)
+    
+    # Get all overrides in the date range
+    overrides = db.query(CapacityOverride).filter(
+        CapacityOverride.start_date <= end_date,
+        CapacityOverride.end_date >= start_date
+    ).all()
+    
+    # Group by line_id for easier frontend consumption
+    overrides_by_line = {}
+    for override in overrides:
+        if override.line_id not in overrides_by_line:
+            overrides_by_line[override.line_id] = []
+        overrides_by_line[override.line_id].append({
+            "id": override.id,
+            "start_date": override.start_date,
+            "end_date": override.end_date,
+            "total_hours": override.total_hours,
+            "reason": override.reason,
+            "shift_config": override.shift_config,
+            "is_down": override.total_hours == 0  # Line is down if 0 hours
+        })
+    
+    result = {
+        "start_date": start_date,
+        "end_date": end_date,
+        "overrides_by_line": overrides_by_line
+    }
+    
+    # Debug logging
+    print(f"🔍 Capacity Overrides API Response: {len(overrides)} overrides found for date range {start_date} to {end_date}")
+    if len(overrides) == 0:
+        print("   No capacity overrides found in this date range")
+    else:
+        for line_id, line_overrides in overrides_by_line.items():
+            for override in line_overrides:
+                print(f"   Line {line_id}: {override['start_date']} to {override['end_date']}, {override['total_hours']}h, down={override['is_down']}")
+    
+    return result
+
+
 @app.post("/api/capacity/overrides", dependencies=[Depends(auth.require_scheduler_or_admin)])
 def create_capacity_override(
     override: schemas.CapacityOverrideCreate,
@@ -2307,6 +2365,163 @@ def import_from_cetec(
         db.rollback()
         print(f"Import failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+
+
+# ============================================================================
+# OPTIMIZER ENDPOINTS - Auto-Scheduling
+# ============================================================================
+
+@app.post("/api/auto-schedule")
+def auto_schedule_jobs(
+    mode: str = "balanced",
+    dry_run: bool = True,
+    clear_existing: bool = False,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Run the simple auto-scheduler to assign work orders to lines.
+    
+    Args:
+        mode: Ignored - uses simple logic for all modes
+        dry_run: If True, return proposed changes without saving
+        clear_existing: If True, clear all existing schedules before redistributing
+    
+    Returns:
+        Summary of scheduling results including:
+        - jobs_scheduled: Total jobs processed
+        - jobs_at_risk: Jobs that might miss promise dates
+        - jobs_will_be_late: Jobs currently scheduled to be late
+        - line_assignments: Distribution across lines
+        - trolley_utilization: Trolley counts per line
+        - changes: List of proposed changes (if dry_run=True)
+    """
+    from simple_scheduler import simple_auto_schedule
+    
+    try:
+        result = simple_auto_schedule(db, dry_run=dry_run, clear_existing=clear_existing)
+        return result
+    except Exception as e:
+        print(f"Auto-schedule error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Auto-schedule failed: {str(e)}")
+
+
+@app.get("/api/schedule-analysis")
+def get_schedule_analysis(db: Session = Depends(get_db)):
+    """
+    Get current schedule statistics and performance metrics.
+    
+    Returns:
+        - promise_date_stats: Hit rate, average variance
+        - jobs_at_risk_count: Number of jobs that might miss promise dates
+        - jobs_late_count: Number of jobs currently scheduled to be late
+        - trolley_utilization: Current trolley usage
+        - line_loads: Current workload per line
+    """
+    from optimizer import get_schedulable_jobs, get_general_lines, get_mci_line, get_line_current_load
+    from sqlalchemy import and_
+    
+    try:
+        # Get all jobs with scheduled dates
+        all_jobs = db.query(WorkOrder).filter(
+            and_(
+                WorkOrder.is_complete == False,
+                WorkOrder.scheduled_end_date.isnot(None)
+            )
+        ).all()
+        
+        if not all_jobs:
+            return {
+                'promise_date_stats': {
+                    'total_jobs': 0,
+                    'on_time': 0,
+                    'at_risk': 0,
+                    'will_be_late': 0,
+                    'hit_rate_percent': 0,
+                    'average_variance_days': 0
+                },
+                'jobs_at_risk_count': 0,
+                'jobs_late_count': 0,
+                'trolley_utilization': {},
+                'line_loads': {}
+            }
+        
+        # Calculate stats
+        on_time_jobs = [j for j in all_jobs if not j.will_be_late()]
+        at_risk_jobs = [j for j in all_jobs if j.is_at_risk()]
+        late_jobs = [j for j in all_jobs if j.will_be_late()]
+        
+        hit_rate = (len(on_time_jobs) / len(all_jobs)) * 100 if all_jobs else 0
+        
+        # Calculate average variance
+        variances = [j.promise_date_variance_days for j in all_jobs if j.promise_date_variance_days is not None]
+        avg_variance = sum(variances) / len(variances) if variances else 0
+        
+        # Get line loads
+        general_lines = get_general_lines(db)
+        mci_line = get_mci_line(db)
+        all_lines = general_lines + ([mci_line] if mci_line else [])
+        
+        line_loads = {}
+        trolley_util = {}
+        for line in all_lines:
+            load = get_line_current_load(db, line.id)
+            line_loads[line.name] = {
+                'job_count': load['job_count'],
+                'total_hours': round(load['total_hours'], 2),
+                'completion_date': load['completion_date'].isoformat()
+            }
+            trolley_util[line.name] = {
+                'positions_1_2': load['trolleys_in_p1_p2'],
+                'limit': 24,
+                'exceeds_limit': load['trolleys_in_p1_p2'] > 24
+            }
+        
+        return {
+            'promise_date_stats': {
+                'total_jobs': len(all_jobs),
+                'on_time': len(on_time_jobs),
+                'at_risk': len(at_risk_jobs),
+                'will_be_late': len(late_jobs),
+                'hit_rate_percent': round(hit_rate, 1),
+                'average_variance_days': round(avg_variance, 1)
+            },
+            'jobs_at_risk_count': len(at_risk_jobs),
+            'jobs_late_count': len(late_jobs),
+            'trolley_utilization': trolley_util,
+            'line_loads': line_loads
+        }
+    except Exception as e:
+        print(f"Schedule analysis error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+
+@app.get("/api/capacity-forecast")
+def get_capacity_forecast_endpoint(weeks: int = 8, db: Session = Depends(get_db)):
+    """
+    Get capacity forecast for the next N weeks.
+    
+    Args:
+        weeks: Number of weeks to forecast (default: 8)
+    
+    Returns:
+        - weeks: Array of weekly capacity data
+        - pipeline: Summary of work not yet in SMT PRODUCTION
+    """
+    from optimizer import get_capacity_forecast
+    
+    try:
+        forecast = get_capacity_forecast(db, weeks=weeks)
+        return forecast
+    except Exception as e:
+        print(f"Capacity forecast error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Forecast failed: {str(e)}")
 
 
 if __name__ == "__main__":

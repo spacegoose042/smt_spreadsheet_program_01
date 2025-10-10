@@ -70,6 +70,8 @@ export const adminResetPassword = (userId, data) => api.post(`/api/users/${userI
 // Capacity Calendar
 export const getCapacityCalendar = (lineId, startDate = null, weeks = 8) =>
   api.get(`/api/capacity/calendar/${lineId}`, { params: { start_date: startDate, weeks } })
+export const getCapacityOverrides = (startDate = null, weeks = 8) =>
+  api.get('/api/capacity/overrides', { params: { start_date: startDate, weeks } })
 export const createCapacityOverride = (data) => api.post('/api/capacity/overrides', data)
 export const updateCapacityOverride = (id, data) => api.put(`/api/capacity/overrides/${id}`, data)
 export const deleteCapacityOverride = (id) => api.delete(`/api/capacity/overrides/${id}`)

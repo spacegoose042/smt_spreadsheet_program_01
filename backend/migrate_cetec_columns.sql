@@ -23,3 +23,5 @@ WHERE table_name = 'work_orders'
 AND column_name IN ('cetec_ordline_id', 'current_location', 'material_status', 'last_cetec_sync')
 ORDER BY column_name;
 
+
+

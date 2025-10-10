@@ -92,6 +92,7 @@ class WorkOrderBase(BaseModel):
     status: Optional[WorkOrderStatus] = None  # Legacy: for backward compatibility
     priority: Priority = Priority.FACTORY_DEFAULT
     is_locked: bool = False
+    is_manual_schedule: bool = False
     is_new_rev_assembly: bool = False
     cetec_ship_date: date
     time_minutes: float
@@ -118,6 +119,7 @@ class WorkOrderUpdate(BaseModel):
     status: Optional[WorkOrderStatus] = None  # Legacy: for backward compatibility
     priority: Optional[Priority] = None
     is_locked: Optional[bool] = None
+    is_manual_schedule: Optional[bool] = None
     is_new_rev_assembly: Optional[bool] = None
     cetec_ship_date: Optional[date] = None
     time_minutes: Optional[float] = None
@@ -155,6 +157,12 @@ class WorkOrderResponse(WorkOrderBase):
     calculated_start_datetime: Optional[datetime] = None
     calculated_end_datetime: Optional[datetime] = None
     wo_start_datetime: Optional[datetime] = None
+    
+    # Optimizer date fields (promise date tracking)
+    earliest_completion_date: Optional[date] = None
+    scheduled_start_date: Optional[date] = None
+    scheduled_end_date: Optional[date] = None
+    promise_date_variance_days: Optional[int] = None
     
     # Cetec Integration
     cetec_ordline_id: Optional[int] = None
