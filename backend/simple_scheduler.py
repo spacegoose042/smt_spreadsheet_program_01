@@ -301,8 +301,11 @@ def simple_auto_schedule(
                     earliest_available = tracker['completion_date']
                     print(f"✅ MCI job assigned to Line {line_id}")
         
-        # If not MCI line or MCI line unavailable, find earliest available slot
+        # If not MCI line or MCI line unavailable, use LOAD BALANCING logic
         if best_line_id is None:
+            # Find all eligible lines and sort by load balancing criteria
+            eligible_lines = []
+            
             for line_id, tracker in line_tracker.items():
                 # Skip MCI line for non-MCI jobs if it's MCI-only
                 if (mci_line and line_id == mci_line.id and 
@@ -329,10 +332,28 @@ def simple_auto_schedule(
                             break
                     
                     if has_capacity:
-                        if earliest_available is None or tracker['completion_date'] < earliest_available:
-                            best_line_id = line_id
-                            best_position = tracker['next_position']
-                            earliest_available = tracker['completion_date']
+                        eligible_lines.append((line_id, tracker))
+            
+            # Sort eligible lines by load balancing criteria:
+            # 1. Fewer jobs first (job count)
+            # 2. Earlier completion date second (to keep lines moving)
+            # 3. Line ID third (for consistency)
+            eligible_lines.sort(key=lambda x: (
+                x[1]['job_count'],           # Fewer jobs = higher priority
+                x[1]['completion_date'],     # Earlier completion = higher priority  
+                x[0]                         # Line ID for consistency
+            ))
+            
+            if eligible_lines:
+                best_line_id = eligible_lines[0][0]
+                best_position = eligible_lines[0][1]['next_position']
+                earliest_available = eligible_lines[0][1]['completion_date']
+                
+                # Debug: Show load balancing decision
+                print(f"   Load balancing: {len(eligible_lines)} eligible lines")
+                for i, (line_id, tracker) in enumerate(eligible_lines[:3]):  # Show top 3
+                    print(f"     {i+1}. Line {line_id}: {tracker['job_count']} jobs, completes {tracker['completion_date']}")
+                print(f"   → Selected Line {best_line_id} (fewest jobs: {eligible_lines[0][1]['job_count']})")
         
         # Assign job
         if best_line_id is not None:
