@@ -153,6 +153,8 @@ def simple_auto_schedule(
         dict with scheduling results and statistics
     """
     print(f"🚀 Starting SIMPLE scheduler (dry_run={dry_run}, clear_existing={clear_existing})")
+    print(f"🔧 DEBUG: clear_existing parameter = {clear_existing}")
+    print(f"🔧 DEBUG: dry_run parameter = {dry_run}")
     
     # Step 1: Get schedulable jobs
     jobs = get_schedulable_jobs(session)
