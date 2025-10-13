@@ -21,13 +21,14 @@ from scheduler import (
 
 
 def get_schedulable_jobs(session: Session) -> List[WorkOrder]:
-    """Get all jobs that can be auto-scheduled."""
+    """Get all jobs that can be auto-scheduled (unscheduled jobs only)."""
     return session.query(WorkOrder).filter(
         and_(
             WorkOrder.current_location == "SMT PRODUCTION",
             WorkOrder.is_complete == False,
             WorkOrder.is_locked == False,
-            WorkOrder.is_manual_schedule == False
+            WorkOrder.is_manual_schedule == False,
+            WorkOrder.line_id.is_(None)  # Only get unscheduled jobs
         )
     ).all()
 
@@ -148,6 +149,7 @@ def simple_auto_schedule(
         print("🧹 Clearing existing schedules...")
         all_scheduled_jobs = session.query(WorkOrder).filter(
             and_(
+                WorkOrder.current_location == "SMT PRODUCTION",
                 WorkOrder.is_complete == False,
                 WorkOrder.is_locked == False,
                 WorkOrder.is_manual_schedule == False,
@@ -163,6 +165,16 @@ def simple_auto_schedule(
         
         jobs.extend(all_scheduled_jobs)
         print(f"📦 Cleared {len(all_scheduled_jobs)} existing jobs for redistribution")
+    
+    # Step 3.5: Deduplicate jobs by ID to prevent double-scheduling
+    seen_ids = set()
+    unique_jobs = []
+    for job in jobs:
+        if job.id not in seen_ids:
+            seen_ids.add(job.id)
+            unique_jobs.append(job)
+    jobs = unique_jobs
+    print(f"📋 After deduplication: {len(jobs)} unique jobs to schedule")
     
     # Step 4: Sort jobs by priority, then minimum start date (simple and reliable)
     def sort_key(job):
