@@ -227,6 +227,20 @@ def simple_auto_schedule(
     sorted_jobs = sorted(jobs, key=sort_key)
     print(f"📅 Sorted {len(sorted_jobs)} jobs by priority, then minimum start date")
     
+    # Step 4.5: Check Line 4 MCI availability (regardless of jobs to schedule)
+    if mci_line:
+        incomplete_mci_jobs = session.query(WorkOrder).filter(
+            and_(
+                WorkOrder.customer.ilike("%Midcontinent%"),
+                WorkOrder.is_complete == False
+            )
+        ).count()
+        
+        if incomplete_mci_jobs == 0:
+            print(f"✅ Line 4 available for any customer (all MCI jobs completed)")
+        else:
+            print(f"🔒 Line 4 MCI-only ({incomplete_mci_jobs} incomplete MCI jobs remaining)")
+    
     # Step 5: Initialize line tracking
     line_tracker = {}
     available_lines = general_lines.copy()
