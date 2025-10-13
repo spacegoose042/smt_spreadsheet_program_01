@@ -325,6 +325,9 @@ def get_work_orders(
     
     if line_id:
         query = query.filter(WorkOrder.line_id == line_id)
+        # Debug: Log how many jobs are found for this line
+        count = query.count()
+        print(f"🔍 API: Found {count} jobs for line_id={line_id}")
     
     if status:
         # Filter by status name (using new Status table)

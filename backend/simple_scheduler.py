@@ -434,6 +434,14 @@ def simple_auto_schedule(
             'exceeds_limit': load['trolleys_in_p1_p2'] > 24
         }
     
+    # Step 11: Commit changes to database
+    if not dry_run:
+        session.commit()
+        print("💾 Changes committed to database")
+    else:
+        session.rollback()
+        print("👀 Dry run complete - no changes committed")
+    
     print(f"✅ Simple scheduler complete: {len(changes)} changes made")
     
     return {
