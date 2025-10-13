@@ -22,7 +22,42 @@ from scheduler import (
 
 def get_schedulable_jobs(session: Session) -> List[WorkOrder]:
     """Get all jobs that can be auto-scheduled (unscheduled jobs only)."""
-    return session.query(WorkOrder).filter(
+    # Debug: Show what we're filtering
+    total_in_smt = session.query(WorkOrder).filter(
+        WorkOrder.current_location == "SMT PRODUCTION"
+    ).count()
+    
+    total_incomplete = session.query(WorkOrder).filter(
+        and_(
+            WorkOrder.current_location == "SMT PRODUCTION",
+            WorkOrder.is_complete == False
+        )
+    ).count()
+    
+    total_unlocked = session.query(WorkOrder).filter(
+        and_(
+            WorkOrder.current_location == "SMT PRODUCTION",
+            WorkOrder.is_complete == False,
+            WorkOrder.is_locked == False
+        )
+    ).count()
+    
+    total_auto_schedulable = session.query(WorkOrder).filter(
+        and_(
+            WorkOrder.current_location == "SMT PRODUCTION",
+            WorkOrder.is_complete == False,
+            WorkOrder.is_locked == False,
+            WorkOrder.is_manual_schedule == False
+        )
+    ).count()
+    
+    print(f"🔍 Job filtering breakdown:")
+    print(f"   Total in SMT PRODUCTION: {total_in_smt}")
+    print(f"   Not complete: {total_incomplete}")
+    print(f"   Not locked: {total_unlocked}")
+    print(f"   Not manual schedule: {total_auto_schedulable}")
+    
+    unscheduled = session.query(WorkOrder).filter(
         and_(
             WorkOrder.current_location == "SMT PRODUCTION",
             WorkOrder.is_complete == False,
@@ -31,6 +66,10 @@ def get_schedulable_jobs(session: Session) -> List[WorkOrder]:
             WorkOrder.line_id.is_(None)  # Only get unscheduled jobs
         )
     ).all()
+    
+    print(f"   Unscheduled (line_id IS NULL): {len(unscheduled)}")
+    
+    return unscheduled
 
 
 def get_line_current_load(session: Session, line_id: int) -> Dict:
@@ -117,7 +156,7 @@ def simple_auto_schedule(
     
     # Step 1: Get schedulable jobs
     jobs = get_schedulable_jobs(session)
-    print(f"📋 Found {len(jobs)} schedulable jobs")
+    print(f"📋 Found {len(jobs)} unscheduled jobs in SMT PRODUCTION")
     
     if not jobs:
         return {
@@ -165,6 +204,7 @@ def simple_auto_schedule(
         
         jobs.extend(all_scheduled_jobs)
         print(f"📦 Cleared {len(all_scheduled_jobs)} existing jobs for redistribution")
+        print(f"📋 Total jobs before dedup: {len(jobs)} (unscheduled + cleared)")
     
     # Step 3.5: Deduplicate jobs by ID to prevent double-scheduling
     seen_ids = set()
