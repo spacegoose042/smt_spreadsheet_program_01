@@ -69,7 +69,7 @@ export default function Schedule() {
   const queryClient = useQueryClient()
 
   const { data: workOrders, isLoading: loadingWOs } = useQuery({
-    queryKey: ['workOrders', filterLine, filterStatus],
+    queryKey: ['workOrders', filterLine, filterStatus, filterLocation, filterMaterialStatus],
     queryFn: () => getWorkOrders({
       line_id: filterLine === 'unscheduled' ? undefined : (filterLine || undefined),
       status: filterStatus || undefined,
