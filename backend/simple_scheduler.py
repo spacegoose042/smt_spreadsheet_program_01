@@ -183,38 +183,42 @@ def simple_auto_schedule(
         )
     ).first()
     
-    # Step 3: Clear existing schedules if requested
-    if clear_existing and not dry_run:
-        print("🧹 Clearing existing schedules...")
-        all_scheduled_jobs = session.query(WorkOrder).filter(
+    # Step 3: Handle clear_existing logic
+    if clear_existing:
+        if not dry_run:
+            print("🧹 Clearing existing schedules...")
+            # Clear schedules in database immediately
+            session.query(WorkOrder).filter(
+                and_(
+                    WorkOrder.current_location == "SMT PRODUCTION",
+                    WorkOrder.is_complete == False,
+                    WorkOrder.is_locked == False,
+                    WorkOrder.is_manual_schedule == False,
+                    WorkOrder.line_id.isnot(None)
+                )
+            ).update({
+                'line_id': None,
+                'line_position': None,
+                'calculated_start_datetime': None,
+                'calculated_end_datetime': None
+            })
+            session.commit()
+            print("💾 Cleared schedules committed to database")
+        
+        # Re-query for unscheduled jobs after clearing
+        jobs = session.query(WorkOrder).filter(
             and_(
                 WorkOrder.current_location == "SMT PRODUCTION",
                 WorkOrder.is_complete == False,
                 WorkOrder.is_locked == False,
                 WorkOrder.is_manual_schedule == False,
-                WorkOrder.line_id.isnot(None)
+                WorkOrder.line_id.is_(None)
             )
         ).all()
-        
-        for job in all_scheduled_jobs:
-            job.line_id = None
-            job.line_position = None
-            job.calculated_start_datetime = None
-            job.calculated_end_datetime = None
-        
-        jobs.extend(all_scheduled_jobs)
-        print(f"📦 Cleared {len(all_scheduled_jobs)} existing jobs for redistribution")
-        print(f"📋 Total jobs before dedup: {len(jobs)} (unscheduled + cleared)")
-    
-    # Step 3.5: Deduplicate jobs by ID to prevent double-scheduling
-    seen_ids = set()
-    unique_jobs = []
-    for job in jobs:
-        if job.id not in seen_ids:
-            seen_ids.add(job.id)
-            unique_jobs.append(job)
-    jobs = unique_jobs
-    print(f"📋 After deduplication: {len(jobs)} unique jobs to schedule")
+        print(f"📋 After clearing: {len(jobs)} jobs available for scheduling")
+    else:
+        # Use original unscheduled jobs
+        print(f"📋 Using {len(jobs)} originally unscheduled jobs")
     
     # Step 4: Sort jobs by priority, then minimum start date (simple and reliable)
     def sort_key(job):
