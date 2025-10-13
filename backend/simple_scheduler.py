@@ -156,36 +156,7 @@ def simple_auto_schedule(
     print(f"🔧 DEBUG: clear_existing parameter = {clear_existing}")
     print(f"🔧 DEBUG: dry_run parameter = {dry_run}")
     
-    # Step 1: Get schedulable jobs
-    jobs = get_schedulable_jobs(session)
-    print(f"📋 Found {len(jobs)} unscheduled jobs in SMT PRODUCTION")
-    
-    if not jobs:
-        return {
-            'jobs_scheduled': 0,
-            'jobs_at_risk': [],
-            'jobs_will_be_late': [],
-            'line_assignments': {},
-            'trolley_utilization': {},
-            'changes': []
-        }
-    
-    # Step 2: Get lines
-    general_lines = session.query(SMTLine).filter(
-        and_(
-            SMTLine.is_active == True,
-            SMTLine.is_manual_only == False
-        )
-    ).order_by(SMTLine.id).all()
-    
-    mci_line = session.query(SMTLine).filter(
-        and_(
-            SMTLine.is_active == True,
-            SMTLine.name.ilike("%MCI%")
-        )
-    ).first()
-    
-    # Step 3: Handle clear_existing logic
+    # Step 0: Handle clear_existing logic FIRST (before getting schedulable jobs)
     if clear_existing:
         print(f"🧹 clear_existing=True, dry_run={dry_run}")
         
@@ -222,21 +193,35 @@ def simple_auto_schedule(
             print(f"💾 Cleared {result} schedules committed to database")
         elif dry_run:
             print("👀 Dry run - would clear schedules but not committing")
-        
-        # Re-query for unscheduled jobs after clearing
-        jobs = session.query(WorkOrder).filter(
-            and_(
-                WorkOrder.current_location == "SMT PRODUCTION",
-                WorkOrder.is_complete == False,
-                WorkOrder.is_locked == False,
-                WorkOrder.is_manual_schedule == False,
-                WorkOrder.line_id.is_(None)
-            )
-        ).all()
-        print(f"📋 After clearing: {len(jobs)} jobs available for scheduling")
-    else:
-        # Use original unscheduled jobs
-        print(f"📋 Using {len(jobs)} originally unscheduled jobs")
+    
+    # Step 1: Get schedulable jobs (after potentially clearing)
+    jobs = get_schedulable_jobs(session)
+    print(f"📋 Found {len(jobs)} unscheduled jobs in SMT PRODUCTION")
+    
+    if not jobs:
+        return {
+            'jobs_scheduled': 0,
+            'jobs_at_risk': [],
+            'jobs_will_be_late': [],
+            'line_assignments': {},
+            'trolley_utilization': {},
+            'changes': []
+        }
+    
+    # Step 2: Get lines
+    general_lines = session.query(SMTLine).filter(
+        and_(
+            SMTLine.is_active == True,
+            SMTLine.is_manual_only == False
+        )
+    ).order_by(SMTLine.id).all()
+    
+    mci_line = session.query(SMTLine).filter(
+        and_(
+            SMTLine.is_active == True,
+            SMTLine.name.ilike("%MCI%")
+        )
+    ).first()
     
     # Step 4: Sort jobs by priority, then minimum start date (simple and reliable)
     def sort_key(job):
