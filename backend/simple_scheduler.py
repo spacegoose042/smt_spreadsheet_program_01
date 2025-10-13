@@ -233,21 +233,20 @@ def simple_auto_schedule(
     
     # Add MCI line if it can accept non-MCI jobs
     if mci_line:
-        unscheduled_mci_jobs = session.query(WorkOrder).filter(
+        # Check if there are any MCI jobs that are NOT completed
+        incomplete_mci_jobs = session.query(WorkOrder).filter(
             and_(
                 WorkOrder.customer.ilike("%Midcontinent%"),
-                WorkOrder.is_complete == False,
-                WorkOrder.is_locked == False,
-                WorkOrder.is_manual_schedule == False,
-                WorkOrder.line_id.is_(None)
+                WorkOrder.is_complete == False
             )
         ).count()
         
-        if unscheduled_mci_jobs == 0:
+        if incomplete_mci_jobs == 0:
+            # All MCI jobs are completed, Line 4 can accept other customers
             available_lines.append(mci_line)
-            print(f"✅ Line 4 available for any customer")
+            print(f"✅ Line 4 available for any customer (all MCI jobs completed)")
         else:
-            print(f"🔒 Line 4 MCI-only ({unscheduled_mci_jobs} MCI jobs remaining)")
+            print(f"🔒 Line 4 MCI-only ({incomplete_mci_jobs} incomplete MCI jobs remaining)")
     
     # Initialize line tracker with current loads
     for line in available_lines:
