@@ -354,13 +354,13 @@ def simple_auto_schedule(
                     if has_capacity:
                         eligible_lines.append((line_id, tracker))
             
-            # Sort eligible lines by load balancing criteria:
-            # 1. Fewer jobs first (job count)
-            # 2. Earlier completion date second (to keep lines moving)
+            # Sort eligible lines by TRUE LOAD BALANCING criteria:
+            # 1. Earlier completion date first (minimize completion date spread)
+            # 2. Fewer jobs second (tiebreaker for same completion date)
             # 3. Line ID third (for consistency)
             eligible_lines.sort(key=lambda x: (
-                x[1]['job_count'],           # Fewer jobs = higher priority
-                x[1]['completion_date'],     # Earlier completion = higher priority  
+                x[1]['completion_date'],     # Earlier completion = higher priority
+                x[1]['job_count'],           # Fewer jobs = tiebreaker
                 x[0]                         # Line ID for consistency
             ))
             
@@ -373,7 +373,7 @@ def simple_auto_schedule(
                 print(f"   Load balancing: {len(eligible_lines)} eligible lines")
                 for i, (line_id, tracker) in enumerate(eligible_lines[:3]):  # Show top 3
                     print(f"     {i+1}. Line {line_id}: {tracker['job_count']} jobs, completes {tracker['completion_date']}")
-                print(f"   → Selected Line {best_line_id} (fewest jobs: {eligible_lines[0][1]['job_count']})")
+                print(f"   → Selected Line {best_line_id} (earliest completion: {eligible_lines[0][1]['completion_date']}, jobs: {eligible_lines[0][1]['job_count']})")
         
         # Assign job
         if best_line_id is not None:
