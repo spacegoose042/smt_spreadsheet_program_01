@@ -185,10 +185,24 @@ def simple_auto_schedule(
     
     # Step 3: Handle clear_existing logic
     if clear_existing:
-        if not dry_run:
+        print(f"🧹 clear_existing=True, dry_run={dry_run}")
+        
+        # First, count how many jobs would be cleared
+        jobs_to_clear = session.query(WorkOrder).filter(
+            and_(
+                WorkOrder.current_location == "SMT PRODUCTION",
+                WorkOrder.is_complete == False,
+                WorkOrder.is_locked == False,
+                WorkOrder.is_manual_schedule == False,
+                WorkOrder.line_id.isnot(None)
+            )
+        ).count()
+        print(f"🔍 Found {jobs_to_clear} scheduled jobs to clear")
+        
+        if not dry_run and jobs_to_clear > 0:
             print("🧹 Clearing existing schedules...")
             # Clear schedules in database immediately
-            session.query(WorkOrder).filter(
+            result = session.query(WorkOrder).filter(
                 and_(
                     WorkOrder.current_location == "SMT PRODUCTION",
                     WorkOrder.is_complete == False,
@@ -203,7 +217,9 @@ def simple_auto_schedule(
                 'calculated_end_datetime': None
             })
             session.commit()
-            print("💾 Cleared schedules committed to database")
+            print(f"💾 Cleared {result} schedules committed to database")
+        elif dry_run:
+            print("👀 Dry run - would clear schedules but not committing")
         
         # Re-query for unscheduled jobs after clearing
         jobs = session.query(WorkOrder).filter(
