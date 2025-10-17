@@ -131,6 +131,136 @@ export default function VisualScheduler() {
   const [weekOffset, setWeekOffset] = useState(0)
   const [zoomLevel, setZoomLevel] = useState('month') // 'day', 'week', 'month'
   const [dayOffset, setDayOffset] = useState(0) // For day view navigation
+  const [scrollPosition, setScrollPosition] = useState(0)
+  const [isScrolling, setIsScrolling] = useState(false)
+  
+  // Enhanced scrolling and navigation functions
+  const handleWheelScroll = (e) => {
+    if (e.ctrlKey || e.metaKey) {
+      // Zoom with Ctrl/Cmd + wheel
+      e.preventDefault()
+      const delta = e.deltaY > 0 ? -1 : 1
+      const zoomLevels = ['day', 'week', 'month']
+      const currentIndex = zoomLevels.indexOf(zoomLevel)
+      const newIndex = Math.max(0, Math.min(zoomLevels.length - 1, currentIndex + delta))
+      setZoomLevel(zoomLevels[newIndex])
+    } else {
+      // Horizontal scroll with wheel
+      e.preventDefault()
+      const scrollContainer = e.currentTarget
+      const scrollAmount = e.deltaY * 2 // Increase scroll sensitivity
+      scrollContainer.scrollLeft += scrollAmount
+      setScrollPosition(scrollContainer.scrollLeft)
+    }
+  }
+  
+  const handlePanLeft = () => {
+    const container = document.querySelector('.timeline-container')
+    if (container) {
+      const panAmount = zoomLevel === 'day' ? 200 : zoomLevel === 'week' ? 400 : 600
+      container.scrollLeft -= panAmount
+      setScrollPosition(container.scrollLeft)
+    }
+  }
+  
+  const handlePanRight = () => {
+    const container = document.querySelector('.timeline-container')
+    if (container) {
+      const panAmount = zoomLevel === 'day' ? 200 : zoomLevel === 'week' ? 400 : 600
+      container.scrollLeft += panAmount
+      setScrollPosition(container.scrollLeft)
+    }
+  }
+  
+  const handleFitToContent = () => {
+    // Find the earliest and latest job times
+    let earliestTime = null
+    let latestTime = null
+    
+    lines.forEach(line => {
+      line.work_orders.forEach(wo => {
+        if (wo.calculated_start_datetime && wo.calculated_end_datetime) {
+          const startTime = new Date(wo.calculated_start_datetime)
+          const endTime = new Date(wo.calculated_end_datetime)
+          
+          if (!earliestTime || startTime < earliestTime) {
+            earliestTime = startTime
+          }
+          if (!latestTime || endTime > latestTime) {
+            latestTime = endTime
+          }
+        }
+      })
+    })
+    
+    if (earliestTime && latestTime) {
+      // Calculate the center point and adjust the view
+      const centerTime = new Date((earliestTime.getTime() + latestTime.getTime()) / 2)
+      const today = new Date()
+      
+      if (zoomLevel === 'day') {
+        const dayDiff = Math.floor((centerTime - today) / (1000 * 60 * 60 * 24))
+        setDayOffset(dayDiff)
+      } else {
+        const weekDiff = Math.floor((centerTime - today) / (1000 * 60 * 60 * 24 * 7))
+        setWeekOffset(weekDiff)
+      }
+    }
+  }
+  
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+      
+      switch (e.key) {
+        case 'ArrowLeft':
+          e.preventDefault()
+          handlePanLeft()
+          break
+        case 'ArrowRight':
+          e.preventDefault()
+          handlePanRight()
+          break
+        case 'Home':
+          e.preventDefault()
+          const container = document.querySelector('.timeline-container')
+          if (container) {
+            container.scrollLeft = 0
+            setScrollPosition(0)
+          }
+          break
+        case 'End':
+          e.preventDefault()
+          const containerEnd = document.querySelector('.timeline-container')
+          if (containerEnd) {
+            containerEnd.scrollLeft = containerEnd.scrollWidth
+            setScrollPosition(containerEnd.scrollWidth)
+          }
+          break
+        case '1':
+          e.preventDefault()
+          setZoomLevel('day')
+          break
+        case '2':
+          e.preventDefault()
+          setZoomLevel('week')
+          break
+        case '3':
+          e.preventDefault()
+          setZoomLevel('month')
+          break
+        case 'f':
+        case 'F':
+          e.preventDefault()
+          handleFitToContent()
+          break
+      }
+    }
+    
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [zoomLevel])
   
   // Calculate timeline based on zoom level
   const today = new Date()
@@ -421,6 +551,47 @@ export default function VisualScheduler() {
           <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
             {format(startDate, 'MMM d')} - {format(addDays(startDate, timelineDays - 1), 'MMM d, yyyy')}
           </div>
+          
+          {/* Enhanced Navigation Controls */}
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* Pan Controls */}
+            <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+              <button 
+                className="btn btn-sm btn-outline-secondary" 
+                onClick={handlePanLeft}
+                title="Pan Left (←)"
+              >
+                ←
+              </button>
+              <button 
+                className="btn btn-sm btn-outline-secondary" 
+                onClick={handlePanRight}
+                title="Pan Right (→)"
+              >
+                →
+              </button>
+            </div>
+            
+            {/* Fit to Content */}
+            <button 
+              className="btn btn-sm btn-outline-primary" 
+              onClick={handleFitToContent}
+              title="Fit to Content (F)"
+            >
+              📐 Fit
+            </button>
+            
+            {/* Scroll Position Indicator */}
+            <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginLeft: '0.5rem' }}>
+              <div>📍 Scroll: {Math.round(scrollPosition)}px</div>
+            </div>
+            
+            {/* Keyboard Shortcuts Help */}
+            <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginLeft: '0.5rem' }}>
+              <div>⌨️ 1=Day, 2=Week, 3=Month</div>
+              <div>←→ Pan, Home/End=Jump, F=Fit</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -463,7 +634,17 @@ export default function VisualScheduler() {
       </div>
 
       {/* Timeline Header */}
-      <div className="card" style={{ padding: 0, overflow: 'auto' }}>
+      <div 
+        className="card timeline-container" 
+        style={{ 
+          padding: 0, 
+          overflow: 'auto',
+          scrollBehavior: 'smooth',
+          scrollbarWidth: 'thin'
+        }}
+        onWheel={handleWheelScroll}
+        onScroll={(e) => setScrollPosition(e.target.scrollLeft)}
+      >
         <div style={{ 
           minWidth: zoomLevel === 'day' ? '2400px' : zoomLevel === 'week' ? '1200px' : '1200px' 
         }}>
