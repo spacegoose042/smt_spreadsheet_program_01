@@ -316,43 +316,32 @@ def calculate_job_dates(session, line_id: int, line_hours_per_day: float = 8.0) 
     from datetime import date as date_type, timedelta
     from models import SMTLine
     
-    print(f"🔍 DEBUG: calculate_job_dates called for Line {line_id}")
-    
     # Get all jobs on this line, ordered by position
     jobs = session.query(WorkOrder).filter(
         WorkOrder.line_id == line_id,
         WorkOrder.is_complete == False
     ).order_by(WorkOrder.line_position).all()
     
-    print(f"🔍 DEBUG: Found {len(jobs)} jobs on Line {line_id}")
-    
     if not jobs:
-        print(f"🔍 DEBUG: No jobs found on Line {line_id}, returning empty dict")
         return {}
     
     # Check if this is Line 1 (1-EURO 264) - it takes twice as long
     line = session.query(SMTLine).filter(SMTLine.id == line_id).first()
     time_multiplier = 2.0 if line and line.name == "1-EURO 264" else 1.0
-    print(f"🔍 DEBUG: Line {line_id} ({line.name if line else 'Unknown'}) time_multiplier = {time_multiplier}")
     
     results = {}
     current_date = date_type.today()
-    print(f"🔍 DEBUG: Starting from current_date = {current_date}")
     
     # Ensure we start on a business day with capacity
     while is_weekend(current_date) or get_capacity_for_date(session, line_id, current_date, line_hours_per_day) == 0:
         current_date += timedelta(days=1)
     
     for job in jobs:
-        print(f"🔍 DEBUG: Processing job {job.wo_number} (position {job.line_position})")
-        
         # If job is locked, keep its existing dates and use its end date as the baseline
         if job.is_locked and job.calculated_start_datetime and job.calculated_end_datetime:
             # Convert datetimes to dates
             locked_start_date = job.calculated_start_datetime.date() if isinstance(job.calculated_start_datetime, datetime) else job.calculated_start_datetime
             locked_end_date = job.calculated_end_datetime.date() if isinstance(job.calculated_end_datetime, datetime) else job.calculated_end_datetime
-            
-            print(f"🔍 DEBUG: Job {job.wo_number} is LOCKED - using existing dates: {locked_start_date} to {locked_end_date}")
             
             results[job.id] = {
                 'start_date': locked_start_date,
@@ -360,24 +349,18 @@ def calculate_job_dates(session, line_id: int, line_hours_per_day: float = 8.0) 
             }
             # Next job starts after this locked job
             current_date = locked_end_date + timedelta(days=1)
-            print(f"🔍 DEBUG: After locked job, current_date = {current_date}")
             while is_weekend(current_date) or get_capacity_for_date(session, line_id, current_date, line_hours_per_day) == 0:
                 current_date += timedelta(days=1)
-            print(f"🔍 DEBUG: After weekend/capacity check, current_date = {current_date}")
             continue
         # Start date
         start_date = current_date
-        print(f"🔍 DEBUG: Job {job.wo_number} start_date = {start_date}")
         
         # Ensure start date is not a weekend or zero-capacity day
         while is_weekend(start_date) or get_capacity_for_date(session, line_id, start_date, line_hours_per_day) == 0:
             start_date += timedelta(days=1)
         
-        print(f"🔍 DEBUG: Job {job.wo_number} adjusted start_date = {start_date}")
-        
         # Calculate total time needed (with Line 1 multiplier if applicable)
         total_minutes_needed = (job.time_minutes + (job.setup_time_hours * 60)) * time_multiplier
-        print(f"🔍 DEBUG: Job {job.wo_number} total_minutes_needed = {total_minutes_needed} (time_minutes={job.time_minutes}, setup_hours={job.setup_time_hours}, multiplier={time_multiplier})")
         
         # Walk through days, accumulating capacity until job is complete
         minutes_remaining = total_minutes_needed
@@ -386,25 +369,19 @@ def calculate_job_dates(session, line_id: int, line_hours_per_day: float = 8.0) 
         while minutes_remaining > 0:
             # Get capacity for this day
             day_capacity_hours = get_capacity_for_date(session, line_id, end_date, line_hours_per_day)
-            print(f"🔍 DEBUG: Job {job.wo_number} day {end_date} capacity = {day_capacity_hours} hours")
             
             # Skip weekends and zero-capacity days
             if is_weekend(end_date) or day_capacity_hours == 0:
-                print(f"🔍 DEBUG: Job {job.wo_number} skipping {end_date} (weekend={is_weekend(end_date)}, capacity={day_capacity_hours})")
                 end_date += timedelta(days=1)
                 continue
             
             # Use this day's capacity
             day_capacity_minutes = day_capacity_hours * 60
-            print(f"🔍 DEBUG: Job {job.wo_number} using {day_capacity_minutes} minutes from {end_date}, {minutes_remaining} minutes remaining")
             minutes_remaining -= day_capacity_minutes
             
             if minutes_remaining > 0:
                 # Need more days
                 end_date += timedelta(days=1)
-                print(f"🔍 DEBUG: Job {job.wo_number} needs more time, moving to {end_date}")
-        
-        print(f"🔍 DEBUG: Job {job.wo_number} end_date = {end_date}")
         
         results[job.id] = {
             'start_date': start_date,
@@ -415,14 +392,6 @@ def calculate_job_dates(session, line_id: int, line_hours_per_day: float = 8.0) 
         current_date = end_date + timedelta(days=1)
         while is_weekend(current_date) or get_capacity_for_date(session, line_id, current_date, line_hours_per_day) == 0:
             current_date += timedelta(days=1)
-        
-        print(f"🔍 DEBUG: Job {job.wo_number} completed, next current_date = {current_date}")
-    
-    print(f"🔍 DEBUG: calculate_job_dates returning {len(results)} results for Line {line_id}")
-    if results:
-        end_dates = [dates['end_date'] for dates in results.values()]
-        latest_end = max(end_dates) if end_dates else None
-        print(f"🔍 DEBUG: Latest end date in results: {latest_end}")
     
     return results
 
@@ -434,16 +403,12 @@ def get_line_completion_date(session, line_id: int, line_hours_per_day: float = 
     Returns:
         The end date of the last job, or None if no jobs
     """
-    print(f"🔍 DEBUG: get_line_completion_date called for Line {line_id}")
     job_dates = calculate_job_dates(session, line_id, line_hours_per_day)
     
     if not job_dates:
-        print(f"🔍 DEBUG: No job_dates returned for Line {line_id}")
         return None
     
     # Get the latest end date
     end_dates = [dates['end_date'] for dates in job_dates.values()]
-    completion_date = max(end_dates) if end_dates else None
-    print(f"🔍 DEBUG: Line {line_id} completion_date = {completion_date}")
-    return completion_date
+    return max(end_dates) if end_dates else None
 

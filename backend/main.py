@@ -2635,8 +2635,9 @@ def debug_job_dates(line_id: int, db: Session = Depends(get_db)):
             )
         ).order_by(WorkOrder.line_position).all()
         
-        # Calculate job dates (this will trigger our debug logging)
-        job_dates = calculate_job_dates(db, line_id, 8.0)
+        # Calculate job dates using proper datetime calculations
+        from time_scheduler import calculate_job_datetimes
+        job_datetimes = calculate_job_datetimes(db, line_id)
         
         # Prepare detailed job information
         jobs_data = []
@@ -2653,10 +2654,12 @@ def debug_job_dates(line_id: int, db: Session = Depends(get_db)):
             }
             
             # Add calculated dates if available
-            if job.id in job_dates:
-                dates = job_dates[job.id]
-                job_info['calculated_start_date'] = dates['start_date'].isoformat()
-                job_info['calculated_end_date'] = dates['end_date'].isoformat()
+            if job.id in job_datetimes:
+                dates = job_datetimes[job.id]
+                job_info['calculated_start_datetime'] = dates['start_datetime'].isoformat()
+                job_info['calculated_end_datetime'] = dates['end_datetime'].isoformat()
+                job_info['calculated_start_date'] = dates['start_datetime'].date().isoformat()
+                job_info['calculated_end_date'] = dates['end_datetime'].date().isoformat()
             
             jobs_data.append(job_info)
         
@@ -2668,8 +2671,8 @@ def debug_job_dates(line_id: int, db: Session = Depends(get_db)):
                 'is_active': line.is_active
             },
             'jobs': jobs_data,
-            'job_dates_count': len(job_dates),
-            'latest_end_date': max([dates['end_date'] for dates in job_dates.values()]).isoformat() if job_dates else None
+            'job_datetimes_count': len(job_datetimes),
+            'latest_end_date': max([dates['end_datetime'].date() for dates in job_datetimes.values()]).isoformat() if job_datetimes else None
         }
         
     except Exception as e:

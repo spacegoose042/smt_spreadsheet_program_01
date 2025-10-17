@@ -18,6 +18,7 @@ from scheduler import (
     get_capacity_for_date,
     add_business_days
 )
+from time_scheduler import calculate_job_datetimes
 
 
 def get_schedulable_jobs(session: Session) -> List[WorkOrder]:
@@ -114,11 +115,11 @@ def get_line_current_load(session: Session, line_id: int) -> Dict:
     positions = [job.line_position for job in jobs if job.line_position is not None]
     positions_used = max(positions) if positions else 0
     
-    # Get completion date of last job
-    job_dates = calculate_job_dates(session, line_id)
+    # Get completion date of last job using proper datetime calculations
+    job_datetimes = calculate_job_datetimes(session, line_id)
     completion_date = date.today()
-    if job_dates:
-        end_dates = [dates['end_date'] for dates in job_dates.values()]
+    if job_datetimes:
+        end_dates = [dates['end_datetime'].date() for dates in job_datetimes.values()]
         completion_date = max(end_dates) if end_dates else date.today()
     
     return {
@@ -429,16 +430,18 @@ def simple_auto_schedule(
         else:
             print(f"❌ No available line for job {job.wo_number}")
     
-    # Step 7: Calculate actual scheduled dates
+    # Step 7: Calculate actual scheduled dates using proper datetime calculations
     all_lines = general_lines + ([mci_line] if mci_line else [])
     
     for line in all_lines:
-        job_dates = calculate_job_dates(session, line.id)
-        for wo_id, dates in job_dates.items():
+        job_datetimes = calculate_job_datetimes(session, line.id)
+        for wo_id, dates in job_datetimes.items():
             job = session.query(WorkOrder).filter(WorkOrder.id == wo_id).first()
             if job and not dry_run:
-                job.scheduled_start_date = dates['start_date']
-                job.scheduled_end_date = dates['end_date']
+                job.calculated_start_datetime = dates['start_datetime']
+                job.calculated_end_datetime = dates['end_datetime']
+                job.scheduled_start_date = dates['start_datetime'].date()
+                job.scheduled_end_date = dates['end_datetime'].date()
                 job.promise_date_variance_days = job.calculate_promise_date_variance()
     
     # Step 8: Update variance for all scheduled jobs
