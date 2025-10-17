@@ -1,4 +1,4 @@
-import { useState } from 'react' // Updated with SMT PRODUCTION filter - PRODUCTION FIX
+import { useState, useEffect } from 'react' // Updated with SMT PRODUCTION filter - PRODUCTION FIX
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getDashboard, getWorkOrders, updateWorkOrder, getCapacityOverrides } from '../api'
 import { format, addDays, differenceInDays, differenceInMinutes, startOfWeek, isWeekend, startOfDay } from 'date-fns'
