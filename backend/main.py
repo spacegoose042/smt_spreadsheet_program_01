@@ -2527,6 +2527,230 @@ def get_capacity_forecast_endpoint(weeks: int = 8, db: Session = Depends(get_db)
         raise HTTPException(status_code=500, detail=f"Forecast failed: {str(e)}")
 
 
+# ============================================================================
+# DEBUG ENDPOINTS - For troubleshooting scheduler issues
+# ============================================================================
+
+@app.get("/api/debug/line-capacity")
+def debug_line_capacity(line_id: int, start_date: str, end_date: str, db: Session = Depends(get_db)):
+    """
+    Debug endpoint to see capacity calculations for a specific line and date range.
+    
+    Args:
+        line_id: Line ID to check
+        start_date: Start date (YYYY-MM-DD)
+        end_date: End date (YYYY-MM-DD)
+    
+    Returns:
+        - line_info: Basic line information
+        - capacity_data: Daily capacity calculations
+        - shifts: Active shifts for this line
+    """
+    from datetime import datetime, date, timedelta
+    from scheduler import get_capacity_for_date
+    from models import SMTLine, Shift
+    
+    try:
+        # Parse dates
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
+        
+        # Get line info
+        line = db.query(SMTLine).filter(SMTLine.id == line_id).first()
+        if not line:
+            raise HTTPException(status_code=404, detail=f"Line {line_id} not found")
+        
+        # Get shifts for this line
+        shifts = db.query(Shift).filter(Shift.line_id == line_id).all()
+        
+        # Calculate capacity for each day
+        capacity_data = []
+        current_date = start_dt
+        while current_date <= end_dt:
+            capacity = get_capacity_for_date(db, line_id, current_date, 8.0)
+            capacity_data.append({
+                'date': current_date.isoformat(),
+                'capacity_hours': capacity,
+                'is_weekend': current_date.weekday() >= 5
+            })
+            current_date += timedelta(days=1)
+        
+        return {
+            'line_info': {
+                'id': line.id,
+                'name': line.name,
+                'hours_per_day': line.hours_per_day,
+                'is_active': line.is_active
+            },
+            'shifts': [
+                {
+                    'id': shift.id,
+                    'name': shift.name,
+                    'start_time': shift.start_time.isoformat() if shift.start_time else None,
+                    'end_time': shift.end_time.isoformat() if shift.end_time else None,
+                    'active_days': shift.active_days,
+                    'is_active': shift.is_active
+                }
+                for shift in shifts
+            ],
+            'capacity_data': capacity_data
+        }
+        
+    except Exception as e:
+        print(f"Debug line capacity error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Debug failed: {str(e)}")
+
+
+@app.get("/api/debug/job-dates")
+def debug_job_dates(line_id: int, db: Session = Depends(get_db)):
+    """
+    Debug endpoint to see detailed job date calculations for a specific line.
+    
+    Args:
+        line_id: Line ID to check
+    
+    Returns:
+        - line_info: Basic line information
+        - jobs: Detailed job information with calculated dates
+        - calculation_details: Step-by-step calculation details
+    """
+    from datetime import datetime, date
+    from scheduler import calculate_job_dates, get_capacity_for_date
+    from models import SMTLine, WorkOrder
+    from sqlalchemy import and_
+    
+    try:
+        # Get line info
+        line = db.query(SMTLine).filter(SMTLine.id == line_id).first()
+        if not line:
+            raise HTTPException(status_code=404, detail=f"Line {line_id} not found")
+        
+        # Get all jobs on this line
+        jobs = db.query(WorkOrder).filter(
+            and_(
+                WorkOrder.line_id == line_id,
+                WorkOrder.is_complete == False
+            )
+        ).order_by(WorkOrder.line_position).all()
+        
+        # Calculate job dates (this will trigger our debug logging)
+        job_dates = calculate_job_dates(db, line_id, 8.0)
+        
+        # Prepare detailed job information
+        jobs_data = []
+        for job in jobs:
+            job_info = {
+                'wo_number': job.wo_number,
+                'line_position': job.line_position,
+                'is_locked': job.is_locked,
+                'time_minutes': job.time_minutes,
+                'setup_time_hours': job.setup_time_hours,
+                'trolley_count': job.trolley_count,
+                'calculated_start_datetime': job.calculated_start_datetime.isoformat() if job.calculated_start_datetime else None,
+                'calculated_end_datetime': job.calculated_end_datetime.isoformat() if job.calculated_end_datetime else None
+            }
+            
+            # Add calculated dates if available
+            if job.id in job_dates:
+                dates = job_dates[job.id]
+                job_info['calculated_start_date'] = dates['start_date'].isoformat()
+                job_info['calculated_end_date'] = dates['end_date'].isoformat()
+            
+            jobs_data.append(job_info)
+        
+        return {
+            'line_info': {
+                'id': line.id,
+                'name': line.name,
+                'hours_per_day': line.hours_per_day,
+                'is_active': line.is_active
+            },
+            'jobs': jobs_data,
+            'job_dates_count': len(job_dates),
+            'latest_end_date': max([dates['end_date'] for dates in job_dates.values()]).isoformat() if job_dates else None
+        }
+        
+    except Exception as e:
+        print(f"Debug job dates error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Debug failed: {str(e)}")
+
+
+@app.get("/api/debug/scheduler-state")
+def debug_scheduler_state(db: Session = Depends(get_db)):
+    """
+    Debug endpoint to see current scheduler state and line loads.
+    
+    Returns:
+        - line_loads: Current load information for each line
+        - schedulable_jobs: Jobs that can be auto-scheduled
+        - mci_availability: MCI line availability status
+    """
+    from simple_scheduler import get_schedulable_jobs, get_line_current_load
+    from models import SMTLine, WorkOrder
+    from sqlalchemy import and_
+    
+    try:
+        # Get all active lines
+        lines = db.query(SMTLine).filter(SMTLine.is_active == True).order_by(SMTLine.id).all()
+        
+        # Get line loads
+        line_loads = {}
+        for line in lines:
+            load = get_line_current_load(db, line.id)
+            line_loads[line.name] = {
+                'line_id': line.id,
+                'job_count': load['job_count'],
+                'total_hours': load['total_hours'],
+                'positions_used': load['positions_used'],
+                'trolleys_in_p1_p2': load['trolleys_in_p1_p2'],
+                'completion_date': load['completion_date'].isoformat()
+            }
+        
+        # Get schedulable jobs
+        schedulable_jobs = get_schedulable_jobs(db)
+        
+        # Check MCI availability
+        mci_line = db.query(SMTLine).filter(
+            and_(
+                SMTLine.is_active == True,
+                SMTLine.name.ilike("%MCI%")
+            )
+        ).first()
+        
+        mci_availability = None
+        if mci_line:
+            incomplete_mci_jobs = db.query(WorkOrder).filter(
+                and_(
+                    WorkOrder.customer.ilike("%Midcontinent%"),
+                    WorkOrder.is_complete == False
+                )
+            ).count()
+            
+            mci_availability = {
+                'line_id': mci_line.id,
+                'line_name': mci_line.name,
+                'incomplete_mci_jobs': incomplete_mci_jobs,
+                'available_for_other_customers': incomplete_mci_jobs == 0
+            }
+        
+        return {
+            'line_loads': line_loads,
+            'schedulable_jobs_count': len(schedulable_jobs),
+            'mci_availability': mci_availability,
+            'total_active_lines': len(lines)
+        }
+        
+    except Exception as e:
+        print(f"Debug scheduler state error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Debug failed: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
