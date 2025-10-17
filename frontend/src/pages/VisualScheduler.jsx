@@ -123,11 +123,31 @@ export default function VisualScheduler() {
   const [draggedWO, setDraggedWO] = useState(null)
   const [dragOverLine, setDragOverLine] = useState(null)
   const [weekOffset, setWeekOffset] = useState(0)
+  const [zoomLevel, setZoomLevel] = useState('month') // 'day', 'week', 'month'
+  const [dayOffset, setDayOffset] = useState(0) // For day view navigation
   
-  // Calculate timeline (show 4 weeks starting from this week)
+  // Calculate timeline based on zoom level
   const today = new Date()
-  const startDate = addDays(startOfWeek(today), weekOffset * 7)
-  const days = Array.from({ length: 28 }, (_, i) => addDays(startDate, i))
+  let startDate, days, timelineDays
+  
+  switch (zoomLevel) {
+    case 'day':
+      startDate = addDays(today, dayOffset)
+      days = [startDate]
+      timelineDays = 1
+      break
+    case 'week':
+      startDate = addDays(startOfWeek(today), weekOffset * 7)
+      days = Array.from({ length: 7 }, (_, i) => addDays(startDate, i))
+      timelineDays = 7
+      break
+    case 'month':
+    default:
+      startDate = addDays(startOfWeek(today), weekOffset * 7)
+      days = Array.from({ length: 28 }, (_, i) => addDays(startDate, i))
+      timelineDays = 28
+      break
+  }
   
   const { data: dashboard, isLoading } = useQuery({
     queryKey: ['dashboard'],
@@ -251,7 +271,7 @@ export default function VisualScheduler() {
       const endDT = new Date(wo.calculated_end_datetime)
       
       // Calculate position in minutes from timeline start
-      const totalMinutes = 28 * 24 * 60  // 28 days in minutes
+      const totalMinutes = timelineDays * 24 * 60  // Dynamic based on zoom level
       const startMinutes = differenceInMinutes(startDT, lineStartDate)
       const durationMinutes = differenceInMinutes(endDT, startDT)
       
@@ -276,8 +296,8 @@ export default function VisualScheduler() {
     const duration = differenceInDays(endDate, startDate) + 1
     
     return {
-      left: `${(startDiff / 28) * 100}%`,
-      width: `${(duration / 28) * 100}%`,
+      left: `${(startDiff / timelineDays) * 100}%`,
+      width: `${(duration / timelineDays) * 100}%`,
       startDiff,
       duration
     }
@@ -301,29 +321,78 @@ export default function VisualScheduler() {
 
       {/* Timeline Controls */}
       <div className="card" style={{ marginBottom: '0.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <button 
-              className="btn btn-sm btn-secondary" 
-              onClick={() => setWeekOffset(weekOffset - 1)}
-            >
-              ← Previous Week
-            </button>
-            <button 
-              className="btn btn-sm btn-secondary" 
-              onClick={() => setWeekOffset(0)}
-            >
-              This Week
-            </button>
-            <button 
-              className="btn btn-sm btn-secondary" 
-              onClick={() => setWeekOffset(weekOffset + 1)}
-            >
-              Next Week →
-            </button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* Zoom Level Controls */}
+            <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, marginRight: '0.5rem' }}>View:</span>
+              <button 
+                className={`btn btn-sm ${zoomLevel === 'day' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setZoomLevel('day')}
+              >
+                Day
+              </button>
+              <button 
+                className={`btn btn-sm ${zoomLevel === 'week' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setZoomLevel('week')}
+              >
+                Week
+              </button>
+              <button 
+                className={`btn btn-sm ${zoomLevel === 'month' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setZoomLevel('month')}
+              >
+                Month
+              </button>
+            </div>
+            
+            {/* Navigation Controls */}
+            {zoomLevel === 'day' ? (
+              <>
+                <button 
+                  className="btn btn-sm btn-secondary" 
+                  onClick={() => setDayOffset(dayOffset - 1)}
+                >
+                  ← Previous Day
+                </button>
+                <button 
+                  className="btn btn-sm btn-secondary" 
+                  onClick={() => setDayOffset(0)}
+                >
+                  Today
+                </button>
+                <button 
+                  className="btn btn-sm btn-secondary" 
+                  onClick={() => setDayOffset(dayOffset + 1)}
+                >
+                  Next Day →
+                </button>
+              </>
+            ) : (
+              <>
+                <button 
+                  className="btn btn-sm btn-secondary" 
+                  onClick={() => setWeekOffset(weekOffset - 1)}
+                >
+                  ← Previous Week
+                </button>
+                <button 
+                  className="btn btn-sm btn-secondary" 
+                  onClick={() => setWeekOffset(0)}
+                >
+                  This Week
+                </button>
+                <button 
+                  className="btn btn-sm btn-secondary" 
+                  onClick={() => setWeekOffset(weekOffset + 1)}
+                >
+                  Next Week →
+                </button>
+              </>
+            )}
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-            {format(startDate, 'MMM d')} - {format(addDays(startDate, 27), 'MMM d, yyyy')}
+            {format(startDate, 'MMM d')} - {format(addDays(startDate, timelineDays - 1), 'MMM d, yyyy')}
           </div>
         </div>
       </div>
@@ -368,7 +437,9 @@ export default function VisualScheduler() {
 
       {/* Timeline Header */}
       <div className="card" style={{ padding: 0, overflow: 'auto' }}>
-        <div style={{ minWidth: '1200px' }}>
+        <div style={{ 
+          minWidth: zoomLevel === 'day' ? '2400px' : zoomLevel === 'week' ? '1200px' : '1200px' 
+        }}>
           {/* Date Header */}
           <div style={{ 
             display: 'grid', 
@@ -383,23 +454,51 @@ export default function VisualScheduler() {
               PRODUCTION LINE
             </div>
             <div style={{ display: 'flex' }}>
-              {days.map((day, i) => (
-                <div
-                  key={i}
-                  style={{
-                    flex: 1,
-                    padding: '0.3rem 0.2rem',
-                    textAlign: 'center',
-                    fontSize: '0.65rem',
-                    background: isWeekend(day) ? '#f8f9fa' : 'transparent',
-                    borderLeft: i > 0 ? '1px solid var(--border)' : 'none',
-                    color: isWeekend(day) ? 'var(--text-secondary)' : 'var(--text-primary)'
-                  }}
-                >
-                  <div style={{ fontWeight: 600 }}>{format(day, 'EEE')}</div>
-                  <div>{format(day, 'd')}</div>
-                </div>
-              ))}
+              {days.map((day, i) => {
+                if (zoomLevel === 'day') {
+                  // Show hours for day view
+                  const hours = Array.from({ length: 24 }, (_, h) => h)
+                  return (
+                    <div key={i} style={{ flex: 1, display: 'flex' }}>
+                      {hours.map(hour => (
+                        <div
+                          key={hour}
+                          style={{
+                            flex: 1,
+                            padding: '0.2rem 0.1rem',
+                            textAlign: 'center',
+                            fontSize: '0.6rem',
+                            borderLeft: hour > 0 ? '1px solid var(--border)' : 'none',
+                            background: hour >= 7 && hour < 16 ? '#e8f5e8' : hour >= 15 && hour < 24 ? '#e8f0ff' : '#f8f9fa',
+                            color: 'var(--text-secondary)'
+                          }}
+                        >
+                          {hour === 0 ? '12A' : hour < 12 ? `${hour}A` : hour === 12 ? '12P' : `${hour-12}P`}
+                        </div>
+                      ))}
+                    </div>
+                  )
+                } else {
+                  // Show days for week/month view
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        flex: 1,
+                        padding: '0.3rem 0.2rem',
+                        textAlign: 'center',
+                        fontSize: '0.65rem',
+                        background: isWeekend(day) ? '#f8f9fa' : 'transparent',
+                        borderLeft: i > 0 ? '1px solid var(--border)' : 'none',
+                        color: isWeekend(day) ? 'var(--text-secondary)' : 'var(--text-primary)'
+                      }}
+                    >
+                      <div style={{ fontWeight: 600 }}>{format(day, 'EEE')}</div>
+                      <div>{format(day, 'd')}</div>
+                    </div>
+                  )
+                }
+              })}
             </div>
           </div>
 
@@ -511,8 +610,8 @@ export default function VisualScheduler() {
                     const position = getWOPosition(wo, startDate)
                     if (!position) return null
                     // Only show if within visible timeline
-                    if (position.startMinutes !== undefined && (position.startMinutes < 0 || position.startMinutes > 28 * 24 * 60)) return null
-                    if (position.startDiff !== undefined && (position.startDiff < 0 || position.startDiff > 28)) return null
+                    if (position.startMinutes !== undefined && (position.startMinutes < 0 || position.startMinutes > timelineDays * 24 * 60)) return null
+                    if (position.startDiff !== undefined && (position.startDiff < 0 || position.startDiff > timelineDays)) return null
 
                     return (
                       <div
