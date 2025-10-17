@@ -2713,8 +2713,8 @@ def debug_scheduler_state(db: Session = Depends(get_db)):
                 'completion_date': load['completion_date'].isoformat()
             }
         
-        # Get schedulable jobs
-        schedulable_jobs = get_schedulable_jobs(db)
+        # Get schedulable jobs (both scheduled and unscheduled for debugging)
+        schedulable_jobs = get_schedulable_jobs(db, include_scheduled=True)
         
         # Check MCI availability
         mci_line = db.query(SMTLine).filter(

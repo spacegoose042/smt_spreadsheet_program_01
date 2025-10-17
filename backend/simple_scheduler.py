@@ -21,8 +21,13 @@ from scheduler import (
 from time_scheduler import calculate_job_datetimes
 
 
-def get_schedulable_jobs(session: Session) -> List[WorkOrder]:
-    """Get all jobs that can be auto-scheduled (unscheduled jobs only)."""
+def get_schedulable_jobs(session: Session, include_scheduled: bool = False) -> List[WorkOrder]:
+    """Get all jobs that can be auto-scheduled.
+    
+    Args:
+        session: Database session
+        include_scheduled: If True, include already-scheduled jobs (for redistribution)
+    """
     # Debug: Show what we're filtering
     total_in_smt = session.query(WorkOrder).filter(
         WorkOrder.current_location == "SMT PRODUCTION"
@@ -58,19 +63,26 @@ def get_schedulable_jobs(session: Session) -> List[WorkOrder]:
     print(f"   Not locked: {total_unlocked}")
     print(f"   Not manual schedule: {total_auto_schedulable}")
     
-    unscheduled = session.query(WorkOrder).filter(
-        and_(
-            WorkOrder.current_location == "SMT PRODUCTION",
-            WorkOrder.is_complete == False,
-            WorkOrder.is_locked == False,
-            WorkOrder.is_manual_schedule == False,
-            WorkOrder.line_id.is_(None)  # Only get unscheduled jobs
-        )
-    ).all()
+    # Build the base query
+    base_filters = and_(
+        WorkOrder.current_location == "SMT PRODUCTION",
+        WorkOrder.is_complete == False,
+        WorkOrder.is_locked == False,
+        WorkOrder.is_manual_schedule == False
+    )
     
-    print(f"   Unscheduled (line_id IS NULL): {len(unscheduled)}")
+    if include_scheduled:
+        # Include both scheduled and unscheduled jobs
+        jobs = session.query(WorkOrder).filter(base_filters).all()
+        print(f"   All schedulable jobs (including scheduled): {len(jobs)}")
+    else:
+        # Only unscheduled jobs
+        jobs = session.query(WorkOrder).filter(
+            and_(base_filters, WorkOrder.line_id.is_(None))
+        ).all()
+        print(f"   Unscheduled jobs only (line_id IS NULL): {len(jobs)}")
     
-    return unscheduled
+    return jobs
 
 
 def get_line_current_load(session: Session, line_id: int) -> Dict:
@@ -196,8 +208,9 @@ def simple_auto_schedule(
             print("👀 Dry run - would clear schedules but not committing")
     
     # Step 1: Get schedulable jobs (after potentially clearing)
-    jobs = get_schedulable_jobs(session)
-    print(f"📋 Found {len(jobs)} unscheduled jobs in SMT PRODUCTION")
+    # If clear_existing was used, include already-scheduled jobs for redistribution
+    jobs = get_schedulable_jobs(session, include_scheduled=clear_existing)
+    print(f"📋 Found {len(jobs)} schedulable jobs in SMT PRODUCTION")
     
     if not jobs:
         return {
