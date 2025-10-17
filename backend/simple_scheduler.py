@@ -371,20 +371,19 @@ def simple_auto_schedule(
             # Sort eligible lines by HYBRID LOAD BALANCING criteria:
             # Calculate a weighted score that balances completion date AND job distribution
             def calculate_balance_score(line_id, tracker):
-                # Normalize completion date (earlier = better score)
-                # Assume target completion around Nov 15, score based on days from target
-                target_date = date(2025, 11, 15)
-                days_from_target = abs((tracker['completion_date'] - target_date).days)
-                completion_score = 100 - days_from_target  # Higher = better
+                # Completion date score (earlier = better score)
+                # Use days from today as the metric - fewer days = better score
+                days_from_today = (tracker['completion_date'] - date.today()).days
+                completion_score = max(0, 100 - days_from_today)  # Higher = better, cap at 100
                 
                 # Job count score (fewer jobs = better, but not too extreme)
                 # Target around 16-17 jobs per line, penalize if too far off
                 target_jobs = 16
                 job_diff = abs(tracker['job_count'] - target_jobs)
-                job_score = 100 - (job_diff * 5)  # Penalize 5 points per job difference
+                job_score = max(0, 100 - (job_diff * 5))  # Higher = better, cap at 100
                 
-                # Weighted combination: 60% completion date, 40% job distribution
-                total_score = (completion_score * 0.6) + (job_score * 0.4)
+                # Weighted combination: 70% completion date (prioritize earlier completion), 30% job distribution
+                total_score = (completion_score * 0.7) + (job_score * 0.3)
                 
                 return total_score
             
