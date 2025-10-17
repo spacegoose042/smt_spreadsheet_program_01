@@ -386,19 +386,23 @@ def calculate_job_dates(session, line_id: int, line_hours_per_day: float = 8.0) 
         while minutes_remaining > 0:
             # Get capacity for this day
             day_capacity_hours = get_capacity_for_date(session, line_id, end_date, line_hours_per_day)
+            print(f"🔍 DEBUG: Job {job.wo_number} day {end_date} capacity = {day_capacity_hours} hours")
             
             # Skip weekends and zero-capacity days
             if is_weekend(end_date) or day_capacity_hours == 0:
+                print(f"🔍 DEBUG: Job {job.wo_number} skipping {end_date} (weekend={is_weekend(end_date)}, capacity={day_capacity_hours})")
                 end_date += timedelta(days=1)
                 continue
             
             # Use this day's capacity
             day_capacity_minutes = day_capacity_hours * 60
+            print(f"🔍 DEBUG: Job {job.wo_number} using {day_capacity_minutes} minutes from {end_date}, {minutes_remaining} minutes remaining")
             minutes_remaining -= day_capacity_minutes
             
             if minutes_remaining > 0:
                 # Need more days
                 end_date += timedelta(days=1)
+                print(f"🔍 DEBUG: Job {job.wo_number} needs more time, moving to {end_date}")
         
         print(f"🔍 DEBUG: Job {job.wo_number} end_date = {end_date}")
         
