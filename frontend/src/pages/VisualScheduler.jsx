@@ -97,6 +97,12 @@ ${wo.notes ? `Notes: ${wo.notes}` : ''}${wo.is_locked ? '\n🔒 LOCKED' : ''}`;
       <div style={{ fontSize: '0.6rem', opacity: 0.85, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
         <Clock size={8} />
         <span>{runtimeHours}h</span>
+        {/* Debug: Show actual times */}
+        {wo.calculated_start_datetime && (
+          <div style={{ fontSize: '0.5rem', opacity: 0.7, marginTop: '0.1rem' }}>
+            {new Date(wo.calculated_start_datetime).toLocaleTimeString()} - {new Date(wo.calculated_end_datetime).toLocaleTimeString()}
+          </div>
+        )}
         <span style={{ opacity: 0.7 }}>+{setupHours}h</span>
         <span style={{ fontWeight: 600 }}>= {totalHours}h</span>
       </div>
@@ -133,17 +139,21 @@ export default function VisualScheduler() {
   switch (zoomLevel) {
     case 'day':
       startDate = addDays(today, dayOffset)
+      // Set to start of day for proper time calculations
+      startDate.setHours(0, 0, 0, 0)
       days = [startDate]
       timelineDays = 1
       break
     case 'week':
       startDate = addDays(startOfWeek(today), weekOffset * 7)
+      startDate.setHours(0, 0, 0, 0) // Set to start of day
       days = Array.from({ length: 7 }, (_, i) => addDays(startDate, i))
       timelineDays = 7
       break
     case 'month':
     default:
       startDate = addDays(startOfWeek(today), weekOffset * 7)
+      startDate.setHours(0, 0, 0, 0) // Set to start of day
       days = Array.from({ length: 28 }, (_, i) => addDays(startDate, i))
       timelineDays = 28
       break
@@ -270,16 +280,33 @@ export default function VisualScheduler() {
       const startDT = new Date(wo.calculated_start_datetime)
       const endDT = new Date(wo.calculated_end_datetime)
       
-      // Calculate position in minutes from timeline start
-      const totalMinutes = timelineDays * 24 * 60  // Dynamic based on zoom level
-      const startMinutes = differenceInMinutes(startDT, lineStartDate)
-      const durationMinutes = differenceInMinutes(endDT, startDT)
-      
-      return {
-        left: `${(startMinutes / totalMinutes) * 100}%`,
-        width: `${(durationMinutes / totalMinutes) * 100}%`,
-        startMinutes,
-        durationMinutes
+      // For day view, we need to calculate position within the day
+      if (zoomLevel === 'day') {
+        const dayStart = new Date(lineStartDate)
+        dayStart.setHours(0, 0, 0, 0) // Start of day
+        
+        const startMinutes = differenceInMinutes(startDT, dayStart)
+        const durationMinutes = differenceInMinutes(endDT, startDT)
+        const totalMinutes = 24 * 60 // 24 hours in minutes
+        
+        return {
+          left: `${(startMinutes / totalMinutes) * 100}%`,
+          width: `${(durationMinutes / totalMinutes) * 100}%`,
+          startMinutes,
+          durationMinutes
+        }
+      } else {
+        // For week/month view, calculate position from timeline start
+        const totalMinutes = timelineDays * 24 * 60  // Dynamic based on zoom level
+        const startMinutes = differenceInMinutes(startDT, lineStartDate)
+        const durationMinutes = differenceInMinutes(endDT, startDT)
+        
+        return {
+          left: `${(startMinutes / totalMinutes) * 100}%`,
+          width: `${(durationMinutes / totalMinutes) * 100}%`,
+          startMinutes,
+          durationMinutes
+        }
       }
     }
     
@@ -610,7 +637,15 @@ export default function VisualScheduler() {
                     const position = getWOPosition(wo, startDate)
                     if (!position) return null
                     // Only show if within visible timeline
-                    if (position.startMinutes !== undefined && (position.startMinutes < 0 || position.startMinutes > timelineDays * 24 * 60)) return null
+                    if (position.startMinutes !== undefined) {
+                      if (zoomLevel === 'day') {
+                        // For day view, show if job is within the 24-hour period
+                        if (position.startMinutes < 0 || position.startMinutes > 24 * 60) return null
+                      } else {
+                        // For week/month view, show if job is within the timeline period
+                        if (position.startMinutes < 0 || position.startMinutes > timelineDays * 24 * 60) return null
+                      }
+                    }
                     if (position.startDiff !== undefined && (position.startDiff < 0 || position.startDiff > timelineDays)) return null
 
                     return (
