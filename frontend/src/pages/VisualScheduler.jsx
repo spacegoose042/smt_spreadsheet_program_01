@@ -133,6 +133,8 @@ export default function VisualScheduler() {
   const [dayOffset, setDayOffset] = useState(0) // For day view navigation
   const [scrollPosition, setScrollPosition] = useState(0)
   const [isScrolling, setIsScrolling] = useState(false)
+  const [zoomSlider, setZoomSlider] = useState(2) // 0=day, 1=week, 2=month
+  const [quickDate, setQuickDate] = useState('today')
   
   // Enhanced scrolling and navigation functions
   const handleWheelScroll = (e) => {
@@ -205,6 +207,60 @@ export default function VisualScheduler() {
         const weekDiff = Math.floor((centerTime - today) / (1000 * 60 * 60 * 24 * 7))
         setWeekOffset(weekDiff)
       }
+    }
+  }
+  
+  // Zoom slider handler
+  const handleZoomSliderChange = (value) => {
+    setZoomSlider(value)
+    const zoomLevels = ['day', 'week', 'month']
+    setZoomLevel(zoomLevels[value])
+  }
+  
+  // Quick date navigation
+  const handleQuickDate = (dateType) => {
+    setQuickDate(dateType)
+    const today = new Date()
+    
+    switch (dateType) {
+      case 'today':
+        setDayOffset(0)
+        setWeekOffset(0)
+        break
+      case 'tomorrow':
+        setDayOffset(1)
+        setWeekOffset(0)
+        break
+      case 'thisWeek':
+        setDayOffset(0)
+        setWeekOffset(0)
+        break
+      case 'nextWeek':
+        setDayOffset(0)
+        setWeekOffset(1)
+        break
+      case 'nextMonth':
+        setDayOffset(0)
+        setWeekOffset(4) // Approximately 4 weeks
+        break
+    }
+  }
+  
+  // Time range selector
+  const handleDateRangeSelect = (startDate, endDate) => {
+    const today = new Date()
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    
+    // Calculate the center of the range
+    const centerTime = new Date((start.getTime() + end.getTime()) / 2)
+    
+    if (zoomLevel === 'day') {
+      const dayDiff = Math.floor((centerTime - today) / (1000 * 60 * 60 * 24))
+      setDayOffset(dayDiff)
+    } else {
+      const weekDiff = Math.floor((centerTime - today) / (1000 * 60 * 60 * 24 * 7))
+      setWeekOffset(weekDiff)
     }
   }
   
@@ -595,6 +651,138 @@ export default function VisualScheduler() {
         </div>
       </div>
 
+      {/* Advanced Interactive Controls */}
+      <div className="card" style={{ marginBottom: '0.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+          {/* Zoom Slider */}
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>Zoom:</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>Day</span>
+              <input
+                type="range"
+                min="0"
+                max="2"
+                step="1"
+                value={zoomSlider}
+                onChange={(e) => handleZoomSliderChange(parseInt(e.target.value))}
+                style={{
+                  width: '100px',
+                  height: '4px',
+                  background: 'var(--border)',
+                  outline: 'none',
+                  borderRadius: '2px'
+                }}
+              />
+              <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>Month</span>
+            </div>
+            <div style={{ 
+              fontSize: '0.65rem', 
+              color: 'var(--primary)', 
+              fontWeight: 600,
+              padding: '0.25rem 0.5rem',
+              background: 'var(--primary-light)',
+              borderRadius: '4px',
+              border: '1px solid var(--primary)'
+            }}>
+              {zoomLevel === 'day' ? '🔍 Day View' : zoomLevel === 'week' ? '📅 Week View' : '📊 Month View'}
+            </div>
+          </div>
+
+          {/* Quick Date Navigation */}
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>Quick Jump:</span>
+            <div style={{ display: 'flex', gap: '0.25rem' }}>
+              <button 
+                className={`btn btn-sm ${quickDate === 'today' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                onClick={() => handleQuickDate('today')}
+                title="Jump to Today"
+              >
+                📅 Today
+              </button>
+              <button 
+                className={`btn btn-sm ${quickDate === 'tomorrow' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                onClick={() => handleQuickDate('tomorrow')}
+                title="Jump to Tomorrow"
+              >
+                📅 Tomorrow
+              </button>
+              <button 
+                className={`btn btn-sm ${quickDate === 'thisWeek' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                onClick={() => handleQuickDate('thisWeek')}
+                title="Jump to This Week"
+              >
+                📅 This Week
+              </button>
+              <button 
+                className={`btn btn-sm ${quickDate === 'nextWeek' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                onClick={() => handleQuickDate('nextWeek')}
+                title="Jump to Next Week"
+              >
+                📅 Next Week
+              </button>
+              <button 
+                className={`btn btn-sm ${quickDate === 'nextMonth' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                onClick={() => handleQuickDate('nextMonth')}
+                title="Jump to Next Month"
+              >
+                📅 Next Month
+              </button>
+            </div>
+          </div>
+
+          {/* Time Range Selector */}
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>Date Range:</span>
+            <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+              <input
+                type="date"
+                style={{
+                  fontSize: '0.7rem',
+                  padding: '0.25rem 0.5rem',
+                  border: '1px solid var(--border)',
+                  borderRadius: '4px',
+                  background: 'white'
+                }}
+                onChange={(e) => {
+                  const endDate = document.getElementById('endDateRange')
+                  if (endDate && e.target.value) {
+                    endDate.min = e.target.value
+                  }
+                }}
+                title="Start Date"
+              />
+              <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>to</span>
+              <input
+                id="endDateRange"
+                type="date"
+                style={{
+                  fontSize: '0.7rem',
+                  padding: '0.25rem 0.5rem',
+                  border: '1px solid var(--border)',
+                  borderRadius: '4px',
+                  background: 'white'
+                }}
+                title="End Date"
+              />
+              <button 
+                className="btn btn-sm btn-outline-primary"
+                onClick={() => {
+                  const startInput = document.querySelector('input[type="date"]:not(#endDateRange)')
+                  const endInput = document.getElementById('endDateRange')
+                  if (startInput?.value && endInput?.value) {
+                    handleDateRangeSelect(startInput.value, endInput.value)
+                  }
+                }}
+                title="Jump to Selected Date Range"
+              >
+                🎯 Go
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Unscheduled Pool */}
       <div className="card" style={{ background: '#fff3cd', borderLeft: '4px solid #ffc107', marginBottom: '0.75rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
@@ -646,7 +834,8 @@ export default function VisualScheduler() {
         onScroll={(e) => setScrollPosition(e.target.scrollLeft)}
       >
         <div style={{ 
-          minWidth: zoomLevel === 'day' ? '2400px' : zoomLevel === 'week' ? '1200px' : '1200px' 
+          minWidth: zoomLevel === 'day' ? '2400px' : zoomLevel === 'week' ? '1200px' : '1200px',
+          transition: 'min-width 0.3s ease-in-out'
         }}>
           {/* Date Header */}
           <div style={{ 
