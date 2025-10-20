@@ -840,8 +840,7 @@ def get_capacity_calendar(
 
 @app.get("/api/capacity/current")
 def get_current_capacity(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(auth.get_current_user)
+    db: Session = Depends(get_db)
 ):
     """
     Get current capacity for all lines (today's effective hours).
@@ -859,6 +858,9 @@ def get_current_capacity(
     for line in lines:
         # Get actual capacity for today
         actual_capacity = get_capacity_for_date(db, line.id, today, line.hours_per_day)
+        
+        # Debug logging
+        print(f"🔍 Line {line.id} ({line.name}): default={line.hours_per_day}h, actual={actual_capacity}h, override={actual_capacity != line.hours_per_day}")
         
         result[line.id] = {
             "line_id": line.id,
