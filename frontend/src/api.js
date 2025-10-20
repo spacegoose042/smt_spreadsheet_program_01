@@ -46,8 +46,6 @@ export const updateLine = (id, data) => api.put(`/api/lines/${id}`, data)
 
 // Capacity
 export const getCurrentCapacity = () => api.get('/api/capacity/current')
-export const getCapacityOverrides = (startDate, weeks = 8) => 
-  api.get('/api/capacity/overrides', { params: { start_date: startDate, weeks } })
 
 // Work Orders
 export const getWorkOrders = (params = {}) => 
