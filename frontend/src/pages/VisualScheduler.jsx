@@ -529,7 +529,7 @@ export default function VisualScheduler() {
     <div className="container">
       <div className="page-header">
         <h1 className="page-title">Visual Scheduler</h1>
-        <p className="page-description">Drag and drop work orders between lines</p>
+        <p className="page-description">Drag and drop work orders between lines • Dynamic zoom and navigation</p>
       </div>
 
       {/* Timeline Controls */}
