@@ -838,6 +838,40 @@ def get_capacity_calendar(
     }
 
 
+@app.get("/api/capacity/current")
+def get_current_capacity(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Get current capacity for all lines (today's effective hours).
+    Takes into account capacity overrides and shows actual vs default hours.
+    """
+    from scheduler import get_capacity_for_date
+    from datetime import date
+    
+    today = date.today()
+    
+    # Get all active lines
+    lines = db.query(SMTLine).filter(SMTLine.is_active == True).all()
+    
+    result = {}
+    for line in lines:
+        # Get actual capacity for today
+        actual_capacity = get_capacity_for_date(db, line.id, today, line.hours_per_day)
+        
+        result[line.id] = {
+            "line_id": line.id,
+            "line_name": line.name,
+            "default_hours_per_day": line.hours_per_day,
+            "actual_hours_today": actual_capacity,
+            "is_override": actual_capacity != line.hours_per_day,
+            "is_down": actual_capacity == 0
+        }
+    
+    return result
+
+
 @app.get("/api/capacity/overrides")
 def get_capacity_overrides(
     start_date: Optional[date] = None,
