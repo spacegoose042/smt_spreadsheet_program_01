@@ -2294,9 +2294,9 @@ def sync_cetec_progress(
                 wo.is_canceled = ordline_data.get("cancelled_flag", False)
                 wo.last_cetec_sync = datetime.utcnow()
                 
-                # Store status-specific progress as JSON
-                import json
-                wo.cetec_status_progress = json.dumps(status_progress)
+                # Store status-specific progress as JSON - temporarily disabled
+                # import json
+                # wo.cetec_status_progress = json.dumps(status_progress)
                 
                 updated_count += 1
                 print(f"✅ Synced WO {wo.wo_number}: {wo.cetec_original_qty} original, {wo.cetec_completed_qty} completed, {wo.cetec_remaining_qty} remaining")
