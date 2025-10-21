@@ -201,6 +201,8 @@ class WorkOrder(Base):
     is_manual_schedule = Column(Boolean, default=False)  # Exclude from auto-scheduler (hand-built schedules)
     is_new_rev_assembly = Column(Boolean, default=False)  # Replaces asterisk
     is_complete = Column(Boolean, default=False)
+    is_deleted = Column(Boolean, default=False)  # Deleted flag from Cetec
+    is_canceled = Column(Boolean, default=False)  # Canceled flag from Cetec
     
     # Timing (Dates)
     cetec_ship_date = Column(Date, nullable=False)  # Original customer promise from Cetec (NEVER CHANGE)

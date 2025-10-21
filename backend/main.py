@@ -343,10 +343,24 @@ def get_work_orders(
     # Filter by remaining work quantity (if Cetec progress data is available)
     if not include_completed_work:
         # Only show work orders that still have work to complete
+        # Check multiple conditions to determine if work order is truly complete
         query = query.filter(
-            or_(
-                WorkOrder.cetec_remaining_qty.is_(None),  # No Cetec data yet
-                WorkOrder.cetec_remaining_qty > 0  # Still has work to do
+            and_(
+                # Must have balance due > 0 (not invoiced/closed)
+                or_(
+                    WorkOrder.cetec_balance_due.is_(None),  # No Cetec data yet
+                    WorkOrder.cetec_balance_due > 0  # Still has balance due
+                ),
+                # Must not be deleted or canceled
+                WorkOrder.is_deleted != True,
+                WorkOrder.is_canceled != True,
+                # Must not be marked as complete in our system
+                WorkOrder.is_complete != True,
+                # If we have Cetec progress data, check remaining quantity
+                or_(
+                    WorkOrder.cetec_remaining_qty.is_(None),  # No Cetec data yet
+                    WorkOrder.cetec_remaining_qty > 0  # Still has work to do
+                )
             )
         )
     
@@ -2033,6 +2047,57 @@ def get_cetec_sync_logs(
     return logs
 
 
+@app.post("/api/migrate/deleted-canceled", dependencies=[Depends(auth.require_admin)])
+def migrate_deleted_canceled(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Run database migration to add deleted and canceled flag columns.
+    Admin only - this modifies the database schema.
+    """
+    try:
+        # Add deleted and canceled flag columns
+        migration_sql = [
+            "ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;",
+            "ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS is_canceled BOOLEAN DEFAULT FALSE;",
+            "CREATE INDEX IF NOT EXISTS idx_work_orders_is_deleted ON work_orders(is_deleted);",
+            "CREATE INDEX IF NOT EXISTS idx_work_orders_is_canceled ON work_orders(is_canceled);"
+        ]
+        
+        from sqlalchemy import text
+        for sql in migration_sql:
+            try:
+                db.execute(text(sql))
+                print(f"✅ Executed: {sql}")
+            except Exception as e:
+                print(f"⚠️  SQL might already exist: {sql} - {e}")
+        
+        db.commit()
+        
+        # Verify columns were added
+        result = db.execute(text("""
+            SELECT column_name, data_type, column_default
+            FROM information_schema.columns 
+            WHERE table_name = 'work_orders' 
+            AND column_name IN ('is_deleted', 'is_canceled')
+            ORDER BY column_name;
+        """)).fetchall()
+        
+        return {
+            "status": "success",
+            "message": "Deleted/Canceled migration completed",
+            "columns_added": len(result),
+            "columns": [{"name": row[0], "type": row[1], "default": row[2]} for row in result]
+        }
+        
+    except Exception as e:
+        print(f"Migration error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
 @app.post("/api/migrate/cetec-progress", dependencies=[Depends(auth.require_admin)])
 def migrate_cetec_progress(
     db: Session = Depends(get_db),
@@ -2169,6 +2234,8 @@ def sync_cetec_progress(
                 wo.cetec_invoiced_qty = ordline_data.get("invoice_qty", 0)
                 wo.cetec_completed_qty = completed_qty
                 wo.cetec_remaining_qty = max(0, wo.cetec_original_qty - completed_qty)
+                wo.is_deleted = ordline_data.get("deleted_flag", False)
+                wo.is_canceled = ordline_data.get("cancelled_flag", False)
                 wo.last_cetec_sync = datetime.utcnow()
                 
                 updated_count += 1

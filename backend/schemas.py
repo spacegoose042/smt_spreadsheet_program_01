@@ -142,6 +142,8 @@ class WorkOrderResponse(WorkOrderBase):
     line_id: Optional[int] = None
     line_position: Optional[int] = None
     is_complete: bool
+    is_deleted: bool = False
+    is_canceled: bool = False
     created_at: datetime
     updated_at: datetime
     
