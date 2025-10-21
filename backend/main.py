@@ -2090,12 +2090,18 @@ def migrate_cetec_progress(
 
 @app.post("/api/cetec/sync-progress", dependencies=[Depends(auth.require_scheduler_or_admin)])
 def sync_cetec_progress(
+    batch_size: int = 10,
+    work_order_ids: Optional[List[int]] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(auth.get_current_user)
 ):
     """
-    Sync work order progress data from Cetec.
+    Sync work order progress data from Cetec with batch processing.
     Updates original_qty, balance_due, shipped_qty, invoiced_qty, completed_qty, and remaining_qty.
+    
+    Args:
+        batch_size: Number of work orders to process at once (default: 10)
+        work_order_ids: Specific work order IDs to sync (optional)
     """
     import requests
     from datetime import datetime
@@ -2106,10 +2112,22 @@ def sync_cetec_progress(
     }
     
     try:
-        # Get all work orders with cetec_ordline_id
-        work_orders = db.query(WorkOrder).filter(
-            WorkOrder.cetec_ordline_id.isnot(None)
-        ).all()
+        # Get work orders to sync
+        query = db.query(WorkOrder).filter(WorkOrder.cetec_ordline_id.isnot(None))
+        
+        if work_order_ids:
+            query = query.filter(WorkOrder.id.in_(work_order_ids))
+        
+        work_orders = query.limit(batch_size).all()
+        
+        if not work_orders:
+            return {
+                "status": "success",
+                "message": "No work orders found to sync",
+                "updated_count": 0,
+                "total_work_orders": 0,
+                "errors": []
+            }
         
         updated_count = 0
         errors = []
@@ -2118,17 +2136,17 @@ def sync_cetec_progress(
             try:
                 ordline_id = wo.cetec_ordline_id
                 
-                # Get ordline data (quantities)
+                # Get ordline data (quantities) with shorter timeout
                 ordline_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/"
                 ordline_response = requests.get(
                     ordline_url,
                     params={"preshared_token": CETEC_CONFIG["token"]},
-                    timeout=30
+                    timeout=10
                 )
                 ordline_response.raise_for_status()
                 ordline_data = ordline_response.json()["data"]
                 
-                # Get ordlinework data (completed quantities)
+                # Get ordlinework data (completed quantities) with shorter timeout
                 work_url = f"https://{CETEC_CONFIG['domain']}/api/ordlinework"
                 work_response = requests.get(
                     work_url,
@@ -2136,7 +2154,7 @@ def sync_cetec_progress(
                         "ordline_id": ordline_id,
                         "preshared_token": CETEC_CONFIG["token"]
                     },
-                    timeout=30
+                    timeout=10
                 )
                 work_response.raise_for_status()
                 work_data = work_response.json()
@@ -2154,6 +2172,7 @@ def sync_cetec_progress(
                 wo.last_cetec_sync = datetime.utcnow()
                 
                 updated_count += 1
+                print(f"✅ Synced WO {wo.wo_number}: {wo.cetec_original_qty} original, {wo.cetec_completed_qty} completed, {wo.cetec_remaining_qty} remaining")
                 
             except Exception as e:
                 error_msg = f"Failed to sync WO {wo.wo_number}: {str(e)}"
@@ -2168,7 +2187,8 @@ def sync_cetec_progress(
             "updated_count": updated_count,
             "total_work_orders": len(work_orders),
             "errors": errors,
-            "message": f"Successfully synced {updated_count} work orders"
+            "message": f"Successfully synced {updated_count} work orders",
+            "next_batch_available": len(work_orders) == batch_size
         }
         
     except Exception as e:
