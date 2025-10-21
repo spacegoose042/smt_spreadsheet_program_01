@@ -179,6 +179,7 @@ class WorkOrderResponse(WorkOrderBase):
     cetec_invoiced_qty: Optional[int] = None
     cetec_completed_qty: Optional[int] = None
     cetec_remaining_qty: Optional[int] = None
+    cetec_status_progress: Optional[str] = None
     
     # Include line info if available
     line: Optional[SMTLineResponse] = None

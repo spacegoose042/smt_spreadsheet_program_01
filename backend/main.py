@@ -2047,6 +2047,53 @@ def get_cetec_sync_logs(
     return logs
 
 
+@app.post("/api/migrate/status-progress", dependencies=[Depends(auth.require_admin)])
+def migrate_status_progress(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Run database migration to add status progress tracking column.
+    Admin only - this modifies the database schema.
+    """
+    try:
+        # Add status progress tracking column
+        migration_sql = [
+            "ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS cetec_status_progress TEXT;"
+        ]
+        
+        from sqlalchemy import text
+        for sql in migration_sql:
+            try:
+                db.execute(text(sql))
+                print(f"✅ Executed: {sql}")
+            except Exception as e:
+                print(f"⚠️  SQL might already exist: {sql} - {e}")
+        
+        db.commit()
+        
+        # Verify column was added
+        result = db.execute(text("""
+            SELECT column_name, data_type 
+            FROM information_schema.columns 
+            WHERE table_name = 'work_orders' 
+            AND column_name = 'cetec_status_progress';
+        """)).fetchall()
+        
+        return {
+            "status": "success",
+            "message": "Status progress migration completed",
+            "columns_added": len(result),
+            "columns": [{"name": row[0], "type": row[1]} for row in result]
+        }
+        
+    except Exception as e:
+        print(f"Migration error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
 @app.post("/api/migrate/deleted-canceled", dependencies=[Depends(auth.require_admin)])
 def migrate_deleted_canceled(
     db: Session = Depends(get_db),
@@ -2224,19 +2271,32 @@ def sync_cetec_progress(
                 work_response.raise_for_status()
                 work_data = work_response.json()
                 
-                # Calculate completed quantity (sum of pieces_completed)
-                completed_qty = sum(entry.get("pieces_completed", 0) for entry in work_data)
+                # Calculate completed quantity by status ID
+                status_progress = {}
+                total_completed = 0
+                for entry in work_data:
+                    status_id = entry.get("status_id")
+                    pieces_completed = entry.get("pieces_completed", 0)
+                    if status_id:
+                        if status_id not in status_progress:
+                            status_progress[status_id] = 0
+                        status_progress[status_id] += pieces_completed
+                        total_completed += pieces_completed
                 
                 # Update work order with Cetec data
                 wo.cetec_original_qty = ordline_data.get("oorderqty", 0)
                 wo.cetec_balance_due = ordline_data.get("balancedue", 0)
                 wo.cetec_shipped_qty = ordline_data.get("shipqty", 0)
                 wo.cetec_invoiced_qty = ordline_data.get("invoice_qty", 0)
-                wo.cetec_completed_qty = completed_qty
-                wo.cetec_remaining_qty = max(0, wo.cetec_original_qty - completed_qty)
+                wo.cetec_completed_qty = total_completed
+                wo.cetec_remaining_qty = max(0, wo.cetec_original_qty - total_completed)
                 wo.is_deleted = ordline_data.get("deleted_flag", False)
                 wo.is_canceled = ordline_data.get("cancelled_flag", False)
                 wo.last_cetec_sync = datetime.utcnow()
+                
+                # Store status-specific progress as JSON
+                import json
+                wo.cetec_status_progress = json.dumps(status_progress)
                 
                 updated_count += 1
                 print(f"✅ Synced WO {wo.wo_number}: {wo.cetec_original_qty} original, {wo.cetec_completed_qty} completed, {wo.cetec_remaining_qty} remaining")
