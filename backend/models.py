@@ -251,7 +251,7 @@ class WorkOrder(Base):
     cetec_invoiced_qty = Column(Integer, nullable=True) # invoice_qty from Cetec
     cetec_completed_qty = Column(Integer, nullable=True) # sum of pieces_completed from ordlinework
     cetec_remaining_qty = Column(Integer, nullable=True) # calculated: original - completed
-    cetec_status_progress = Column(Text, nullable=True) # JSON string of status_id -> completed_qty mapping
+    cetec_status_progress = Column(String, nullable=True) # JSON string of status_id -> completed_qty mapping
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
