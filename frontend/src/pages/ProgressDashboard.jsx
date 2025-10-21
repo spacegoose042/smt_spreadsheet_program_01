@@ -95,6 +95,8 @@ function ProcessTable({ title, data, columns }) {
 
 export default function ProgressDashboard() {
   const [selectedLocation, setSelectedLocation] = useState('all')
+  const [selectedWorkOrder, setSelectedWorkOrder] = useState('all')
+  const [searchTerm, setSearchTerm] = useState('')
 
   const { data: workOrders, isLoading: loadingWOs } = useQuery({
     queryKey: ['workOrders', 'progress'],
@@ -115,8 +117,29 @@ export default function ProgressDashboard() {
     )
   }
 
+  // Filter work orders based on search and selection
+  const filteredWorkOrders = (workOrders?.data || []).filter(wo => {
+    // Location filter
+    if (selectedLocation !== 'all' && wo.current_location !== selectedLocation) {
+      return false
+    }
+    
+    // Work order filter
+    if (selectedWorkOrder !== 'all' && wo.wo_number !== selectedWorkOrder) {
+      return false
+    }
+    
+    // Search filter
+    if (searchTerm && !wo.wo_number.toLowerCase().includes(searchTerm.toLowerCase()) && 
+        !wo.customer.toLowerCase().includes(searchTerm.toLowerCase())) {
+      return false
+    }
+    
+    return true
+  })
+
   // Process work orders data
-  const processData = (workOrders?.data || []).reduce((acc, wo) => {
+  const processData = filteredWorkOrders.reduce((acc, wo) => {
     const location = wo.current_location || 'Unknown'
     const lineName = wo.line?.name || 'Unscheduled'
     
@@ -200,7 +223,7 @@ export default function ProgressDashboard() {
           Work Order Progress Dashboard
         </h1>
         
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             Filter by Location:
             <select 
@@ -214,6 +237,94 @@ export default function ProgressDashboard() {
               ))}
             </select>
           </label>
+          
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            Filter by Work Order:
+            <select 
+              value={selectedWorkOrder} 
+              onChange={(e) => setSelectedWorkOrder(e.target.value)}
+              style={{ padding: '0.5rem', minWidth: '150px' }}
+            >
+              <option value="all">All Work Orders</option>
+              {Array.from(new Set((workOrders?.data || []).map(wo => wo.wo_number))).sort().map(woNumber => (
+                <option key={woNumber} value={woNumber}>{woNumber}</option>
+              ))}
+            </select>
+          </label>
+          
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            Search:
+            <input
+              type="text"
+              placeholder="Search WO# or Customer..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{ padding: '0.5rem', minWidth: '200px' }}
+            />
+          </label>
+        </div>
+      </div>
+
+      {/* Work Order Distribution (when specific WO selected) */}
+      {selectedWorkOrder !== 'all' && (
+        <div className="card" style={{ marginBottom: '2rem' }}>
+          <div className="card-header">
+            <h3>Work Order Distribution: {selectedWorkOrder}</h3>
+          </div>
+          <div className="card-body">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+              {Object.entries(processData.locations).map(([location, data]) => {
+                const woInLocation = data.workOrders.filter(wo => wo.wo_number === selectedWorkOrder)
+                if (woInLocation.length === 0) return null
+                
+                const wo = woInLocation[0]
+                return (
+                  <div key={location} className="card" style={{ padding: '1rem', backgroundColor: '#f8f9fa' }}>
+                    <h4 style={{ margin: '0 0 0.5rem 0', color: 'var(--primary)' }}>{location}</h4>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                      <span>Original: <strong>{wo.original.toLocaleString()}</strong></span>
+                      <span>Completed: <strong style={{ color: 'var(--success)' }}>{wo.completed.toLocaleString()}</strong></span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                      <span>Remaining: <strong style={{ color: 'var(--warning)' }}>{wo.remaining.toLocaleString()}</strong></span>
+                      <span>Progress: <strong>{wo.percentage}%</strong></span>
+                    </div>
+                    <div style={{ 
+                      width: '100%', 
+                      height: '6px', 
+                      backgroundColor: '#e9ecef', 
+                      borderRadius: '3px',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{
+                        width: `${wo.percentage}%`,
+                        height: '100%',
+                        backgroundColor: wo.percentage === 100 ? 'var(--success)' : 'var(--primary)',
+                        transition: 'width 0.3s ease'
+                      }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Filter Summary */}
+      <div className="card" style={{ marginBottom: '2rem', backgroundColor: '#f8f9fa' }}>
+        <div className="card-body">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <strong>Showing {filteredWorkOrders.length} work orders</strong>
+              {selectedWorkOrder !== 'all' && <span> for work order <code>{selectedWorkOrder}</code></span>}
+              {selectedLocation !== 'all' && <span> in location <code>{selectedLocation}</code></span>}
+              {searchTerm && <span> matching "<code>{searchTerm}</code>"</span>}
+            </div>
+            <div style={{ fontSize: '0.9rem', color: '#666' }}>
+              Total: {workOrders?.data?.length || 0} work orders
+            </div>
+          </div>
         </div>
       </div>
 
@@ -293,9 +404,7 @@ export default function ProgressDashboard() {
               </tr>
             </thead>
             <tbody>
-              {(workOrders?.data || [])
-                .filter(wo => selectedLocation === 'all' || wo.current_location === selectedLocation)
-                .map((wo, index) => {
+              {filteredWorkOrders.map((wo, index) => {
                   const originalQty = wo.cetec_original_qty || wo.quantity || 0
                   const completedQty = wo.cetec_completed_qty || 0
                   const remainingQty = wo.cetec_remaining_qty || Math.max(0, originalQty - completedQty)
