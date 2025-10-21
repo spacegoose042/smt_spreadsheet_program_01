@@ -8,6 +8,7 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from sqlalchemy import and_, or_
 from typing import List, Optional
 from datetime import date, timedelta, datetime
 import requests
@@ -311,6 +312,7 @@ def get_work_orders(
     status: Optional[str] = None,  # Changed from enum to string (status name)
     priority: Optional[Priority] = None,
     include_complete: bool = False,
+    include_completed_work: bool = True,  # New: include work orders with 0 remaining qty
     db: Session = Depends(get_db)
 ):
     """Get all work orders with optional filters"""
@@ -337,6 +339,16 @@ def get_work_orders(
     
     if priority:
         query = query.filter(WorkOrder.priority == priority)
+    
+    # Filter by remaining work quantity (if Cetec progress data is available)
+    if not include_completed_work:
+        # Only show work orders that still have work to complete
+        query = query.filter(
+            or_(
+                WorkOrder.cetec_remaining_qty.is_(None),  # No Cetec data yet
+                WorkOrder.cetec_remaining_qty > 0  # Still has work to do
+            )
+        )
     
     work_orders = query.order_by(WorkOrder.line_position).all()
     
@@ -2019,6 +2031,96 @@ def get_cetec_sync_logs(
     ).order_by(CetecSyncLog.sync_date.desc()).all()
     
     return logs
+
+
+@app.post("/api/cetec/sync-progress", dependencies=[Depends(auth.require_scheduler_or_admin)])
+def sync_cetec_progress(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Sync work order progress data from Cetec.
+    Updates original_qty, balance_due, shipped_qty, invoiced_qty, completed_qty, and remaining_qty.
+    """
+    import requests
+    from datetime import datetime
+    
+    CETEC_CONFIG = {
+        "domain": "sandy.cetecerp.com",
+        "token": "123matthatesbrant123"
+    }
+    
+    try:
+        # Get all work orders with cetec_ordline_id
+        work_orders = db.query(WorkOrder).filter(
+            WorkOrder.cetec_ordline_id.isnot(None)
+        ).all()
+        
+        updated_count = 0
+        errors = []
+        
+        for wo in work_orders:
+            try:
+                ordline_id = wo.cetec_ordline_id
+                
+                # Get ordline data (quantities)
+                ordline_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/"
+                ordline_response = requests.get(
+                    ordline_url,
+                    params={"preshared_token": CETEC_CONFIG["token"]},
+                    timeout=30
+                )
+                ordline_response.raise_for_status()
+                ordline_data = ordline_response.json()["data"]
+                
+                # Get ordlinework data (completed quantities)
+                work_url = f"https://{CETEC_CONFIG['domain']}/api/ordlinework"
+                work_response = requests.get(
+                    work_url,
+                    params={
+                        "ordline_id": ordline_id,
+                        "preshared_token": CETEC_CONFIG["token"]
+                    },
+                    timeout=30
+                )
+                work_response.raise_for_status()
+                work_data = work_response.json()
+                
+                # Calculate completed quantity (sum of pieces_completed)
+                completed_qty = sum(entry.get("pieces_completed", 0) for entry in work_data)
+                
+                # Update work order with Cetec data
+                wo.cetec_original_qty = ordline_data.get("oorderqty", 0)
+                wo.cetec_balance_due = ordline_data.get("balancedue", 0)
+                wo.cetec_shipped_qty = ordline_data.get("shipqty", 0)
+                wo.cetec_invoiced_qty = ordline_data.get("invoice_qty", 0)
+                wo.cetec_completed_qty = completed_qty
+                wo.cetec_remaining_qty = max(0, wo.cetec_original_qty - completed_qty)
+                wo.last_cetec_sync = datetime.utcnow()
+                
+                updated_count += 1
+                
+            except Exception as e:
+                error_msg = f"Failed to sync WO {wo.wo_number}: {str(e)}"
+                errors.append(error_msg)
+                print(f"❌ {error_msg}")
+                continue
+        
+        db.commit()
+        
+        return {
+            "status": "success",
+            "updated_count": updated_count,
+            "total_work_orders": len(work_orders),
+            "errors": errors,
+            "message": f"Successfully synced {updated_count} work orders"
+        }
+        
+    except Exception as e:
+        print(f"Cetec progress sync error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
 
 
 @app.post("/api/cetec/import", response_model=schemas.CetecImportResponse)

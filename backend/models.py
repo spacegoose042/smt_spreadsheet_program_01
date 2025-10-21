@@ -242,6 +242,14 @@ class WorkOrder(Base):
     material_status = Column(String, nullable=True)  # "Ready", "Partial", "Shortage"
     last_cetec_sync = Column(DateTime, nullable=True)  # When last synced from Cetec
     
+    # Cetec Progress Tracking
+    cetec_original_qty = Column(Integer, nullable=True)  # oorderqty from Cetec
+    cetec_balance_due = Column(Integer, nullable=True)   # balancedue from Cetec
+    cetec_shipped_qty = Column(Integer, nullable=True)  # shipqty from Cetec
+    cetec_invoiced_qty = Column(Integer, nullable=True) # invoice_qty from Cetec
+    cetec_completed_qty = Column(Integer, nullable=True) # sum of pieces_completed from ordlinework
+    cetec_remaining_qty = Column(Integer, nullable=True) # calculated: original - completed
+    
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
