@@ -2033,6 +2033,59 @@ def get_cetec_sync_logs(
     return logs
 
 
+@app.post("/api/migrate/cetec-progress", dependencies=[Depends(auth.require_admin)])
+def migrate_cetec_progress(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Run database migration to add Cetec progress tracking columns.
+    Admin only - this modifies the database schema.
+    """
+    try:
+        # Add Cetec progress tracking columns
+        migration_sql = [
+            "ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS cetec_original_qty INTEGER;",
+            "ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS cetec_balance_due INTEGER;",
+            "ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS cetec_shipped_qty INTEGER;",
+            "ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS cetec_invoiced_qty INTEGER;",
+            "ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS cetec_completed_qty INTEGER;",
+            "ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS cetec_remaining_qty INTEGER;",
+            "CREATE INDEX IF NOT EXISTS idx_work_orders_cetec_remaining_qty ON work_orders(cetec_remaining_qty);"
+        ]
+        
+        for sql in migration_sql:
+            try:
+                db.execute(sql)
+                print(f"✅ Executed: {sql}")
+            except Exception as e:
+                print(f"⚠️  SQL might already exist: {sql} - {e}")
+        
+        db.commit()
+        
+        # Verify columns were added
+        result = db.execute("""
+            SELECT column_name, data_type 
+            FROM information_schema.columns 
+            WHERE table_name = 'work_orders' 
+            AND column_name LIKE 'cetec_%'
+            ORDER BY column_name;
+        """).fetchall()
+        
+        return {
+            "status": "success",
+            "message": "Cetec progress migration completed",
+            "columns_added": len(result),
+            "columns": [{"name": row[0], "type": row[1]} for row in result]
+        }
+        
+    except Exception as e:
+        print(f"Migration error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
 @app.post("/api/cetec/sync-progress", dependencies=[Depends(auth.require_scheduler_or_admin)])
 def sync_cetec_progress(
     db: Session = Depends(get_db),

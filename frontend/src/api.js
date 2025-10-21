@@ -49,6 +49,7 @@ export const getCurrentCapacity = () => api.get('/api/capacity/current')
 
 // Cetec Progress
 export const syncCetecProgress = () => api.post('/api/cetec/sync-progress')
+export const migrateCetecProgress = () => api.post('/api/migrate/cetec-progress')
 
 // Work Orders
 export const getWorkOrders = (params = {}) => 
