@@ -2054,9 +2054,10 @@ def migrate_cetec_progress(
             "CREATE INDEX IF NOT EXISTS idx_work_orders_cetec_remaining_qty ON work_orders(cetec_remaining_qty);"
         ]
         
+        from sqlalchemy import text
         for sql in migration_sql:
             try:
-                db.execute(sql)
+                db.execute(text(sql))
                 print(f"✅ Executed: {sql}")
             except Exception as e:
                 print(f"⚠️  SQL might already exist: {sql} - {e}")
@@ -2064,13 +2065,14 @@ def migrate_cetec_progress(
         db.commit()
         
         # Verify columns were added
-        result = db.execute("""
+        from sqlalchemy import text
+        result = db.execute(text("""
             SELECT column_name, data_type 
             FROM information_schema.columns 
             WHERE table_name = 'work_orders' 
             AND column_name LIKE 'cetec_%'
             ORDER BY column_name;
-        """).fetchall()
+        """)).fetchall()
         
         return {
             "status": "success",
