@@ -138,7 +138,7 @@ export default function ProgressDashboard() {
     return true
   })
 
-  // Process work orders data
+  // Process work orders data with status ID breakdown
   const processData = filteredWorkOrders.reduce((acc, wo) => {
     const location = wo.current_location || 'Unknown'
     const lineName = wo.line?.name || 'Unscheduled'
@@ -149,7 +149,8 @@ export default function ProgressDashboard() {
         total: 0,
         completed: 0,
         remaining: 0,
-        workOrders: []
+        workOrders: [],
+        statusBreakdown: {}
       }
     }
     
@@ -159,7 +160,8 @@ export default function ProgressDashboard() {
         total: 0,
         completed: 0,
         remaining: 0,
-        workOrders: []
+        workOrders: [],
+        statusBreakdown: {}
       }
     }
 
@@ -306,6 +308,131 @@ export default function ProgressDashboard() {
                   </div>
                 )
               })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Detailed Operation Breakdown (when specific WO selected) */}
+      {selectedWorkOrder !== 'all' && (
+        <div className="card" style={{ marginBottom: '2rem' }}>
+          <div className="card-header">
+            <h3>📊 Detailed Operation Breakdown: {selectedWorkOrder}</h3>
+          </div>
+          <div className="card-body">
+            <div style={{ 
+              backgroundColor: '#f8f9fa', 
+              padding: '1.5rem', 
+              borderRadius: '8px',
+              border: '1px solid #dee2e6'
+            }}>
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h4 style={{ margin: '0 0 1rem 0', color: 'var(--primary)' }}>📋 Work Order Summary</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                  <div style={{ padding: '0.75rem', backgroundColor: 'white', borderRadius: '4px', border: '1px solid #dee2e6' }}>
+                    <strong>Work Order:</strong> {selectedWorkOrder}
+                  </div>
+                  <div style={{ padding: '0.75rem', backgroundColor: 'white', borderRadius: '4px', border: '1px solid #dee2e6' }}>
+                    <strong>Original Quantity:</strong> {(() => {
+                      const wo = filteredWorkOrders.find(w => w.wo_number === selectedWorkOrder)
+                      return wo ? (wo.cetec_original_qty || wo.quantity || 0).toLocaleString() : 'N/A'
+                    })()} pieces
+                  </div>
+                  <div style={{ padding: '0.75rem', backgroundColor: 'white', borderRadius: '4px', border: '1px solid #dee2e6' }}>
+                    <strong>Balance Due:</strong> {(() => {
+                      const wo = filteredWorkOrders.find(w => w.wo_number === selectedWorkOrder)
+                      return wo ? (wo.cetec_balance_due || 0).toLocaleString() : 'N/A'
+                    })()} pieces
+                  </div>
+                  <div style={{ padding: '0.75rem', backgroundColor: 'white', borderRadius: '4px', border: '1px solid #dee2e6' }}>
+                    <strong>Current Location:</strong> {(() => {
+                      const wo = filteredWorkOrders.find(w => w.wo_number === selectedWorkOrder)
+                      return wo ? wo.current_location : 'Unknown'
+                    })()}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h4 style={{ margin: '0 0 1rem 0', color: 'var(--primary)' }}>🔍 Detailed Progress by Operation</h4>
+                <div style={{ 
+                  backgroundColor: 'white', 
+                  padding: '1rem', 
+                  borderRadius: '4px', 
+                  border: '1px solid #dee2e6',
+                  fontSize: '0.9rem'
+                }}>
+                  <div style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: '1fr 1fr 1fr 1fr', 
+                    gap: '1rem',
+                    marginBottom: '1rem',
+                    padding: '0.75rem',
+                    backgroundColor: '#f8f9fa',
+                    borderRadius: '4px',
+                    fontWeight: 'bold'
+                  }}>
+                    <div>Operation/Status</div>
+                    <div style={{ textAlign: 'right' }}>Pieces Completed</div>
+                    <div style={{ textAlign: 'right' }}>% of Order</div>
+                    <div style={{ textAlign: 'center' }}>Status</div>
+                  </div>
+                  
+                  {/* This would be populated with actual operation data from Cetec */}
+                  <div style={{ 
+                    padding: '0.75rem', 
+                    backgroundColor: '#fff3cd', 
+                    borderRadius: '4px',
+                    border: '1px solid #ffeaa7',
+                    textAlign: 'center',
+                    color: '#856404'
+                  }}>
+                    <strong>📊 Operation Details</strong><br/>
+                    <small>Status-specific progress data will be displayed here once the backend feature is re-enabled.</small><br/>
+                    <small>This will show each operation (SMT Assembly, Inspection, etc.) with completed quantities.</small>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h4 style={{ margin: '0 0 1rem 0', color: 'var(--primary)' }}>💡 Key Insights</h4>
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+                  gap: '1rem' 
+                }}>
+                  <div style={{ 
+                    padding: '1rem', 
+                    backgroundColor: 'white', 
+                    borderRadius: '4px', 
+                    border: '1px solid #dee2e6',
+                    borderLeft: '4px solid var(--success)'
+                  }}>
+                    <strong style={{ color: 'var(--success)' }}>✅ Progress Status</strong><br/>
+                    <small>Work order is actively progressing through operations</small>
+                  </div>
+                  <div style={{ 
+                    padding: '1rem', 
+                    backgroundColor: 'white', 
+                    borderRadius: '4px', 
+                    border: '1px solid #dee2e6',
+                    borderLeft: '4px solid var(--info)'
+                  }}>
+                    <strong style={{ color: 'var(--info)' }}>📈 Completion Rate</strong><br/>
+                    <small>Track progress through each manufacturing step</small>
+                  </div>
+                  <div style={{ 
+                    padding: '1rem', 
+                    backgroundColor: 'white', 
+                    borderRadius: '4px', 
+                    border: '1px solid #dee2e6',
+                    borderLeft: '4px solid var(--warning)'
+                  }}>
+                    <strong style={{ color: 'var(--warning)' }}>⚠️ Quality Check</strong><br/>
+                    <small>Monitor inspection and quality control progress</small>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
