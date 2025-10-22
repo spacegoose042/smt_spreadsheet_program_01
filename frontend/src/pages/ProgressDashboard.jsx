@@ -118,7 +118,7 @@ export default function ProgressDashboard() {
   }
 
   // Filter work orders based on search and selection
-  const filteredWorkOrders = (workOrders || []).filter(wo => {
+  const filteredWorkOrders = (workOrders?.data || []).filter(wo => {
     // Location filter
     if (selectedLocation !== 'all' && wo.current_location !== selectedLocation) {
       return false
@@ -248,7 +248,7 @@ export default function ProgressDashboard() {
               style={{ padding: '0.5rem', minWidth: '150px' }}
             >
               <option value="all">All Work Orders</option>
-              {Array.from(new Set((workOrders || []).map(wo => wo.wo_number))).sort().map(woNumber => (
+              {Array.from(new Set((workOrders?.data || []).map(wo => wo.wo_number))).sort().map(woNumber => (
                 <option key={woNumber} value={woNumber}>{woNumber}</option>
               ))}
             </select>
@@ -449,7 +449,7 @@ export default function ProgressDashboard() {
               {searchTerm && <span> matching "<code>{searchTerm}</code>"</span>}
             </div>
             <div style={{ fontSize: '0.9rem', color: '#666' }}>
-              Total: {workOrders?.length || 0} work orders
+              Total: {workOrders?.data?.length || 0} work orders
             </div>
           </div>
         </div>
