@@ -142,8 +142,6 @@ class WorkOrderResponse(WorkOrderBase):
     line_id: Optional[int] = None
     line_position: Optional[int] = None
     is_complete: bool
-    is_deleted: bool = False
-    is_canceled: bool = False
     created_at: datetime
     updated_at: datetime
     
@@ -171,15 +169,6 @@ class WorkOrderResponse(WorkOrderBase):
     current_location: Optional[str] = None
     material_status: Optional[str] = None
     last_cetec_sync: Optional[datetime] = None
-    
-    # Cetec Progress Tracking
-    cetec_original_qty: Optional[int] = None
-    cetec_balance_due: Optional[int] = None
-    cetec_shipped_qty: Optional[int] = None
-    cetec_invoiced_qty: Optional[int] = None
-    cetec_completed_qty: Optional[int] = None
-    cetec_remaining_qty: Optional[int] = None
-    cetec_status_progress: Optional[str] = None
     
     # Include line info if available
     line: Optional[SMTLineResponse] = None

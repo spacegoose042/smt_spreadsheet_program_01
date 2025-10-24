@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
-import { Home, Calendar, Settings, CheckCircle, List, LayoutGrid, LogOut, User as UserIcon, Users, Clock, Timer, Tag, ChevronDown, Key, AlertTriangle, Database, RefreshCw, BarChart3 } from 'lucide-react'
+import { Home, Calendar, Settings, CheckCircle, List, LayoutGrid, LogOut, User as UserIcon, Users, Clock, Timer, Tag, ChevronDown, Key, AlertTriangle, Database, RefreshCw } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import Login from './pages/Login'
@@ -19,7 +19,6 @@ import ResolutionTypeManagement from './pages/ResolutionTypeManagement'
 import Issues from './pages/Issues'
 import CetecImport from './pages/CetecImport'
 import CetecSyncReport from './pages/CetecSyncReport'
-import ProgressDashboard from './pages/ProgressDashboard'
 import './App.css'
 
 function ProtectedRoute({ children, requireAuth = true }) {
@@ -82,10 +81,6 @@ function Navigation() {
           <Link to="/schedule" className={isActive('/schedule') ? 'active' : ''}>
             <Calendar size={18} />
             Schedule
-          </Link>
-          <Link to="/progress" className={isActive('/progress') ? 'active' : ''}>
-            <BarChart3 size={18} />
-            Progress
           </Link>
           <Link to="/visual" className={isActive('/visual') ? 'active' : ''}>
             <LayoutGrid size={18} />
@@ -247,7 +242,6 @@ function AppContent() {
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/schedule" element={<ProtectedRoute><Schedule /></ProtectedRoute>} />
-          <Route path="/progress" element={<ProtectedRoute><ProgressDashboard /></ProtectedRoute>} />
           <Route path="/visual" element={<ProtectedRoute><VisualScheduler /></ProtectedRoute>} />
           <Route path="/lines" element={<ProtectedRoute><LineView /></ProtectedRoute>} />
           <Route path="/lines/:lineId" element={<ProtectedRoute><LineView /></ProtectedRoute>} />

@@ -201,8 +201,6 @@ class WorkOrder(Base):
     is_manual_schedule = Column(Boolean, default=False)  # Exclude from auto-scheduler (hand-built schedules)
     is_new_rev_assembly = Column(Boolean, default=False)  # Replaces asterisk
     is_complete = Column(Boolean, default=False)
-    is_deleted = Column(Boolean, default=False)  # Deleted flag from Cetec
-    is_canceled = Column(Boolean, default=False)  # Canceled flag from Cetec
     
     # Timing (Dates)
     cetec_ship_date = Column(Date, nullable=False)  # Original customer promise from Cetec (NEVER CHANGE)
@@ -243,15 +241,6 @@ class WorkOrder(Base):
     current_location = Column(String, nullable=True)  # Current work location from Cetec
     material_status = Column(String, nullable=True)  # "Ready", "Partial", "Shortage"
     last_cetec_sync = Column(DateTime, nullable=True)  # When last synced from Cetec
-    
-    # Cetec Progress Tracking
-    cetec_original_qty = Column(Integer, nullable=True)  # oorderqty from Cetec
-    cetec_balance_due = Column(Integer, nullable=True)   # balancedue from Cetec
-    cetec_shipped_qty = Column(Integer, nullable=True)  # shipqty from Cetec
-    cetec_invoiced_qty = Column(Integer, nullable=True) # invoice_qty from Cetec
-    cetec_completed_qty = Column(Integer, nullable=True) # sum of pieces_completed from ordlinework
-    cetec_remaining_qty = Column(Integer, nullable=True) # calculated: original - completed
-    # cetec_status_progress = Column(String, nullable=True) # JSON string of status_id -> completed_qty mapping - temporarily disabled
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -1,6 +1,6 @@
 import { useState } from 'react' // Updated with SMT PRODUCTION filter - PRODUCTION FIX
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getWorkOrders, getLines, createWorkOrder, updateWorkOrder, deleteWorkOrder, completeWorkOrder, getDashboard, getStatuses, syncCetecProgress } from '../api'
+import { getWorkOrders, getLines, createWorkOrder, updateWorkOrder, deleteWorkOrder, completeWorkOrder, getDashboard, getStatuses } from '../api'
 import { Plus, Edit2, Trash2, Lock, Unlock, CheckCircle, Calendar, AlertTriangle, Zap, HandMetal } from 'lucide-react'
 import { format } from 'date-fns'
 import WorkOrderForm from '../components/WorkOrderForm'
@@ -56,7 +56,6 @@ export default function Schedule() {
   const [completingWO, setCompletingWO] = useState(null)
   const [reportingIssueWO, setReportingIssueWO] = useState(null)
   const [showAutoSchedule, setShowAutoSchedule] = useState(false)
-  const [showCetecSync, setShowCetecSync] = useState(false)
   const [filterLine, setFilterLine] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterLocation, setFilterLocation] = useState('SMT PRODUCTION') // Default to SMT PRODUCTION
@@ -171,10 +170,6 @@ export default function Schedule() {
           aVal = a.trolley_count || 0
           bVal = b.trolley_count || 0
           break
-        case 'cetec_remaining_qty':
-          aVal = a.cetec_remaining_qty !== null ? a.cetec_remaining_qty : 999999
-          bVal = b.cetec_remaining_qty !== null ? b.cetec_remaining_qty : 999999
-          break
         case 'line_position':
         default:
           aVal = a.line_position || 999
@@ -252,19 +247,6 @@ export default function Schedule() {
       queryClient.invalidateQueries(['dashboard'])
       queryClient.invalidateQueries(['completed'])
       setCompletingWO(null)
-    },
-  })
-
-  const syncMutation = useMutation({
-    mutationFn: syncCetecProgress,
-    onSuccess: (data) => {
-      queryClient.invalidateQueries(['workOrders'])
-      queryClient.invalidateQueries(['dashboard'])
-      setShowCetecSync(false)
-      alert(`Sync completed! Updated ${data.updated_count} work orders.`)
-    },
-    onError: (error) => {
-      alert(`Sync failed: ${error.message}`)
     },
   })
 
@@ -387,43 +369,6 @@ export default function Schedule() {
     <div className="container">
       {showAutoSchedule && (
         <AutoScheduleModal onClose={() => setShowAutoSchedule(false)} />
-      )}
-      
-      {showCetecSync && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <div className="modal-header">
-              <h3>Sync Cetec Progress</h3>
-              <button 
-                className="btn-close" 
-                onClick={() => setShowCetecSync(false)}
-                disabled={syncMutation.isPending}
-              >
-                ×
-              </button>
-            </div>
-            <div className="modal-body">
-              <p>This will sync work order progress data from Cetec ERP.</p>
-              <p><strong>Note:</strong> This may take a few minutes for large datasets.</p>
-            </div>
-            <div className="modal-footer">
-              <button 
-                className="btn btn-secondary" 
-                onClick={() => setShowCetecSync(false)}
-                disabled={syncMutation.isPending}
-              >
-                Cancel
-              </button>
-              <button 
-                className="btn btn-primary" 
-                onClick={() => syncMutation.mutate()}
-                disabled={syncMutation.isPending}
-              >
-                {syncMutation.isPending ? 'Syncing...' : 'Sync Now'}
-              </button>
-            </div>
-          </div>
-        </div>
       )}
       
       {showForm && (
@@ -592,14 +537,6 @@ export default function Schedule() {
             <Zap size={16} />
             Auto-Schedule
           </button>
-          <button 
-            onClick={() => setShowCetecSync(true)} 
-            className="btn btn-info"
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-          >
-            <Calendar size={16} />
-            Sync Cetec
-          </button>
         </div>
         
         {/* Drag and drop hint */}
@@ -739,13 +676,6 @@ export default function Schedule() {
                   title="Time (hours)"
                 >
                   Hrs {sortColumn === 'time_minutes' && (sortDirection === 'asc' ? '↑' : '↓')}
-                </th>
-                <th 
-                  onClick={() => handleSort('cetec_remaining_qty')}
-                  style={{ cursor: 'pointer', userSelect: 'none', padding: '0.35rem', maxWidth: '80px' }}
-                  title="Remaining Quantity (from Cetec)"
-                >
-                  Rem {sortColumn === 'cetec_remaining_qty' && (sortDirection === 'asc' ? '↑' : '↓')}
                 </th>
                 <th 
                   onClick={() => handleSort('trolley_count')}
@@ -911,37 +841,6 @@ export default function Schedule() {
                     )}
                   </td>
                   <td style={{ padding: '0.35rem', whiteSpace: 'nowrap', textAlign: 'right' }}>{(wo.time_minutes / 60).toFixed(1)}</td>
-                  <td style={{ padding: '0.35rem', textAlign: 'center', maxWidth: '80px' }}>
-                    {wo.cetec_remaining_qty !== null ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-                        <span style={{ 
-                          fontSize: '0.7rem', 
-                          fontWeight: 'bold',
-                          color: wo.cetec_remaining_qty === 0 ? '#28a745' : wo.cetec_remaining_qty > 0 ? '#007bff' : '#6c757d'
-                        }}>
-                          {wo.cetec_remaining_qty}
-                        </span>
-                        {wo.cetec_original_qty && wo.cetec_original_qty > 0 && (
-                          <div style={{ 
-                            width: '40px', 
-                            height: '4px', 
-                            background: '#e9ecef', 
-                            borderRadius: '2px',
-                            overflow: 'hidden'
-                          }}>
-                            <div style={{
-                              width: `${Math.max(0, Math.min(100, ((wo.cetec_original_qty - wo.cetec_remaining_qty) / wo.cetec_original_qty) * 100))}%`,
-                              height: '100%',
-                              background: wo.cetec_remaining_qty === 0 ? '#28a745' : '#007bff',
-                              transition: 'width 0.3s ease'
-                            }} />
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <span style={{ color: '#999', fontSize: '0.7rem' }}>-</span>
-                    )}
-                  </td>
                   <td style={{ padding: '0.35rem', textAlign: 'center' }}>{wo.trolley_count}</td>
                   <td style={{ padding: '0.35rem', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={wo.th_kit_status || ''}>
                     {wo.th_kit_status || '-'}

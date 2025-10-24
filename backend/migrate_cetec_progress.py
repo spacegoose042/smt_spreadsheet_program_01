@@ -28,3 +28,4 @@ ORDER BY column_name;
 if __name__ == "__main__":
     print("Cetec Progress Migration SQL:")
     print(ALTER_TABLE_SQL)
+
