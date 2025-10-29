@@ -326,9 +326,9 @@ def get_work_orders(
     
     # Cetec progress filtering for Progress Dashboard
     if include_completed_work:
-        # Include work orders that have Cetec progress data and are still relevant
+        # Include work orders that are not deleted or canceled
+        # Temporarily relaxed filtering for testing (will be strict once Cetec data is imported)
         query = query.filter(
-            WorkOrder.cetec_balance_due > 0,  # Still has balance due
             WorkOrder.is_deleted != True,     # Not deleted
             WorkOrder.is_canceled != True     # Not canceled
         )
