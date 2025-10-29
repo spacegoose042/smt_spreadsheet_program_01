@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getWorkOrders, getLines } from '../api'
+import { getWorkOrders, getLines, getCetecCombinedData } from '../api'
 import { Package, Clock, CheckCircle, AlertCircle, TrendingUp, BarChart3 } from 'lucide-react'
 
 function ProgressCard({ title, icon: Icon, data, color = 'blue' }) {
@@ -97,6 +97,7 @@ export default function ProgressDashboard() {
   const [selectedLocation, setSelectedLocation] = useState('all')
   const [selectedWorkOrder, setSelectedWorkOrder] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
+  const [expandedWOs, setExpandedWOs] = useState({})
 
   const { data: workOrders, isLoading: loadingWOs } = useQuery({
     queryKey: ['workOrders', 'progress'],
@@ -520,6 +521,7 @@ export default function ProgressDashboard() {
           <table style={{ width: '100%', fontSize: '0.9rem' }}>
             <thead>
               <tr style={{ backgroundColor: '#f8f9fa' }}>
+                <th style={{ padding: '0.75rem', textAlign: 'left', width: '36px' }}></th>
                 <th style={{ padding: '0.75rem', textAlign: 'left' }}>WO#</th>
                 <th style={{ padding: '0.75rem', textAlign: 'left' }}>Customer</th>
                 <th style={{ padding: '0.75rem', textAlign: 'left' }}>Location</th>
@@ -537,44 +539,169 @@ export default function ProgressDashboard() {
                   const remainingQty = wo.cetec_remaining_qty || Math.max(0, originalQty - completedQty)
                   const percentage = originalQty > 0 ? Math.round((completedQty / originalQty) * 100) : 0
                   
+                  const isExpanded = !!expandedWOs[wo.wo_number]
+
                   return (
-                    <tr key={index} style={{ borderBottom: '1px solid #dee2e6' }}>
-                      <td style={{ padding: '0.75rem' }}>{wo.wo_number}</td>
-                      <td style={{ padding: '0.75rem' }}>{wo.customer}</td>
-                      <td style={{ padding: '0.75rem' }}>{wo.current_location || 'Unknown'}</td>
-                      <td style={{ padding: '0.75rem' }}>{wo.line?.name || 'Unscheduled'}</td>
-                      <td style={{ padding: '0.75rem', textAlign: 'right' }}>{originalQty.toLocaleString()}</td>
-                      <td style={{ padding: '0.75rem', textAlign: 'right', color: 'var(--success)' }}>
-                        {completedQty.toLocaleString()}
-                      </td>
-                      <td style={{ padding: '0.75rem', textAlign: 'right', color: 'var(--warning)' }}>
-                        {remainingQty.toLocaleString()}
-                      </td>
-                      <td style={{ padding: '0.75rem', textAlign: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <div style={{ 
-                            width: '60px', 
-                            height: '6px', 
-                            backgroundColor: '#e9ecef', 
-                            borderRadius: '3px',
-                            overflow: 'hidden'
-                          }}>
-                            <div style={{
-                              width: `${percentage}%`,
-                              height: '100%',
-                              backgroundColor: percentage === 100 ? 'var(--success)' : 'var(--primary)',
-                              transition: 'width 0.3s ease'
-                            }} />
+                    <>
+                      <tr key={`${wo.wo_number}-row`} style={{ borderBottom: '1px solid #dee2e6' }}>
+                        <td style={{ padding: '0.5rem' }}>
+                          <button
+                            aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                            onClick={() => setExpandedWOs(prev => ({ ...prev, [wo.wo_number]: !isExpanded }))}
+                            style={{
+                              border: '1px solid #dee2e6',
+                              background: 'white',
+                              borderRadius: '4px',
+                              width: '28px',
+                              height: '28px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {isExpanded ? '−' : '+'}
+                          </button>
+                        </td>
+                        <td style={{ padding: '0.75rem' }}>{wo.wo_number}</td>
+                        <td style={{ padding: '0.75rem' }}>{wo.customer}</td>
+                        <td style={{ padding: '0.75rem' }}>{wo.current_location || 'Unknown'}</td>
+                        <td style={{ padding: '0.75rem' }}>{wo.line?.name || 'Unscheduled'}</td>
+                        <td style={{ padding: '0.75rem', textAlign: 'right' }}>{originalQty.toLocaleString()}</td>
+                        <td style={{ padding: '0.75rem', textAlign: 'right', color: 'var(--success)' }}>
+                          {completedQty.toLocaleString()}
+                        </td>
+                        <td style={{ padding: '0.75rem', textAlign: 'right', color: 'var(--warning)' }}>
+                          {remainingQty.toLocaleString()}
+                        </td>
+                        <td style={{ padding: '0.75rem', textAlign: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <div style={{ 
+                              width: '60px', 
+                              height: '6px', 
+                              backgroundColor: '#e9ecef', 
+                              borderRadius: '3px',
+                              overflow: 'hidden'
+                            }}>
+                              <div style={{
+                                width: `${percentage}%`,
+                                height: '100%',
+                                backgroundColor: percentage === 100 ? 'var(--success)' : 'var(--primary)',
+                                transition: 'width 0.3s ease'
+                              }} />
+                            </div>
+                            <span style={{ fontSize: '0.8rem', color: '#666' }}>{percentage}%</span>
                           </div>
-                          <span style={{ fontSize: '0.8rem', color: '#666' }}>{percentage}%</span>
-                        </div>
-                      </td>
-                    </tr>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr key={`${wo.wo_number}-details`}>
+                          <td colSpan={9} style={{ padding: 0, background: '#f8f9fa' }}>
+                            <WorkOrderOperationsPanel workOrder={wo} />
+                          </td>
+                        </tr>
+                      )}
+                    </>
                   )
                 })}
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function WorkOrderOperationsPanel({ workOrder }) {
+  const ordlineId = workOrder.cetec_ordline_id
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['cetecCombined', ordlineId],
+    queryFn: () => getCetecCombinedData(ordlineId),
+    enabled: !!ordlineId
+  })
+
+  if (!ordlineId) {
+    return (
+      <div style={{ padding: '1rem' }}>
+        <em>No Cetec ordline id available for this work order.</em>
+      </div>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <div style={{ padding: '1rem' }}>
+        Loading Cetec operations…
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div style={{ padding: '1rem', color: 'var(--danger)' }}>
+        Failed to load operations from Cetec.
+      </div>
+    )
+  }
+
+  const payload = data?.data || {}
+  const locationMaps = payload.location_maps || []
+
+  return (
+    <div style={{ padding: '1rem 1.25rem 1.25rem 3.25rem', borderTop: '1px solid #dee2e6' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.75rem' }}>
+        {locationMaps.length === 0 && (
+          <div style={{ background: '#fff3cd', border: '1px solid #ffeaa7', padding: '0.75rem', borderRadius: '6px' }}>
+            No locations/operations returned from Cetec for this work order.
+          </div>
+        )}
+
+        {locationMaps.map((loc, idx) => {
+          const ops = loc.operations || []
+          const locName = loc.name || loc.location_name || `Location ${idx + 1}`
+          return (
+            <div key={idx} className="card" style={{ background: 'white' }}>
+              <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <strong>{locName}</strong>
+                <span style={{ fontSize: '0.85rem', color: '#666' }}>{ops.length} operations</span>
+              </div>
+              <div className="card-body" style={{ padding: 0 }}>
+                <table style={{ width: '100%', fontSize: '0.9rem' }}>
+                  <thead>
+                    <tr style={{ background: '#f8f9fa' }}>
+                      <th style={{ padding: '0.5rem', textAlign: 'left' }}>Operation</th>
+                      <th style={{ padding: '0.5rem', textAlign: 'right' }}>Pieces Completed</th>
+                      <th style={{ padding: '0.5rem', textAlign: 'right' }}>% of Order</th>
+                      <th style={{ padding: '0.5rem', textAlign: 'left' }}>Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ops.length === 0 && (
+                      <tr>
+                        <td colSpan={4} style={{ padding: '0.75rem' }}>
+                          <em>No operations defined for this location.</em>
+                        </td>
+                      </tr>
+                    )}
+                    {ops.map((op, j) => {
+                      const name = op.name || op.operation || `Operation ${j + 1}`
+                      const completed = 0 // Placeholder until per-op progress is wired
+                      const orderQty = (workOrder.cetec_original_qty || workOrder.quantity || 0)
+                      const pct = orderQty > 0 ? Math.round((completed / orderQty) * 100) : 0
+                      return (
+                        <tr key={j} style={{ borderTop: '1px solid #eee' }}>
+                          <td style={{ padding: '0.5rem' }}>{name}</td>
+                          <td style={{ padding: '0.5rem', textAlign: 'right' }}>{completed.toLocaleString()}</td>
+                          <td style={{ padding: '0.5rem', textAlign: 'right' }}>{pct}%</td>
+                          <td style={{ padding: '0.5rem', color: '#666' }}>
+                            <small>Per-operation completed pcs coming soon</small>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
