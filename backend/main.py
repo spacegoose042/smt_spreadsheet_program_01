@@ -311,6 +311,7 @@ def get_work_orders(
     status: Optional[str] = None,  # Changed from enum to string (status name)
     priority: Optional[Priority] = None,
     include_complete: bool = False,
+    include_completed_work: bool = False,
     db: Session = Depends(get_db)
 ):
     """Get all work orders with optional filters"""
@@ -322,6 +323,15 @@ def get_work_orders(
     
     if not include_complete:
         query = query.filter(WorkOrder.is_complete == False)
+    
+    # Cetec progress filtering for Progress Dashboard
+    if include_completed_work:
+        # Include work orders that have Cetec progress data and are still relevant
+        query = query.filter(
+            WorkOrder.cetec_balance_due > 0,  # Still has balance due
+            WorkOrder.is_deleted != True,     # Not deleted
+            WorkOrder.is_canceled != True     # Not canceled
+        )
     
     if line_id:
         query = query.filter(WorkOrder.line_id == line_id)
@@ -2788,6 +2798,88 @@ def debug_scheduler_state(db: Session = Depends(get_db)):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Debug failed: {str(e)}")
+
+
+# ========== Migration Endpoints ==========
+
+@app.post("/api/migrate/cetec-progress")
+def migrate_cetec_progress(db: Session = Depends(get_db)):
+    """Run migration to add Cetec progress tracking columns"""
+    try:
+        from sqlalchemy import text
+        
+        # Add Cetec progress columns
+        db.execute(text("""
+            ALTER TABLE work_orders 
+            ADD COLUMN IF NOT EXISTS cetec_original_qty INTEGER,
+            ADD COLUMN IF NOT EXISTS cetec_balance_due INTEGER,
+            ADD COLUMN IF NOT EXISTS cetec_shipped_qty INTEGER,
+            ADD COLUMN IF NOT EXISTS cetec_invoiced_qty INTEGER,
+            ADD COLUMN IF NOT EXISTS cetec_completed_qty INTEGER,
+            ADD COLUMN IF NOT EXISTS cetec_remaining_qty INTEGER
+        """))
+        
+        # Add indexes
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_work_orders_cetec_remaining_qty 
+            ON work_orders (cetec_remaining_qty)
+        """))
+        
+        db.commit()
+        return {"message": "Cetec progress columns added successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
+@app.post("/api/migrate/deleted-canceled")
+def migrate_deleted_canceled(db: Session = Depends(get_db)):
+    """Run migration to add is_deleted and is_canceled columns"""
+    try:
+        from sqlalchemy import text
+        
+        # Add deleted/canceled columns
+        db.execute(text("""
+            ALTER TABLE work_orders 
+            ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS is_canceled BOOLEAN DEFAULT FALSE
+        """))
+        
+        # Add indexes
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_work_orders_is_deleted 
+            ON work_orders (is_deleted)
+        """))
+        
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_work_orders_is_canceled 
+            ON work_orders (is_canceled)
+        """))
+        
+        db.commit()
+        return {"message": "Deleted/canceled columns added successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
+@app.post("/api/migrate/status-progress")
+def migrate_status_progress(db: Session = Depends(get_db)):
+    """Run migration to add cetec_status_progress column"""
+    try:
+        from sqlalchemy import text
+        
+        # Add status progress column
+        db.execute(text("""
+            ALTER TABLE work_orders 
+            ADD COLUMN IF NOT EXISTS cetec_status_progress TEXT
+        """))
+        
+        db.commit()
+        return {"message": "Status progress column added successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
 if __name__ == "__main__":
