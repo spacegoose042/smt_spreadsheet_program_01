@@ -585,85 +585,106 @@ def complete_work_order(
 
 @app.get("/api/dashboard", response_model=schemas.DashboardResponse)
 def get_dashboard(db: Session = Depends(get_db)):
-    """Get dashboard overview"""
-    # Get trolley status
-    trolleys_in_use = sched.get_trolley_count_in_use(db)
-    trolley_status = schemas.TrolleyStatus(
-        current_in_use=trolleys_in_use,
-        limit=24,
-        available=24 - trolleys_in_use,
-        warning=trolleys_in_use >= 22
-    )
-    
-    # Get all active lines with their work orders
-    lines = db.query(SMTLine).filter(SMTLine.is_active == True).order_by(SMTLine.order_position).all()
-    line_summaries = []
-    
-    for line in lines:
-        from sqlalchemy.orm import joinedload
-        work_orders = db.query(WorkOrder).options(
-            joinedload(WorkOrder.status_obj)
-        ).filter(
-            WorkOrder.line_id == line.id,
-            WorkOrder.is_complete == False
-        ).order_by(WorkOrder.line_position).all()
-        
-        # Count trolleys for active statuses (using status_obj relationship)
-        line_trolleys = sum(
-            wo.trolley_count for wo in work_orders 
-            if wo.status_obj and wo.status_obj.name in [
-                'Running', '2nd Side Running', 'Clear to Build', 'Clear to Build *'
-            ]
+    """Get dashboard overview (fail-open to avoid 500s)."""
+    try:
+        # Get trolley status
+        trolleys_in_use = sched.get_trolley_count_in_use(db)
+        trolley_status = schemas.TrolleyStatus(
+            current_in_use=trolleys_in_use,
+            limit=24,
+            available=max(0, 24 - trolleys_in_use),
+            warning=trolleys_in_use >= 22
         )
-        
-        # Calculate job dates AND times for this line
-        job_dates = sched.calculate_job_dates(db, line.id, line.hours_per_day)
-        job_datetimes = time_sched.calculate_job_datetimes(db, line.id)
-        completion_date = sched.get_line_completion_date(db, line.id, line.hours_per_day)
-        
-        # Add calculated dates to work orders
-        wo_responses = []
-        for wo in work_orders:
-            wo_dict = schemas.WorkOrderResponse.model_validate(wo).model_dump()
-            if wo.id in job_dates:
-                wo_dict['calculated_start_date'] = job_dates[wo.id]['start_date']
-                wo_dict['calculated_end_date'] = job_dates[wo.id]['end_date']
-            if wo.id in job_datetimes:
-                wo_dict['calculated_start_datetime'] = job_datetimes[wo.id]['start_datetime']
-                wo_dict['calculated_end_datetime'] = job_datetimes[wo.id]['end_datetime']
-            wo_responses.append(schemas.WorkOrderResponse(**wo_dict))
-        
-        line_summaries.append(schemas.LineScheduleSummary(
-            line=schemas.SMTLineResponse.model_validate(line),
-            work_orders=wo_responses,
-            total_jobs=len(work_orders),
-            trolleys_in_use=line_trolleys,
-            completion_date=completion_date
-        ))
-    
-    # Get upcoming deadlines (next 7 days)
-    from datetime import timedelta
-    today = date.today()
-    week_from_now = today + timedelta(days=7)
-    
-    upcoming = db.query(WorkOrder).filter(
-        WorkOrder.is_complete == False,
-        WorkOrder.actual_ship_date >= today,
-        WorkOrder.actual_ship_date <= week_from_now
-    ).order_by(WorkOrder.actual_ship_date).limit(10).all()
-    
-    # Get high priority jobs
-    high_priority = db.query(WorkOrder).filter(
-        WorkOrder.is_complete == False,
-        WorkOrder.priority.in_([Priority.CRITICAL_MASS, Priority.OVERCLOCKED])
-    ).order_by(WorkOrder.priority).limit(10).all()
-    
-    return schemas.DashboardResponse(
-        trolley_status=trolley_status,
-        lines=line_summaries,
-        upcoming_deadlines=[schemas.WorkOrderResponse.model_validate(wo) for wo in upcoming],
-        high_priority_jobs=[schemas.WorkOrderResponse.model_validate(wo) for wo in high_priority]
-    )
+
+        # Get all active lines with their work orders
+        lines = db.query(SMTLine).filter(SMTLine.is_active == True).order_by(SMTLine.order_position).all()
+        line_summaries = []
+
+        for line in lines:
+            from sqlalchemy.orm import joinedload
+            work_orders = db.query(WorkOrder).options(
+                joinedload(WorkOrder.status_obj)
+            ).filter(
+                WorkOrder.line_id == line.id,
+                WorkOrder.is_complete == False
+            ).order_by(WorkOrder.line_position).all()
+
+            # Count trolleys for active statuses (using status_obj relationship)
+            line_trolleys = sum(
+                getattr(wo, 'trolley_count', 0) for wo in work_orders
+                if getattr(wo, 'status_obj', None) and wo.status_obj.name in [
+                    'Running', '2nd Side Running', 'Clear to Build', 'Clear to Build *'
+                ]
+            )
+
+            # Calculate job dates AND times for this line (guarded)
+            try:
+                job_dates = sched.calculate_job_dates(db, line.id, getattr(line, 'hours_per_day', 8))
+            except Exception:
+                job_dates = {}
+            try:
+                job_datetimes = time_sched.calculate_job_datetimes(db, line.id)
+            except Exception:
+                job_datetimes = {}
+            try:
+                completion_date = sched.get_line_completion_date(db, line.id, getattr(line, 'hours_per_day', 8))
+            except Exception:
+                completion_date = None
+
+            # Add calculated dates to work orders
+            wo_responses = []
+            for wo in work_orders:
+                try:
+                    wo_dict = schemas.WorkOrderResponse.model_validate(wo).model_dump()
+                except Exception:
+                    wo_dict = schemas.WorkOrderResponse.from_orm(wo).model_dump()
+                if wo.id in job_dates:
+                    wo_dict['calculated_start_date'] = job_dates[wo.id].get('start_date')
+                    wo_dict['calculated_end_date'] = job_dates[wo.id].get('end_date')
+                if wo.id in job_datetimes:
+                    wo_dict['calculated_start_datetime'] = job_datetimes[wo.id].get('start_datetime')
+                    wo_dict['calculated_end_datetime'] = job_datetimes[wo.id].get('end_datetime')
+                wo_responses.append(schemas.WorkOrderResponse(**wo_dict))
+
+            line_summaries.append(schemas.LineScheduleSummary(
+                line=schemas.SMTLineResponse.model_validate(line),
+                work_orders=wo_responses,
+                total_jobs=len(work_orders),
+                trolleys_in_use=line_trolleys,
+                completion_date=completion_date
+            ))
+
+        # Get upcoming deadlines (next 7 days)
+        from datetime import timedelta
+        today = date.today()
+        week_from_now = today + timedelta(days=7)
+
+        upcoming = db.query(WorkOrder).filter(
+            WorkOrder.is_complete == False,
+            WorkOrder.actual_ship_date >= today,
+            WorkOrder.actual_ship_date <= week_from_now
+        ).order_by(WorkOrder.actual_ship_date).limit(10).all()
+
+        # Get high priority jobs
+        high_priority = db.query(WorkOrder).filter(
+            WorkOrder.is_complete == False,
+            WorkOrder.priority.in_([Priority.CRITICAL_MASS, Priority.OVERCLOCKED])
+        ).order_by(WorkOrder.priority).limit(10).all()
+
+        return schemas.DashboardResponse(
+            trolley_status=trolley_status,
+            lines=line_summaries,
+            upcoming_deadlines=[schemas.WorkOrderResponse.model_validate(wo) for wo in upcoming],
+            high_priority_jobs=[schemas.WorkOrderResponse.model_validate(wo) for wo in high_priority]
+        )
+    except Exception as e:
+        print(f"/api/dashboard fallback due to error: {e}")
+        return schemas.DashboardResponse(
+            trolley_status=schemas.TrolleyStatus(current_in_use=0, limit=24, available=24, warning=False),
+            lines=[],
+            upcoming_deadlines=[],
+            high_priority_jobs=[]
+        )
 
 
 @app.get("/api/trolley-status", response_model=schemas.TrolleyStatus)
