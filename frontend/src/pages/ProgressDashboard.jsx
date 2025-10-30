@@ -670,12 +670,41 @@ function WorkOrderOperationsPanel({ workOrder }) {
 
         {locationMaps.map((loc, idx) => {
           const ops = loc.operations || []
-          const locName = loc.name || loc.location_name || `Location ${idx + 1}`
+          const locName = loc.name || loc.location_name || loc.location || loc.title || `Location ${idx + 1}`
+
+          // Compute location-level completed by fuzzy matching progress rows to this location name
+          const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim()
+          const ln = norm(locName)
+          let locationCompleted = 0
+          for (const row of progressRows) {
+            const rName = norm(row.operation_name || row.status_name)
+            if (!rName) continue
+            if (rName === ln || rName.includes(ln) || ln.includes(rName)) {
+              locationCompleted += row.completed_qty || 0
+            }
+            // Also count if row mentions a known alias (e.g., SMT PRODUCTION vs SMT ASSEMBLY)
+            if (!locationCompleted && ln.includes('smt') && rName.includes('production')) {
+              locationCompleted += row.completed_qty || 0
+            }
+          }
           return (
             <div key={idx} className="card" style={{ background: 'white' }}>
               <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <strong>{locName}</strong>
-                <span style={{ fontSize: '0.85rem', color: '#666' }}>{ops.length} operations</span>
+                <span style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                  {locationCompleted > 0 && (
+                    <span style={{
+                      fontSize: '0.85rem',
+                      background: 'var(--success)',
+                      color: 'white',
+                      padding: '2px 8px',
+                      borderRadius: '999px'
+                    }}>
+                      {locationCompleted.toLocaleString()} pcs
+                    </span>
+                  )}
+                  <span style={{ fontSize: '0.85rem', color: '#666' }}>{ops.length} operations</span>
+                </span>
               </div>
               <div className="card-body" style={{ padding: 0 }}>
                 <table style={{ width: '100%', fontSize: '0.9rem' }}>
@@ -708,6 +737,10 @@ function WorkOrderOperationsPanel({ workOrder }) {
                           if (rName && (rName === opName || rName.includes(opName) || opName.includes(rName))) {
                             completed += row.completed_qty || 0
                           }
+                        }
+                        // Special-case: if this looks like SMT Assembly and location has production completions, attribute to this op
+                        if (completed === 0 && opName.includes('assembly') && ln.includes('smt') && locationCompleted > 0) {
+                          completed = locationCompleted
                         }
                       }
                       const orderQty = (workOrder.cetec_original_qty || workOrder.quantity || 0)
