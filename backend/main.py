@@ -1846,6 +1846,8 @@ def get_cetec_ordline_work_progress(
             f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/ordlinework",
             f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/work",
             f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/work_log",
+            f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/work_history",
+            f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/history",
         ]
 
         raw_data = None
@@ -1867,24 +1869,46 @@ def get_cetec_ordline_work_progress(
             return []
 
         normalized = []
+        def to_int(x):
+            try:
+                return int(float(x))
+            except Exception:
+                return 0
+
+        def extract_completed_qty(item: dict) -> int:
+            # Try several possible keys from Cetec variations
+            for k in (
+                "completed_qty", "qty_completed", "quantity_completed", "pieces_completed",
+                "Pieces Completed", "pcs_completed", "pcs", "quantity"
+            ):
+                if k in item and item.get(k) is not None:
+                    return to_int(item.get(k))
+            return 0
+
+        def extract_operation_name(item: dict) -> str:
+            for k in ("operation_name", "operation", "op_name", "work_location", "location", "status_name", "status"):
+                if k in item and item.get(k):
+                    return str(item.get(k))
+            return None
+
         if isinstance(raw_data, list):
             for item in raw_data:
                 normalized.append({
                     "operation_id": item.get("operation_id") or item.get("op_id") or item.get("operationid"),
-                    "operation_name": item.get("operation_name") or item.get("operation") or item.get("op_name"),
+                    "operation_name": extract_operation_name(item),
                     "status_id": item.get("status_id") or item.get("statusid"),
                     "status_name": item.get("status_name") or item.get("status"),
-                    "completed_qty": int(item.get("completed_qty") or item.get("qty_completed") or item.get("quantity_completed") or 0)
+                    "completed_qty": extract_completed_qty(item)
                 })
         elif isinstance(raw_data, dict):
             container = raw_data.get("entries") or raw_data.get("data") or raw_data.get("results") or []
             for item in container:
                 normalized.append({
                     "operation_id": item.get("operation_id") or item.get("op_id") or item.get("operationid"),
-                    "operation_name": item.get("operation_name") or item.get("operation") or item.get("op_name"),
+                    "operation_name": extract_operation_name(item),
                     "status_id": item.get("status_id") or item.get("statusid"),
                     "status_name": item.get("status_name") or item.get("status"),
-                    "completed_qty": int(item.get("completed_qty") or item.get("qty_completed") or item.get("quantity_completed") or 0)
+                    "completed_qty": extract_completed_qty(item)
                 })
 
         print(f"Cetec work_progress normalized rows: {len(normalized)}")
@@ -1912,6 +1936,9 @@ def get_cetec_ordline_work_progress(
             r.pop("__k", None)
 
         print(f"Cetec work_progress combined distinct keys: {len(result)}; totals={sum(r.get('completed_qty',0) for r in result)}")
+        # Log a few sample rows for debugging
+        for sample in result[:3]:
+            print(f"work_progress sample: {sample}")
         return result
     except requests.exceptions.RequestException as e:
         print(f"Cetec ordlinework API error: {str(e)}")
