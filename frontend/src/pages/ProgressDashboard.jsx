@@ -547,6 +547,7 @@ export default function ProgressDashboard() {
                         <td style={{ padding: '0.5rem' }}>
                           <button
                             aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                            aria-expanded={isExpanded}
                             onClick={() => setExpandedWOs(prev => ({ ...prev, [wo.wo_number]: !isExpanded }))}
                             style={{
                               border: '1px solid #dee2e6',
