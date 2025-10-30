@@ -674,8 +674,8 @@ function WorkOrderOperationsPanel({ workOrder }) {
   }
 
   return (
-    <div style={{ padding: '0.5rem 1rem 1rem 2rem', borderTop: '1px solid #dee2e6' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.5rem' }}>
+    <div style={{ padding: '0.25rem 0.75rem 0.5rem 1.25rem', borderTop: '1px solid #dee2e6' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.35rem' }}>
         <div style={{ textAlign: 'right' }}>
           <button
             onClick={() => setShowDebug(v => !v)}
@@ -718,37 +718,37 @@ function WorkOrderOperationsPanel({ workOrder }) {
             }
           }
           return (
-            <div key={idx} className="card" style={{ background: 'white', marginBottom: '0.25rem' }}>
-              <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.4rem 0.6rem' }}>
-                <strong style={{ fontSize: '0.95rem' }}>{locName}</strong>
-                <span style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <div key={idx} className="card" style={{ background: 'white', marginBottom: '0.15rem' }}>
+              <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.25rem 0.5rem' }}>
+                <strong style={{ fontSize: '0.85rem' }}>{locName}</strong>
+                <span style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
                   {locationCompleted > 0 && (
                     <span style={{
-                      fontSize: '0.8rem',
+                      fontSize: '0.7rem',
                       background: 'var(--success)',
                       color: 'white',
-                      padding: '1px 6px',
+                      padding: '0 6px',
                       borderRadius: '999px'
                     }}>
-                      {locationCompleted.toLocaleString()} pcs
+                      {locationCompleted.toLocaleString()}
                     </span>
                   )}
-                  <span style={{ fontSize: '0.8rem', color: '#666' }}>{ops.length} ops</span>
+                  <span style={{ fontSize: '0.75rem', color: '#666' }}>{ops.length} ops</span>
                 </span>
               </div>
               <div className="card-body" style={{ padding: 0 }}>
-                <table style={{ width: '100%', fontSize: '0.85rem' }}>
+                <table style={{ width: '100%', fontSize: '0.8rem' }}>
                   <thead>
                     <tr style={{ background: '#f8f9fa' }}>
-                      <th style={{ padding: '0.4rem 0.5rem', textAlign: 'left' }}>Operation</th>
-                      <th style={{ padding: '0.4rem 0.5rem', textAlign: 'right' }}>Completed</th>
-                      <th style={{ padding: '0.4rem 0.5rem', textAlign: 'right' }}>%</th>
+                      <th style={{ padding: '0.3rem 0.4rem', textAlign: 'left' }}>Operation</th>
+                      <th style={{ padding: '0.3rem 0.4rem', textAlign: 'right' }}>Completed</th>
+                      <th style={{ padding: '0.3rem 0.4rem', textAlign: 'right' }}>%</th>
                     </tr>
                   </thead>
                   <tbody>
                     {ops.length === 0 && (
                       <tr>
-                        <td colSpan={3} style={{ padding: '0.5rem' }}>
+                        <td colSpan={3} style={{ padding: '0.35rem' }}>
                           <em>No operations defined for this location.</em>
                         </td>
                       </tr>
@@ -774,10 +774,10 @@ function WorkOrderOperationsPanel({ workOrder }) {
                       const orderQty = (workOrder.cetec_original_qty || workOrder.quantity || 0)
                       const pct = orderQty > 0 ? Math.round((completed / orderQty) * 100) : 0
                       return (
-                        <tr key={j} style={{ borderTop: '1px solid #eee' }}>
-                          <td style={{ padding: '0.4rem 0.5rem' }}>{name}</td>
-                          <td style={{ padding: '0.4rem 0.5rem', textAlign: 'right' }}>{completed.toLocaleString()}</td>
-                          <td style={{ padding: '0.4rem 0.5rem', textAlign: 'right' }}>{pct}%</td>
+                        <tr key={j} style={{ borderTop: '1px solid #f1f3f5' }}>
+                          <td style={{ padding: '0.3rem 0.4rem' }}>{name}</td>
+                          <td style={{ padding: '0.3rem 0.4rem', textAlign: 'right' }}>{completed.toLocaleString()}</td>
+                          <td style={{ padding: '0.3rem 0.4rem', textAlign: 'right' }}>{pct}%</td>
                         </tr>
                       )
                     })}
