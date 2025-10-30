@@ -622,6 +622,7 @@ function WorkOrderOperationsPanel({ workOrder }) {
     queryFn: () => getCetecOrdlineWorkProgress(ordlineId),
     enabled: !!ordlineId
   })
+  const [showDebug, setShowDebug] = useState(false)
 
   if (!ordlineId) {
     return (
@@ -662,6 +663,22 @@ function WorkOrderOperationsPanel({ workOrder }) {
   return (
     <div style={{ padding: '1rem 1.25rem 1.25rem 3.25rem', borderTop: '1px solid #dee2e6' }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.75rem' }}>
+        <div style={{ textAlign: 'right' }}>
+          <button
+            onClick={() => setShowDebug(v => !v)}
+            style={{ border: '1px solid #dee2e6', background: 'white', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}
+          >
+            {showDebug ? 'Hide debug' : 'Show debug'}
+          </button>
+        </div>
+        {showDebug && (
+          <div className="card" style={{ background: '#fff8e1' }}>
+            <div className="card-header"><strong>Debug: Raw progress data</strong></div>
+            <div className="card-body" style={{ maxHeight: '240px', overflow: 'auto', fontFamily: 'monospace', fontSize: '0.8rem', whiteSpace: 'pre-wrap' }}>
+              {progressQuery.isLoading ? 'Loading…' : JSON.stringify(workProgress, null, 2)}
+            </div>
+          </div>
+        )}
         {locationMaps.length === 0 && (
           <div style={{ background: '#fff3cd', border: '1px solid #ffeaa7', padding: '0.75rem', borderRadius: '6px' }}>
             No locations/operations returned from Cetec for this work order.
