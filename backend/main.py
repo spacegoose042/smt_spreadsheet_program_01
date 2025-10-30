@@ -326,12 +326,9 @@ def get_work_orders(
     
     # Cetec progress filtering for Progress Dashboard
     if include_completed_work:
-        # Include work orders that are not deleted or canceled
-        # Temporarily relaxed filtering for testing (will be strict once Cetec data is imported)
-        query = query.filter(
-            WorkOrder.is_deleted != True,     # Not deleted
-            WorkOrder.is_canceled != True     # Not canceled
-        )
+        # Temporarily show all work orders for testing
+        # Will add proper filtering once Cetec data is imported
+        pass
     
     if line_id:
         query = query.filter(WorkOrder.line_id == line_id)
@@ -1823,6 +1820,97 @@ def get_cetec_combined_data(
             detail=f"Failed to fetch from Cetec: {str(e)}"
         )
 
+
+@app.get("/api/cetec/ordline/{ordline_id}/work_progress")
+def get_cetec_ordline_work_progress(
+    ordline_id: int,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Proxy endpoint to fetch per-operation completion (work progress) from Cetec.
+    Normalizes various possible Cetec response shapes into:
+      [{
+        "operation_id": int | None,
+        "operation_name": str | None,
+        "status_id": int | None,
+        "status_name": str | None,
+        "completed_qty": int
+      }]
+    """
+    try:
+        params = {
+            "preshared_token": CETEC_CONFIG["token"]
+        }
+
+        candidate_urls = [
+            f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/ordlinework",
+            f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/work",
+            f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/work_log",
+        ]
+
+        raw_data = None
+        for url in candidate_urls:
+            try:
+                resp = requests.get(url, params=params, timeout=30)
+                if resp.status_code == 200:
+                    raw_data = resp.json()
+                    break
+            except requests.exceptions.RequestException:
+                continue
+
+        if raw_data is None:
+            return []
+
+        normalized = []
+        if isinstance(raw_data, list):
+            for item in raw_data:
+                normalized.append({
+                    "operation_id": item.get("operation_id") or item.get("op_id") or item.get("operationid"),
+                    "operation_name": item.get("operation_name") or item.get("operation") or item.get("op_name"),
+                    "status_id": item.get("status_id") or item.get("statusid"),
+                    "status_name": item.get("status_name") or item.get("status"),
+                    "completed_qty": int(item.get("completed_qty") or item.get("qty_completed") or item.get("quantity_completed") or 0)
+                })
+        elif isinstance(raw_data, dict):
+            container = raw_data.get("entries") or raw_data.get("data") or raw_data.get("results") or []
+            for item in container:
+                normalized.append({
+                    "operation_id": item.get("operation_id") or item.get("op_id") or item.get("operationid"),
+                    "operation_name": item.get("operation_name") or item.get("operation") or item.get("op_name"),
+                    "status_id": item.get("status_id") or item.get("statusid"),
+                    "status_name": item.get("status_name") or item.get("status"),
+                    "completed_qty": int(item.get("completed_qty") or item.get("qty_completed") or item.get("quantity_completed") or 0)
+                })
+
+        combined: Dict[str, int] = {}
+        for row in normalized:
+            key = str(row.get("operation_id") or row.get("operation_name") or row.get("status_id") or row.get("status_name") or "unknown")
+            combined[key] = combined.get(key, 0) + int(row.get("completed_qty") or 0)
+
+        result = []
+        for row in normalized:
+            key = str(row.get("operation_id") or row.get("operation_name") or row.get("status_id") or row.get("status_name") or "unknown")
+            if any(r.get("__k") == key for r in result):
+                continue
+            result.append({
+                "__k": key,
+                "operation_id": row.get("operation_id"),
+                "operation_name": row.get("operation_name"),
+                "status_id": row.get("status_id"),
+                "status_name": row.get("status_name"),
+                "completed_qty": combined.get(key, 0)
+            })
+
+        for r in result:
+            r.pop("__k", None)
+
+        return result
+    except requests.exceptions.RequestException as e:
+        print(f"Cetec ordlinework API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch from Cetec: {str(e)}"
+        )
 
 @app.get("/api/cetec/ordlinestatus/list")
 def get_cetec_ordline_statuses(

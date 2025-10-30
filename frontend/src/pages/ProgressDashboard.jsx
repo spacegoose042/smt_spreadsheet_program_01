@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getWorkOrders, getLines, getCetecCombinedData } from '../api'
+import { getWorkOrders, getLines, getCetecCombinedData, getCetecOrdlineWorkProgress } from '../api'
 import { Package, Clock, CheckCircle, AlertCircle, TrendingUp, BarChart3 } from 'lucide-react'
 
 function ProgressCard({ title, icon: Icon, data, color = 'blue' }) {
@@ -617,6 +617,11 @@ function WorkOrderOperationsPanel({ workOrder }) {
     queryFn: () => getCetecCombinedData(ordlineId),
     enabled: !!ordlineId
   })
+  const progressQuery = useQuery({
+    queryKey: ['cetecProgress', ordlineId],
+    queryFn: () => getCetecOrdlineWorkProgress(ordlineId),
+    enabled: !!ordlineId
+  })
 
   if (!ordlineId) {
     return (
@@ -644,6 +649,14 @@ function WorkOrderOperationsPanel({ workOrder }) {
 
   const payload = data?.data || {}
   const locationMaps = payload.location_maps || []
+  const workProgress = progressQuery.data?.data || []
+
+  // Build a quick lookup for completed qty by operation id or name
+  const completedByKey = {}
+  for (const row of workProgress) {
+    const key = String(row.operation_id ?? row.operation_name ?? row.status_id ?? row.status_name ?? 'unknown')
+    completedByKey[key] = (completedByKey[key] || 0) + (row.completed_qty || 0)
+  }
 
   return (
     <div style={{ padding: '1rem 1.25rem 1.25rem 3.25rem', borderTop: '1px solid #dee2e6' }}>
@@ -683,7 +696,8 @@ function WorkOrderOperationsPanel({ workOrder }) {
                     )}
                     {ops.map((op, j) => {
                       const name = op.name || op.operation || `Operation ${j + 1}`
-                      const completed = 0 // Placeholder until per-op progress is wired
+                      const key = String(op.id ?? op.operation_id ?? name)
+                      const completed = completedByKey[key] || 0
                       const orderQty = (workOrder.cetec_original_qty || workOrder.quantity || 0)
                       const pct = orderQty > 0 ? Math.round((completed / orderQty) * 100) : 0
                       return (
@@ -692,7 +706,7 @@ function WorkOrderOperationsPanel({ workOrder }) {
                           <td style={{ padding: '0.5rem', textAlign: 'right' }}>{completed.toLocaleString()}</td>
                           <td style={{ padding: '0.5rem', textAlign: 'right' }}>{pct}%</td>
                           <td style={{ padding: '0.5rem', color: '#666' }}>
-                            <small>Per-operation completed pcs coming soon</small>
+                            <small>{progressQuery.isLoading ? 'Loading progress…' : ''}</small>
                           </td>
                         </tr>
                       )
