@@ -1851,14 +1851,19 @@ def get_cetec_ordline_work_progress(
         raw_data = None
         for url in candidate_urls:
             try:
+                print(f"Cetec work_progress request: {url}")
                 resp = requests.get(url, params=params, timeout=30)
                 if resp.status_code == 200:
+                    print(f"Cetec work_progress status 200, length={len(resp.text)} bytes")
                     raw_data = resp.json()
                     break
+                else:
+                    print(f"Cetec work_progress non-200: {resp.status_code}")
             except requests.exceptions.RequestException:
                 continue
 
         if raw_data is None:
+            print("Cetec work_progress: no usable response from candidates")
             return []
 
         normalized = []
@@ -1882,6 +1887,8 @@ def get_cetec_ordline_work_progress(
                     "completed_qty": int(item.get("completed_qty") or item.get("qty_completed") or item.get("quantity_completed") or 0)
                 })
 
+        print(f"Cetec work_progress normalized rows: {len(normalized)}")
+
         combined: Dict[str, int] = {}
         for row in normalized:
             key = str(row.get("operation_id") or row.get("operation_name") or row.get("status_id") or row.get("status_name") or "unknown")
@@ -1904,6 +1911,7 @@ def get_cetec_ordline_work_progress(
         for r in result:
             r.pop("__k", None)
 
+        print(f"Cetec work_progress combined distinct keys: {len(result)}; totals={sum(r.get('completed_qty',0) for r in result)}")
         return result
     except requests.exceptions.RequestException as e:
         print(f"Cetec ordlinework API error: {str(e)}")

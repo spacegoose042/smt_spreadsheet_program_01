@@ -651,9 +651,10 @@ function WorkOrderOperationsPanel({ workOrder }) {
   const locationMaps = payload.location_maps || []
   const workProgress = progressQuery.data?.data || []
 
-  // Build a quick lookup for completed qty by operation id or name
+  // Build a quick lookup for completed qty by operation id or name, plus arrays for fuzzy matching
   const completedByKey = {}
-  for (const row of workProgress) {
+  const progressRows = Array.isArray(workProgress) ? workProgress : []
+  for (const row of progressRows) {
     const key = String(row.operation_id ?? row.operation_name ?? row.status_id ?? row.status_name ?? 'unknown')
     completedByKey[key] = (completedByKey[key] || 0) + (row.completed_qty || 0)
   }
@@ -697,7 +698,18 @@ function WorkOrderOperationsPanel({ workOrder }) {
                     {ops.map((op, j) => {
                       const name = op.name || op.operation || `Operation ${j + 1}`
                       const key = String(op.id ?? op.operation_id ?? name)
-                      const completed = completedByKey[key] || 0
+                      let completed = completedByKey[key] || 0
+                      if (!completed) {
+                        // Fallback fuzzy match by name tokens (case-insensitive)
+                        const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim()
+                        const opName = norm(name)
+                        for (const row of progressRows) {
+                          const rName = norm(row.operation_name || row.status_name)
+                          if (rName && (rName === opName || rName.includes(opName) || opName.includes(rName))) {
+                            completed += row.completed_qty || 0
+                          }
+                        }
+                      }
                       const orderQty = (workOrder.cetec_original_qty || workOrder.quantity || 0)
                       const pct = orderQty > 0 ? Math.round((completed / orderQty) * 100) : 0
                       return (
