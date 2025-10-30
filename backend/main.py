@@ -1848,6 +1848,8 @@ def get_cetec_ordline_work_progress(
             f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/work_log",
             f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/work_history",
             f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/history",
+            f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}",
+            f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/workhistory",
         ]
 
         raw_data = None
@@ -1856,7 +1858,9 @@ def get_cetec_ordline_work_progress(
                 print(f"Cetec work_progress request: {url}")
                 resp = requests.get(url, params=params, timeout=30)
                 if resp.status_code == 200:
-                    print(f"Cetec work_progress status 200, length={len(resp.text)} bytes")
+                    ctype = resp.headers.get('Content-Type')
+                    preview = resp.text[:200].replace('\n', ' ')
+                    print(f"Cetec work_progress 200 {ctype}, length={len(resp.text)} bytes, preview={preview}")
                     raw_data = resp.json()
                     break
                 else:
