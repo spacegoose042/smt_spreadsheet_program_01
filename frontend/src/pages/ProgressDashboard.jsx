@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getWorkOrders, getLines, getCetecCombinedData, getCetecOrdlineWorkProgress } from '../api'
+import { getWorkOrders, getLines, getCetecCombinedData, getCetecOrdlineWorkProgress, getCetecOrdlineStatuses } from '../api'
 import { Package, Clock, CheckCircle, AlertCircle, TrendingUp, BarChart3 } from 'lucide-react'
 
 function ProgressCard({ title, icon: Icon, data, color = 'blue' }) {
@@ -622,6 +622,10 @@ function WorkOrderOperationsPanel({ workOrder }) {
     queryFn: () => getCetecOrdlineWorkProgress(ordlineId),
     enabled: !!ordlineId
   })
+  const statusesQuery = useQuery({
+    queryKey: ['cetecOrdlineStatuses'],
+    queryFn: () => getCetecOrdlineStatuses(),
+  })
   const [showDebug, setShowDebug] = useState(false)
 
   if (!ordlineId) {
@@ -651,12 +655,21 @@ function WorkOrderOperationsPanel({ workOrder }) {
   const payload = data?.data || {}
   const locationMaps = payload.location_maps || []
   const workProgress = progressQuery.data?.data || []
+  const statusesList = statusesQuery.data?.data || []
+  const statusIdToName = {}
+  for (const s of Array.isArray(statusesList) ? statusesList : []) {
+    const id = s.id || s.status_id || s.statusid
+    const name = s.name || s.status || s.status_name
+    if (id != null && name) statusIdToName[id] = String(name)
+  }
 
   // Build a quick lookup for completed qty by operation id or name, plus arrays for fuzzy matching
   const completedByKey = {}
   const progressRows = Array.isArray(workProgress) ? workProgress : []
+  const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim()
   for (const row of progressRows) {
-    const key = String(row.operation_id ?? row.operation_name ?? row.status_id ?? row.status_name ?? 'unknown')
+    const derivedName = row.operation_name || row.status_name || statusIdToName[row.status_id]
+    const key = String(row.operation_id ?? derivedName ?? row.status_id ?? 'unknown')
     completedByKey[key] = (completedByKey[key] || 0) + (row.completed_qty || 0)
   }
 
@@ -694,7 +707,7 @@ function WorkOrderOperationsPanel({ workOrder }) {
           const ln = norm(locName)
           let locationCompleted = 0
           for (const row of progressRows) {
-            const rName = norm(row.operation_name || row.status_name)
+            const rName = norm(row.operation_name || row.status_name || statusIdToName[row.status_id])
             if (!rName) continue
             if (rName === ln || rName.includes(ln) || ln.includes(rName)) {
               locationCompleted += row.completed_qty || 0
@@ -747,10 +760,9 @@ function WorkOrderOperationsPanel({ workOrder }) {
                       let completed = completedByKey[key] || 0
                       if (!completed) {
                         // Fallback fuzzy match by name tokens (case-insensitive)
-                        const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim()
                         const opName = norm(name)
                         for (const row of progressRows) {
-                          const rName = norm(row.operation_name || row.status_name)
+                          const rName = norm(row.operation_name || row.status_name || statusIdToName[row.status_id])
                           if (rName && (rName === opName || rName.includes(opName) || opName.includes(rName))) {
                             completed += row.completed_qty || 0
                           }
