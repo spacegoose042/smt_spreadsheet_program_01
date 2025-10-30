@@ -1838,10 +1838,11 @@ def get_cetec_ordline_work_progress(
       }]
     """
     try:
-        params = {
+        params_base = {
             "preshared_token": CETEC_CONFIG["token"]
         }
 
+        # Candidate URLs; some take ordline id in path, some as query param
         candidate_urls = [
             f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/ordlinework",
             f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/work",
@@ -1850,12 +1851,22 @@ def get_cetec_ordline_work_progress(
             f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/history",
             f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}",
             f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/workhistory",
+            # List-style endpoints with filters
+            f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlinework/list",
+            f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/workhistory/list",
         ]
 
         raw_data = None
         for url in candidate_urls:
             try:
                 print(f"Cetec work_progress request: {url}")
+                # Provide generous filter params for list endpoints
+                params = params_base.copy()
+                if url.endswith('/ordlinework/list') or url.endswith('/workhistory/list'):
+                    params.update({
+                        "rows": "1000",
+                        "ordline_id": str(ordline_id),
+                    })
                 resp = requests.get(url, params=params, timeout=30)
                 if resp.status_code == 200:
                     ctype = resp.headers.get('Content-Type')
