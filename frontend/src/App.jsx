@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
-import { Home, Calendar, Settings, CheckCircle, List, LayoutGrid, LogOut, User as UserIcon, Users, Clock, Timer, Tag, ChevronDown, Key, AlertTriangle, Database, RefreshCw } from 'lucide-react'
+import { Home, Calendar, Settings, CheckCircle, List, LayoutGrid, LogOut, User as UserIcon, Users, Clock, Timer, Tag, ChevronDown, Key, AlertTriangle, Database, RefreshCw, BarChart3 } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import Login from './pages/Login'
@@ -19,6 +19,7 @@ import ResolutionTypeManagement from './pages/ResolutionTypeManagement'
 import Issues from './pages/Issues'
 import CetecImport from './pages/CetecImport'
 import CetecSyncReport from './pages/CetecSyncReport'
+import ProgressDashboard from './pages/ProgressDashboard'
 import './App.css'
 
 function ProtectedRoute({ children, requireAuth = true }) {
@@ -97,6 +98,10 @@ function Navigation() {
           <Link to="/issues" className={isActive('/issues') ? 'active' : ''}>
             <AlertTriangle size={18} />
             Issues
+          </Link>
+          <Link to="/progress" className={isActive('/progress') ? 'active' : ''}>
+            <BarChart3 size={18} />
+            Progress
           </Link>
           
           {/* Settings Dropdown */}
@@ -247,6 +252,7 @@ function AppContent() {
           <Route path="/lines/:lineId" element={<ProtectedRoute><LineView /></ProtectedRoute>} />
           <Route path="/completed" element={<ProtectedRoute><Completed /></ProtectedRoute>} />
           <Route path="/issues" element={<ProtectedRoute><Issues /></ProtectedRoute>} />
+          <Route path="/progress" element={<ProtectedRoute><ProgressDashboard /></ProtectedRoute>} />
           <Route path="/capacity" element={<ProtectedRoute><CapacityCalendar /></ProtectedRoute>} />
           <Route path="/shifts" element={<ProtectedRoute><ShiftConfiguration /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />

@@ -311,6 +311,7 @@ def get_work_orders(
     status: Optional[str] = None,  # Changed from enum to string (status name)
     priority: Optional[Priority] = None,
     include_complete: bool = False,
+    include_completed_work: bool = False,
     db: Session = Depends(get_db)
 ):
     """Get all work orders with optional filters"""
@@ -322,6 +323,12 @@ def get_work_orders(
     
     if not include_complete:
         query = query.filter(WorkOrder.is_complete == False)
+    
+    # Cetec progress filtering for Progress Dashboard
+    if include_completed_work:
+        # Temporarily show all work orders for testing
+        # Will add proper filtering once Cetec data is imported
+        pass
     
     if line_id:
         query = query.filter(WorkOrder.line_id == line_id)
@@ -836,6 +843,42 @@ def get_capacity_calendar(
             for o in overrides
         ]
     }
+
+
+@app.get("/api/capacity/current")
+def get_current_capacity(
+    db: Session = Depends(get_db)
+):
+    """
+    Get current capacity for all lines (today's effective hours).
+    Takes into account capacity overrides and shows actual vs default hours.
+    """
+    from scheduler import get_capacity_for_date
+    from datetime import date
+    
+    today = date.today()
+    
+    # Get all active lines
+    lines = db.query(SMTLine).filter(SMTLine.is_active == True).all()
+    
+    result = {}
+    for line in lines:
+        # Get actual capacity for today
+        actual_capacity = get_capacity_for_date(db, line.id, today, line.hours_per_day)
+        
+        # Debug logging
+        print(f"🔍 Line {line.id} ({line.name}): default={line.hours_per_day}h, actual={actual_capacity}h, override={actual_capacity != line.hours_per_day}")
+        
+        result[line.id] = {
+            "line_id": line.id,
+            "line_name": line.name,
+            "default_hours_per_day": line.hours_per_day,
+            "actual_hours_today": actual_capacity,
+            "is_override": actual_capacity != line.hours_per_day,
+            "is_down": actual_capacity == 0
+        }
+    
+    return result
 
 
 @app.get("/api/capacity/overrides")
@@ -1777,6 +1820,182 @@ def get_cetec_combined_data(
             detail=f"Failed to fetch from Cetec: {str(e)}"
         )
 
+
+@app.get("/api/cetec/ordline/{ordline_id}/work_progress")
+def get_cetec_ordline_work_progress(
+    ordline_id: int,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Proxy endpoint to fetch per-operation completion (work progress) from Cetec.
+    Normalizes various possible Cetec response shapes into:
+      [{
+        "operation_id": int | None,
+        "operation_name": str | None,
+        "status_id": int | None,
+        "status_name": str | None,
+        "completed_qty": int
+      }]
+    """
+    try:
+        params_base = {
+            "preshared_token": CETEC_CONFIG["token"]
+        }
+
+        # Candidate URLs; some take ordline id in path, some as query param
+        candidate_urls = [
+            f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/ordlinework",
+            f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/work",
+            f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/work_log",
+            f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/work_history",
+            f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/history",
+            f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}",
+            f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/workhistory",
+            # List-style endpoints with filters
+            f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlinework/list",
+            f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/workhistory/list",
+        ]
+
+        raw_data = None
+        for url in candidate_urls:
+            try:
+                print(f"Cetec work_progress request: {url}")
+                # Provide generous filter params for list endpoints
+                params = params_base.copy()
+                if url.endswith('/ordlinework/list') or url.endswith('/workhistory/list'):
+                    params.update({
+                        "rows": "1000",
+                        "ordline_id": str(ordline_id),
+                    })
+                resp = requests.get(url, params=params, timeout=30)
+                if resp.status_code == 200:
+                    ctype = resp.headers.get('Content-Type')
+                    preview = resp.text[:200].replace('\n', ' ')
+                    print(f"Cetec work_progress 200 {ctype}, length={len(resp.text)} bytes, preview={preview}")
+                    raw_data = resp.json()
+                    break
+                else:
+                    print(f"Cetec work_progress non-200: {resp.status_code}")
+            except requests.exceptions.RequestException:
+                continue
+
+        if raw_data is None:
+            print("Cetec work_progress: no usable response from candidates")
+            return []
+
+        normalized = []
+        def to_int(x):
+            try:
+                return int(float(x))
+            except Exception:
+                return 0
+
+        def extract_completed_qty(item: dict) -> int:
+            # Try several possible keys from Cetec variations
+            for k in (
+                "completed_qty", "qty_completed", "quantity_completed", "pieces_completed",
+                "Pieces Completed", "pcs_completed", "pcs", "quantity"
+            ):
+                if k in item and item.get(k) is not None:
+                    return to_int(item.get(k))
+            return 0
+
+        def extract_operation_name(item: dict) -> str:
+            for k in ("operation_name", "operation", "op_name", "work_location", "location", "status_name", "status"):
+                if k in item and item.get(k):
+                    return str(item.get(k))
+            return None
+
+        if isinstance(raw_data, list):
+            for item in raw_data:
+                normalized.append({
+                    "operation_id": item.get("operation_id") or item.get("op_id") or item.get("operationid"),
+                    "operation_name": extract_operation_name(item),
+                    "status_id": item.get("status_id") or item.get("statusid"),
+                    "status_name": item.get("status_name") or item.get("status"),
+                    "completed_qty": extract_completed_qty(item)
+                })
+        elif isinstance(raw_data, dict):
+            container = raw_data.get("entries") or raw_data.get("data") or raw_data.get("results") or []
+            for item in container:
+                normalized.append({
+                    "operation_id": item.get("operation_id") or item.get("op_id") or item.get("operationid"),
+                    "operation_name": extract_operation_name(item),
+                    "status_id": item.get("status_id") or item.get("statusid"),
+                    "status_name": item.get("status_name") or item.get("status"),
+                    "completed_qty": extract_completed_qty(item)
+                })
+
+        print(f"Cetec work_progress normalized rows: {len(normalized)}")
+
+        # Resolve missing status_name via ordlinestatus list
+        try:
+            missing_ids = sorted(set([r.get("status_id") for r in normalized if r.get("status_id") and not r.get("status_name")]))
+            if missing_ids:
+                print(f"Resolving status names for ids: {missing_ids}")
+                status_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlinestatus/list"
+                status_params = {"preshared_token": CETEC_CONFIG["token"], "rows": "1000"}
+                s_resp = requests.get(status_url, params=status_params, timeout=30)
+                if s_resp.status_code == 200:
+                    s_json = s_resp.json()
+                    status_rows = []
+                    if isinstance(s_json, list):
+                        status_rows = s_json
+                    elif isinstance(s_json, dict):
+                        for k in ("data", "rows", "ordlinestatus", "entries"):
+                            if k in s_json and isinstance(s_json[k], list):
+                                status_rows = s_json[k]
+                                break
+                    id_to_name = {}
+                    for s in status_rows:
+                        sid = s.get("id") or s.get("status_id") or s.get("statusid")
+                        sname = s.get("name") or s.get("status") or s.get("status_name") or s.get("description")
+                        if sid is not None and sname:
+                            id_to_name[int(sid)] = str(sname)
+                    # Apply mapping
+                    for r in normalized:
+                        if r.get("status_id") and not r.get("status_name"):
+                            mapped = id_to_name.get(int(r["status_id"]))
+                            if mapped:
+                                r["status_name"] = mapped
+                else:
+                    print(f"ordlinestatus list non-200: {s_resp.status_code}")
+        except Exception as e:
+            print(f"ordlinestatus resolution error: {e}")
+
+        combined: Dict[str, int] = {}
+        for row in normalized:
+            key = str(row.get("operation_id") or row.get("operation_name") or row.get("status_id") or row.get("status_name") or "unknown")
+            combined[key] = combined.get(key, 0) + int(row.get("completed_qty") or 0)
+
+        result = []
+        for row in normalized:
+            key = str(row.get("operation_id") or row.get("operation_name") or row.get("status_id") or row.get("status_name") or "unknown")
+            if any(r.get("__k") == key for r in result):
+                continue
+            result.append({
+                "__k": key,
+                "operation_id": row.get("operation_id"),
+                "operation_name": row.get("operation_name"),
+                "status_id": row.get("status_id"),
+                "status_name": row.get("status_name"),
+                "completed_qty": combined.get(key, 0)
+            })
+
+        for r in result:
+            r.pop("__k", None)
+
+        print(f"Cetec work_progress combined distinct keys: {len(result)}; totals={sum(r.get('completed_qty',0) for r in result)}")
+        # Log a few sample rows for debugging
+        for sample in result[:3]:
+            print(f"work_progress sample: {sample}")
+        return result
+    except requests.exceptions.RequestException as e:
+        print(f"Cetec ordlinework API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch from Cetec: {str(e)}"
+        )
 
 @app.get("/api/cetec/ordlinestatus/list")
 def get_cetec_ordline_statuses(
@@ -2752,6 +2971,88 @@ def debug_scheduler_state(db: Session = Depends(get_db)):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Debug failed: {str(e)}")
+
+
+# ========== Migration Endpoints ==========
+
+@app.post("/api/migrate/cetec-progress")
+def migrate_cetec_progress(db: Session = Depends(get_db)):
+    """Run migration to add Cetec progress tracking columns"""
+    try:
+        from sqlalchemy import text
+        
+        # Add Cetec progress columns
+        db.execute(text("""
+            ALTER TABLE work_orders 
+            ADD COLUMN IF NOT EXISTS cetec_original_qty INTEGER,
+            ADD COLUMN IF NOT EXISTS cetec_balance_due INTEGER,
+            ADD COLUMN IF NOT EXISTS cetec_shipped_qty INTEGER,
+            ADD COLUMN IF NOT EXISTS cetec_invoiced_qty INTEGER,
+            ADD COLUMN IF NOT EXISTS cetec_completed_qty INTEGER,
+            ADD COLUMN IF NOT EXISTS cetec_remaining_qty INTEGER
+        """))
+        
+        # Add indexes
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_work_orders_cetec_remaining_qty 
+            ON work_orders (cetec_remaining_qty)
+        """))
+        
+        db.commit()
+        return {"message": "Cetec progress columns added successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
+@app.post("/api/migrate/deleted-canceled")
+def migrate_deleted_canceled(db: Session = Depends(get_db)):
+    """Run migration to add is_deleted and is_canceled columns"""
+    try:
+        from sqlalchemy import text
+        
+        # Add deleted/canceled columns
+        db.execute(text("""
+            ALTER TABLE work_orders 
+            ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS is_canceled BOOLEAN DEFAULT FALSE
+        """))
+        
+        # Add indexes
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_work_orders_is_deleted 
+            ON work_orders (is_deleted)
+        """))
+        
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_work_orders_is_canceled 
+            ON work_orders (is_canceled)
+        """))
+        
+        db.commit()
+        return {"message": "Deleted/canceled columns added successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
+@app.post("/api/migrate/status-progress")
+def migrate_status_progress(db: Session = Depends(get_db)):
+    """Run migration to add cetec_status_progress column"""
+    try:
+        from sqlalchemy import text
+        
+        # Add status progress column
+        db.execute(text("""
+            ALTER TABLE work_orders 
+            ADD COLUMN IF NOT EXISTS cetec_status_progress TEXT
+        """))
+        
+        db.commit()
+        return {"message": "Status progress column added successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getLines, getWorkOrders, completeWorkOrder } from '../api'
+import { getLines, getWorkOrders, completeWorkOrder, getCurrentCapacity } from '../api'
 import { format } from 'date-fns'
 import { Clock, Package, Calendar, CheckCircle, AlertTriangle } from 'lucide-react'
 import CompleteJobModal from '../components/CompleteJobModal'
@@ -56,6 +56,12 @@ export default function LineView() {
   const { data: lines } = useQuery({
     queryKey: ['lines'],
     queryFn: () => getLines(),
+  })
+
+  const { data: currentCapacity } = useQuery({
+    queryKey: ['currentCapacity'],
+    queryFn: () => getCurrentCapacity(),
+    refetchInterval: 30000, // Refresh every 30 seconds
   })
 
   const { data: workOrders, isLoading } = useQuery({
@@ -145,7 +151,19 @@ export default function LineView() {
         <div className="page-header">
           <h1 className="page-title">{selectedLine.name}</h1>
           <p className="page-description">
-            {selectedLine.hours_per_day}h/day • {selectedLine.hours_per_week}h/week
+            {(() => {
+              const capacity = currentCapacity?.data?.[selectedLine.id]
+              if (capacity) {
+                if (capacity.is_down) {
+                  return `🔴 DOWN (0h today) • ${selectedLine.hours_per_week}h/week`
+                } else if (capacity.is_override) {
+                  return `⚡ ${capacity.actual_hours_today}h today (override) • ${selectedLine.hours_per_week}h/week`
+                } else {
+                  return `${capacity.actual_hours_today}h/day • ${selectedLine.hours_per_week}h/week`
+                }
+              }
+              return `${selectedLine.hours_per_day}h/day • ${selectedLine.hours_per_week}h/week`
+            })()}
             {selectedLine.special_customer_name && ` • ${selectedLine.special_customer_name} Dedicated`}
           </p>
         </div>
@@ -315,7 +333,19 @@ export default function LineView() {
             <div style={{ display: 'flex', gap: '1.5rem', marginTop: '1rem', fontSize: '0.875rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <Clock size={16} />
-                {line.hours_per_day}h/day
+                {(() => {
+                  const capacity = currentCapacity?.data?.[line.id]
+                  if (capacity) {
+                    if (capacity.is_down) {
+                      return <span style={{ color: '#dc3545' }}>🔴 DOWN (0h today)</span>
+                    } else if (capacity.is_override) {
+                      return <span style={{ color: '#ff6b35' }}>⚡ {capacity.actual_hours_today}h today (override)</span>
+                    } else {
+                      return `${capacity.actual_hours_today}h/day`
+                    }
+                  }
+                  return `${line.hours_per_day}h/day`
+                })()}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <Calendar size={16} />

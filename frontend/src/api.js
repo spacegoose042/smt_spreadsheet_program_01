@@ -44,6 +44,13 @@ export const getLine = (id) => api.get(`/api/lines/${id}`)
 export const createLine = (data) => api.post('/api/lines', data)
 export const updateLine = (id, data) => api.put(`/api/lines/${id}`, data)
 
+// Capacity
+export const getCurrentCapacity = () => api.get('/api/capacity/current')
+
+// Cetec Progress
+export const syncCetecProgress = () => api.post('/api/cetec/sync-progress')
+export const migrateCetecProgress = () => api.post('/api/migrate/cetec-progress')
+
 // Work Orders
 export const getWorkOrders = (params = {}) => 
   api.get('/api/work-orders', { params })
@@ -118,6 +125,8 @@ export const getCetecOperationDetail = (ordlineId, ordlineMapId, opId) =>
   api.get(`/api/cetec/ordline/${ordlineId}/location_map/${ordlineMapId}/operation/${opId}`)
 export const getCetecCombinedData = (ordlineId) =>
   api.get(`/api/cetec/ordline/${ordlineId}/combined`)
+export const getCetecOrdlineWorkProgress = (ordlineId) =>
+  api.get(`/api/cetec/ordline/${ordlineId}/work_progress`)
 export const getCetecOrdlineStatuses = () =>
   api.get('/api/cetec/ordlinestatus/list')
 export const getCetecPart = (prcpart) =>

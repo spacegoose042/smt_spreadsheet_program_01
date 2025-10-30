@@ -242,6 +242,17 @@ class WorkOrder(Base):
     material_status = Column(String, nullable=True)  # "Ready", "Partial", "Shortage"
     last_cetec_sync = Column(DateTime, nullable=True)  # When last synced from Cetec
     
+    # Cetec Progress Tracking
+    cetec_original_qty = Column(Integer, nullable=True)  # Original order quantity from Cetec
+    cetec_balance_due = Column(Integer, nullable=True)  # Balance due from Cetec
+    cetec_shipped_qty = Column(Integer, nullable=True)  # Shipped quantity from Cetec
+    cetec_invoiced_qty = Column(Integer, nullable=True)  # Invoiced quantity from Cetec
+    cetec_completed_qty = Column(Integer, nullable=True)  # Completed quantity from Cetec
+    cetec_remaining_qty = Column(Integer, nullable=True)  # Remaining quantity to build
+    is_deleted = Column(Boolean, nullable=True, default=False)  # Deleted flag from Cetec
+    is_canceled = Column(Boolean, nullable=True, default=False)  # Canceled flag from Cetec
+    cetec_status_progress = Column(String, nullable=True)  # JSON mapping of status_id to completed_qty
+    
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

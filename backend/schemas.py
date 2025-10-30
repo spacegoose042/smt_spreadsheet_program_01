@@ -170,6 +170,17 @@ class WorkOrderResponse(WorkOrderBase):
     material_status: Optional[str] = None
     last_cetec_sync: Optional[datetime] = None
     
+    # Cetec Progress Tracking
+    cetec_original_qty: Optional[int] = None
+    cetec_balance_due: Optional[int] = None
+    cetec_shipped_qty: Optional[int] = None
+    cetec_invoiced_qty: Optional[int] = None
+    cetec_completed_qty: Optional[int] = None
+    cetec_remaining_qty: Optional[int] = None
+    is_deleted: Optional[bool] = None
+    is_canceled: Optional[bool] = None
+    cetec_status_progress: Optional[str] = None
+    
     # Include line info if available
     line: Optional[SMTLineResponse] = None
 
