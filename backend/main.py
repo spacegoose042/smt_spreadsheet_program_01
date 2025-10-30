@@ -1928,6 +1928,41 @@ def get_cetec_ordline_work_progress(
 
         print(f"Cetec work_progress normalized rows: {len(normalized)}")
 
+        # Resolve missing status_name via ordlinestatus list
+        try:
+            missing_ids = sorted(set([r.get("status_id") for r in normalized if r.get("status_id") and not r.get("status_name")]))
+            if missing_ids:
+                print(f"Resolving status names for ids: {missing_ids}")
+                status_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlinestatus/list"
+                status_params = {"preshared_token": CETEC_CONFIG["token"], "rows": "1000"}
+                s_resp = requests.get(status_url, params=status_params, timeout=30)
+                if s_resp.status_code == 200:
+                    s_json = s_resp.json()
+                    status_rows = []
+                    if isinstance(s_json, list):
+                        status_rows = s_json
+                    elif isinstance(s_json, dict):
+                        for k in ("data", "rows", "ordlinestatus", "entries"):
+                            if k in s_json and isinstance(s_json[k], list):
+                                status_rows = s_json[k]
+                                break
+                    id_to_name = {}
+                    for s in status_rows:
+                        sid = s.get("id") or s.get("status_id") or s.get("statusid")
+                        sname = s.get("name") or s.get("status") or s.get("status_name") or s.get("description")
+                        if sid is not None and sname:
+                            id_to_name[int(sid)] = str(sname)
+                    # Apply mapping
+                    for r in normalized:
+                        if r.get("status_id") and not r.get("status_name"):
+                            mapped = id_to_name.get(int(r["status_id"]))
+                            if mapped:
+                                r["status_name"] = mapped
+                else:
+                    print(f"ordlinestatus list non-200: {s_resp.status_code}")
+        except Exception as e:
+            print(f"ordlinestatus resolution error: {e}")
+
         combined: Dict[str, int] = {}
         for row in normalized:
             key = str(row.get("operation_id") or row.get("operation_name") or row.get("status_id") or row.get("status_name") or "unknown")
