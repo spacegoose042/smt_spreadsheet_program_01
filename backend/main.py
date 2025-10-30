@@ -49,8 +49,9 @@ app.add_middleware(
     allow_origins=[
         config_settings.FRONTEND_URL,
         "http://localhost:5173",
-        "https://smtspreadsheetprogram01-production-frontend.up.railway.app"
+        "https://smtspreadsheetprogram01-production-frontend.up.railway.app",
     ],
+    allow_origin_regex=r"https://.*\.railway\.app$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "Accept"],
