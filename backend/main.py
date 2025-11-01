@@ -2222,6 +2222,50 @@ def get_cetec_sync_logs(
     return logs
 
 
+@app.get("/api/cetec/health", response_model=schemas.CetecHealthResponse)
+def get_cetec_health(
+    stale_threshold_minutes: int = 360,
+    error_window_hours: int = 24,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """Return high-level Cetec sync health metrics for dashboard banners."""
+    from sqlalchemy import func
+
+    latest_sync = db.query(func.max(WorkOrder.last_cetec_sync)).scalar()
+    now = datetime.utcnow()
+    stale_minutes = None
+    is_stale = False
+    if latest_sync:
+        delta = now - latest_sync
+        stale_minutes = int(delta.total_seconds() // 60)
+        is_stale = stale_minutes > stale_threshold_minutes
+    else:
+        is_stale = True
+
+    error_window_start = now - timedelta(hours=error_window_hours)
+
+    recent_error_count = db.query(func.count(CetecSyncLog.id)).filter(
+        CetecSyncLog.change_type == "error",
+        CetecSyncLog.sync_date >= error_window_start
+    ).scalar() or 0
+
+    last_error_entry = db.query(CetecSyncLog).filter(
+        CetecSyncLog.change_type == "error"
+    ).order_by(CetecSyncLog.sync_date.desc()).first()
+
+    return schemas.CetecHealthResponse(
+        latest_sync=latest_sync,
+        stale_minutes=stale_minutes,
+        stale_threshold_minutes=stale_threshold_minutes,
+        is_stale=is_stale,
+        recent_error_count=recent_error_count,
+        recent_error_window_hours=error_window_hours,
+        last_error_at=last_error_entry.sync_date if last_error_entry else None,
+        last_error_message=last_error_entry.new_value if last_error_entry else None
+    )
+
+
 @app.post("/api/cetec/import", response_model=schemas.CetecImportResponse)
 def import_from_cetec(
     request: schemas.CetecImportRequest,
@@ -2576,6 +2620,15 @@ def import_from_cetec(
                 print(f"Error processing ordline {ordline_id}: {str(e)}")
                 print(f"Full traceback:")
                 traceback.print_exc()
+                changes.append(CetecSyncLog(
+                    sync_date=sync_time,
+                    wo_number=wo_number,
+                    change_type="error",
+                    field_name="exception",
+                    old_value=None,
+                    new_value=str(e),
+                    cetec_ordline_id=ordline_id
+                ))
                 error_count += 1
                 continue
         

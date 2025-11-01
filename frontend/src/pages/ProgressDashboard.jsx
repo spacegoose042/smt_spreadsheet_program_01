@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getWorkOrders, getCetecCombinedData, getCetecOrdlineWorkProgress, getCetecOrdlineStatuses } from '../api'
+import { getWorkOrders, getCetecCombinedData, getCetecOrdlineWorkProgress, getCetecOrdlineStatuses, getCetecHealth } from '../api'
 import { Package, Clock, AlertCircle, TrendingUp, BarChart3, Info } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -326,6 +326,14 @@ export default function ProgressDashboard() {
     queryKey: ['workOrders', 'progress', { includeDocControl }],
     queryFn: () => getWorkOrders(workOrderParams),
     refetchInterval: livePolling ? LIVE_REFETCH_INTERVAL_MS : false,
+    keepPreviousData: true
+  })
+
+  const { data: cetecHealthData } = useQuery({
+    queryKey: ['cetecHealth'],
+    queryFn: getCetecHealth,
+    refetchInterval: livePolling ? LIVE_REFETCH_INTERVAL_MS * 2 : 180000,
+    staleTime: LIVE_REFETCH_INTERVAL_MS,
     keepPreviousData: true
   })
 
@@ -701,6 +709,16 @@ export default function ProgressDashboard() {
     : 'waiting…'
   const liveDotColor = livePolling ? (isFetching ? '#f59f00' : '#2f9e44') : '#adb5bd'
   const liveStatusLabel = livePolling ? 'Live' : 'Paused'
+  const cetecHealth = cetecHealthData?.data
+  const latestSyncTimestamp = cetecHealth?.latest_sync ? new Date(cetecHealth.latest_sync) : null
+  const latestSyncRelative = latestSyncTimestamp ? formatRelativeTime(new Date(), latestSyncTimestamp) : 'never'
+  const lastErrorTimestamp = cetecHealth?.last_error_at ? new Date(cetecHealth.last_error_at) : null
+  const lastErrorRelative = lastErrorTimestamp ? formatRelativeTime(new Date(), lastErrorTimestamp) : null
+  const shouldShowHealthBanner = !!cetecHealth && (cetecHealth.is_stale || (cetecHealth.recent_error_count ?? 0) > 0)
+  const healthHasErrors = (cetecHealth?.recent_error_count ?? 0) > 0
+  const healthBannerBackground = healthHasErrors ? '#fff5f5' : '#fff4e6'
+  const healthBannerBorder = healthHasErrors ? '#ffc9c9' : '#ffd8a8'
+  const healthBannerAccent = healthHasErrors ? '#c92a2a' : '#e67700'
 
   if (loadingWOs && rawWorkOrders.length === 0) {
     return (
@@ -712,6 +730,44 @@ export default function ProgressDashboard() {
 
   return (
     <div className="container">
+      {shouldShowHealthBanner && (
+        <div
+          style={{
+            marginBottom: '1rem',
+            border: `1px solid ${healthBannerBorder}`,
+            background: healthBannerBackground,
+            borderRadius: '8px',
+            padding: '0.85rem 1rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.4rem'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <strong style={{ color: healthBannerAccent }}>
+              {healthHasErrors ? 'Cetec sync errors detected' : 'Cetec data appears stale'}
+            </strong>
+            <span style={{ fontSize: '0.8rem', color: '#868e96' }}>Last sync {latestSyncRelative}{latestSyncTimestamp ? ` (${latestSyncTimestamp.toLocaleString()})` : ''}</span>
+          </div>
+          <div style={{ fontSize: '0.85rem', color: '#495057' }}>
+            {healthHasErrors && (
+              <div>
+                {cetecHealth?.recent_error_count} error{cetecHealth?.recent_error_count === 1 ? '' : 's'} in the past {cetecHealth?.recent_error_window_hours}h.
+                {lastErrorRelative ? ` Most recent ${lastErrorRelative}` : ''}
+                {cetecHealth?.last_error_message ? ` · ${cetecHealth.last_error_message}` : ''}
+              </div>
+            )}
+            {cetecHealth?.is_stale && (
+              <div>
+                Data refreshed {latestSyncRelative}. Threshold: {cetecHealth?.stale_threshold_minutes} minutes.
+              </div>
+            )}
+            {!healthHasErrors && !cetecHealth?.is_stale && (
+              <div>Sync healthy.</div>
+            )}
+          </div>
+        </div>
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <h1 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
           <BarChart3 size={24} />

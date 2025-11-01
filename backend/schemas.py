@@ -503,3 +503,14 @@ class CetecImportResponse(BaseModel):
     error_count: int
     changes: list[CetecSyncLogResponse]
 
+
+class CetecHealthResponse(BaseModel):
+    latest_sync: Optional[datetime]
+    stale_minutes: Optional[int]
+    stale_threshold_minutes: int
+    is_stale: bool
+    recent_error_count: int
+    recent_error_window_hours: int
+    last_error_at: Optional[datetime] = None
+    last_error_message: Optional[str] = None
+
