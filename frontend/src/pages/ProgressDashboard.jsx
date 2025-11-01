@@ -179,6 +179,74 @@ const isOrderStalled = (wo, nowMs) => {
   return nowMs - activity.getTime() > DAY_MS
 }
 
+const BUILD_ORDER_KEYS = [
+  'build_order',
+  'buildOrder',
+  'buildorder',
+  'sequence',
+  'sequence_number',
+  'sequenceNumber',
+  'seq',
+  'step',
+  'step_order',
+  'stepOrder',
+  'operation_order',
+  'operationOrder',
+  'operationorder',
+  'sort_order',
+  'sortOrder',
+  'sortorder',
+  'display_order',
+  'displayOrder',
+  'displayorder',
+  'line_order',
+  'lineOrder',
+  'line_position',
+  'linePosition',
+  'order_position',
+  'orderPosition',
+  'position',
+  'order'
+]
+
+const resolveBuildOrder = (entity, fallbackIndex) => {
+  if (entity && typeof entity === 'object') {
+    for (const key of BUILD_ORDER_KEYS) {
+      const value = entity[key]
+      if (value !== undefined && value !== null) {
+        const trimmed = String(value).trim()
+        if (trimmed !== '') {
+          return trimmed
+        }
+      }
+    }
+  }
+  return String(fallbackIndex)
+}
+
+const ORDER_BADGE_BASE_STYLE = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  minWidth: '1.75rem',
+  padding: '0.1rem 0.45rem',
+  borderRadius: '999px',
+  fontSize: '0.72rem',
+  fontWeight: 600
+}
+
+const renderOrderBadge = (orderValue, tone = '#1971c2') => (
+  <span
+    style={{
+      ...ORDER_BADGE_BASE_STYLE,
+      background: tone === '#1971c2' ? '#e7f5ff' : 'rgba(12, 166, 120, 0.12)',
+      color: tone
+    }}
+  >
+    #{orderValue}
+  </span>
+)
+
 function ProcessTable({ title, data, columns }) {
   if (!data || data.length === 0) {
     return (
@@ -1351,6 +1419,7 @@ function WorkOrderOperationsPanel({ workOrder, onSelectLocation = () => {} }) {
             const ops = loc.operations || []
             const locName = loc.name || loc.location_name || loc.location || loc.title || `Location ${idx + 1}`
             const ln = norm(locName)
+            const locationOrder = resolveBuildOrder(loc, idx + 1)
 
             let locationCompleted = 0
             for (const row of progressRows) {
@@ -1376,7 +1445,10 @@ function WorkOrderOperationsPanel({ workOrder, onSelectLocation = () => {} }) {
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.8rem 0.4rem' }}>
                   <div>
-                    <strong style={{ fontSize: '0.9rem' }}>{locName}</strong>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      {renderOrderBadge(locationOrder, '#0b7285')}
+                      <strong style={{ fontSize: '0.9rem' }}>{locName}</strong>
+                    </div>
                     <div style={{ fontSize: '0.7rem', color: '#868e96' }}>{ops.length} operation{ops.length === 1 ? '' : 's'}</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -1435,39 +1507,13 @@ function WorkOrderOperationsPanel({ workOrder, onSelectLocation = () => {} }) {
                     }
 
                     const pct = orderQty > 0 ? Math.round((completed / orderQty) * 100) : 0
-                    const buildOrderCandidates = [
-                      op.build_order,
-                      op.buildOrder,
-                      op.buildorder,
-                      op.sequence,
-                      op.seq,
-                      op.step,
-                      op.step_order,
-                      op.operation_order,
-                      op.sort_order,
-                      op.order
-                    ]
-                    const rawBuildOrder = buildOrderCandidates.find(candidate => candidate !== undefined && candidate !== null && String(candidate).trim() !== '')
-                    const buildOrder = rawBuildOrder !== undefined ? String(rawBuildOrder).trim() : String(j + 1)
+                    const buildOrder = resolveBuildOrder(op, j + 1)
 
                     return (
                       <div key={j} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '0.82rem', color: '#495057' }}>
                           <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                            <span style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              minWidth: '1.75rem',
-                              padding: '0.1rem 0.45rem',
-                              borderRadius: '999px',
-                              background: '#e7f5ff',
-                              color: '#1971c2',
-                              fontSize: '0.72rem',
-                              fontWeight: 600
-                            }}>
-                              #{buildOrder}
-                            </span>
+                            {renderOrderBadge(buildOrder)}
                             <span>{name}</span>
                           </span>
                           <span style={{ color: '#343a40', fontWeight: 600 }}>{completed.toLocaleString()} pcs&nbsp;<span style={{ color: '#868e96', fontSize: '0.75rem' }}>({pct}%)</span></span>
