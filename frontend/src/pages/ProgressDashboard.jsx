@@ -177,46 +177,39 @@ export default function ProgressDashboard() {
     refetchInterval: 30000 // Refresh every 30 seconds
   })
 
+  const rawWorkOrders = workOrders?.data ?? []
+
   const locationOptions = useMemo(() => {
     const set = new Set()
-    ;(workOrders?.data || []).forEach(wo => {
+    rawWorkOrders.forEach(wo => {
       set.add(wo.current_location || 'Unknown')
     })
     return Array.from(set).sort()
-  }, [workOrders])
+  }, [rawWorkOrders])
 
   const workOrderOptions = useMemo(() => {
-    return Array.from(new Set((workOrders?.data || []).map(wo => wo.wo_number))).sort()
-  }, [workOrders])
+    return Array.from(new Set(rawWorkOrders.map(wo => wo.wo_number))).sort()
+  }, [rawWorkOrders])
 
-  if (loadingWOs) {
-    return (
-      <div className="container">
-        <div className="loading">Loading progress data...</div>
-      </div>
-    )
-  }
+  const filteredWorkOrders = useMemo(() => {
+    const searchLower = searchTerm.trim().toLowerCase()
 
-  // Filter work orders based on search and selection
-  const filteredWorkOrders = (workOrders?.data || []).filter(wo => {
     // Location filter
-    if (selectedLocation !== 'all' && wo.current_location !== selectedLocation) {
-      return false
-    }
-    
+    const matchesLocation = (wo) => selectedLocation === 'all' || wo.current_location === selectedLocation
+
     // Work order filter
-    if (selectedWorkOrder !== 'all' && wo.wo_number !== selectedWorkOrder) {
-      return false
-    }
-    
+    const matchesWorkOrder = (wo) => selectedWorkOrder === 'all' || wo.wo_number === selectedWorkOrder
+
     // Search filter
-    if (searchTerm && !wo.wo_number.toLowerCase().includes(searchTerm.toLowerCase()) && 
-        !wo.customer.toLowerCase().includes(searchTerm.toLowerCase())) {
-      return false
+    const matchesSearch = (wo) => {
+      if (!searchLower) return true
+      const woNumber = (wo.wo_number || '').toLowerCase()
+      const customer = (wo.customer || '').toLowerCase()
+      return woNumber.includes(searchLower) || customer.includes(searchLower)
     }
-    
-    return true
-  })
+
+    return rawWorkOrders.filter(wo => matchesLocation(wo) && matchesWorkOrder(wo) && matchesSearch(wo))
+  }, [rawWorkOrders, selectedLocation, selectedWorkOrder, searchTerm])
 
   const processData = useMemo(() => {
     return filteredWorkOrders.reduce((acc, wo) => {
@@ -400,7 +393,7 @@ export default function ProgressDashboard() {
     }
   }, [filteredWorkOrders])
 
-  const datasetSize = workOrders?.data?.length || 0
+  const datasetSize = rawWorkOrders.length
 
   const locationRows = Object.entries(processData.locations).map(([location, data]) => ({
     Location: location,
@@ -468,6 +461,14 @@ export default function ProgressDashboard() {
   const generatedLabel = metrics.generatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   const activeThroughputLocations = Object.keys(metrics.throughputByLocation || {}).length
   const datasetSummary = `${formatNumber(filteredWorkOrders.length)} / ${formatNumber(datasetSize)}`
+
+  if (loadingWOs && rawWorkOrders.length === 0) {
+    return (
+      <div className="container">
+        <div className="loading">Loading progress data...</div>
+      </div>
+    )
+  }
 
   return (
     <div className="container">
