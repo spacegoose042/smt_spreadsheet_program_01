@@ -312,6 +312,7 @@ def get_work_orders(
     priority: Optional[Priority] = None,
     include_complete: bool = False,
     include_completed_work: bool = False,
+    include_doc_control: bool = False,
     db: Session = Depends(get_db)
 ):
     """Get all work orders with optional filters"""
@@ -346,6 +347,23 @@ def get_work_orders(
         query = query.filter(WorkOrder.priority == priority)
     
     work_orders = query.order_by(WorkOrder.line_position).all()
+
+    if include_completed_work and not include_doc_control:
+        original_count = len(work_orders)
+
+        def is_doc_control(location: Optional[str]) -> bool:
+            if not location:
+                return False
+            normalized = location.upper()
+            return "DOC CONTROL" in normalized or "UNRELEASED" in normalized
+
+        work_orders = [wo for wo in work_orders if not is_doc_control(wo.current_location)]
+
+        filtered_count = len(work_orders)
+        if original_count != filtered_count:
+            print(
+                f"📦 Progress API: filtered out {original_count - filtered_count} DOC CONTROL work orders"
+            )
     
     # Calculate dates AND times for each line
     line_dates = {}
