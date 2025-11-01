@@ -1435,11 +1435,33 @@ function WorkOrderOperationsPanel({ workOrder, onSelectLocation = () => {} }) {
                     }
 
                     const pct = orderQty > 0 ? Math.round((completed / orderQty) * 100) : 0
+                    const buildOrderRaw = op.build_order ?? op.buildOrder ?? op.buildorder ?? op.sequence ?? op.seq ?? op.step ?? op.step_order ?? op.operation_order ?? op.sort_order ?? op.order ?? null
+                    const buildOrder = buildOrderRaw !== null && buildOrderRaw !== undefined && buildOrderRaw !== ''
+                      ? Number.isNaN(Number(buildOrderRaw)) ? String(buildOrderRaw) : Number(buildOrderRaw)
+                      : null
 
                     return (
                       <div key={j} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '0.82rem', color: '#495057' }}>
-                          <span>{name}</span>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                            {buildOrder !== null && (
+                              <span style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                minWidth: '1.75rem',
+                                padding: '0.1rem 0.45rem',
+                                borderRadius: '999px',
+                                background: '#e7f5ff',
+                                color: '#1971c2',
+                                fontSize: '0.72rem',
+                                fontWeight: 600
+                              }}>
+                                #{buildOrder}
+                              </span>
+                            )}
+                            <span>{name}</span>
+                          </span>
                           <span style={{ color: '#343a40', fontWeight: 600 }}>{completed.toLocaleString()} pcs&nbsp;<span style={{ color: '#868e96', fontSize: '0.75rem' }}>({pct}%)</span></span>
                         </div>
                         <div style={{
