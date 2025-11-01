@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getWorkOrders, getCetecCombinedData, getCetecOrdlineWorkProgress, getCetecOrdlineStatuses } from '../api'
-import { Package, Clock, AlertCircle, TrendingUp, BarChart3 } from 'lucide-react'
+import { Package, Clock, AlertCircle, TrendingUp, BarChart3, Info } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 function KpiCard({ title, icon: Icon, accent = 'var(--primary)', headline, subtitle, items = [], footer }) {
@@ -1198,7 +1198,7 @@ export default function ProgressDashboard() {
                       {isExpanded && (
                         <tr key={`${wo.wo_number}-details`}>
                           <td colSpan={9} style={{ padding: 0, background: '#f8f9fa' }}>
-                            <WorkOrderOperationsPanel workOrder={wo} />
+                            <WorkOrderOperationsPanel workOrder={wo} onSelectLocation={setSelectedLocation} />
                           </td>
                         </tr>
                       )}
@@ -1213,7 +1213,7 @@ export default function ProgressDashboard() {
   )
 }
 
-function WorkOrderOperationsPanel({ workOrder }) {
+function WorkOrderOperationsPanel({ workOrder, onSelectLocation = () => {} }) {
   const ordlineId = workOrder.cetec_ordline_id
   const { data, isLoading, isError } = useQuery({
     queryKey: ['cetecCombined', ordlineId],
@@ -1230,6 +1230,11 @@ function WorkOrderOperationsPanel({ workOrder }) {
     queryFn: () => getCetecOrdlineStatuses(),
   })
   const [showDebug, setShowDebug] = useState(false)
+
+  const orderQty = workOrder.cetec_original_qty ?? workOrder.quantity ?? 0
+  const orderCompleted = workOrder.cetec_completed_qty ?? 0
+  const orderRemaining = Math.max(0, workOrder.cetec_remaining_qty ?? (orderQty - orderCompleted))
+  const orderPercent = orderQty > 0 ? Math.round((orderCompleted / orderQty) * 100) : 0
 
   if (!ordlineId) {
     return (
@@ -1276,121 +1281,190 @@ function WorkOrderOperationsPanel({ workOrder }) {
     completedByKey[key] = (completedByKey[key] || 0) + (row.completed_qty || 0)
   }
 
+  const chipStyle = {
+    padding: '0.4rem 0.75rem',
+    borderRadius: '8px',
+    border: '1px solid #dee2e6',
+    background: '#fff',
+    fontSize: '0.8rem',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.1rem',
+    minWidth: '120px'
+  }
+
+  const chips = [
+    { label: 'Original', value: formatNumber(orderQty) },
+    { label: 'Completed', value: formatNumber(orderCompleted), tone: 'var(--success)' },
+    { label: 'Remaining', value: formatNumber(orderRemaining), tone: 'var(--warning)' },
+    { label: 'Progress', value: `${orderPercent}%`, tone: orderPercent === 100 ? 'var(--success)' : 'var(--primary)' }
+  ]
+
   return (
-    <div style={{ padding: '0.25rem 0.75rem 0.5rem 1.25rem', borderTop: '1px solid #dee2e6' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.35rem' }}>
-        <div style={{ textAlign: 'right' }}>
-          <button
-            onClick={() => setShowDebug(v => !v)}
-            style={{ border: '1px solid #dee2e6', background: 'white', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}
-          >
-            {showDebug ? 'Hide debug' : 'Show debug'}
-          </button>
-        </div>
-        {showDebug && (
-          <div className="card" style={{ background: '#fff8e1' }}>
-            <div className="card-header"><strong>Debug: Raw progress data</strong></div>
-            <div className="card-body" style={{ maxHeight: '240px', overflow: 'auto', fontFamily: 'monospace', fontSize: '0.8rem', whiteSpace: 'pre-wrap' }}>
-              {progressQuery.isLoading ? 'Loading…' : JSON.stringify(workProgress, null, 2)}
+    <div style={{ padding: '0.75rem 1rem 1.25rem 1.5rem', borderTop: '1px solid #dee2e6', background: '#f8f9fa' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.75rem' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+          {chips.map((chip) => (
+            <div key={chip.label} style={{ ...chipStyle, borderColor: chip.tone ? chip.tone : '#dee2e6' }}>
+              <span style={{ color: '#868e96', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{chip.label}</span>
+              <strong style={{ fontSize: '1rem', color: chip.tone || '#212529' }}>{chip.value}</strong>
             </div>
-          </div>
-        )}
-        {locationMaps.length === 0 && (
-          <div style={{ background: '#fff3cd', border: '1px solid #ffeaa7', padding: '0.75rem', borderRadius: '6px' }}>
-            No locations/operations returned from Cetec for this work order.
-          </div>
-        )}
+          ))}
+        </div>
+        <button
+          onClick={() => setShowDebug(v => !v)}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.35rem',
+            padding: '0.4rem 0.75rem',
+            borderRadius: '6px',
+            border: '1px solid #ced4da',
+            background: '#fff',
+            color: '#495057',
+            cursor: 'pointer',
+            fontSize: '0.8rem'
+          }}
+          title={showDebug ? 'Hide raw progress payload' : 'Show raw progress payload'}
+        >
+          <Info size={16} />
+          {showDebug ? 'Hide raw data' : 'Raw data'}
+        </button>
+      </div>
 
-        {locationMaps.map((loc, idx) => {
-          const ops = loc.operations || []
-          const locName = loc.name || loc.location_name || loc.location || loc.title || `Location ${idx + 1}`
+      {showDebug && (
+        <div className="card" style={{ background: '#fff8e1', marginBottom: '1rem' }}>
+          <div className="card-header"><strong>Debug: Raw progress data</strong></div>
+          <div className="card-body" style={{ maxHeight: '240px', overflow: 'auto', fontFamily: 'monospace', fontSize: '0.8rem', whiteSpace: 'pre-wrap' }}>
+            {progressQuery.isLoading ? 'Loading…' : JSON.stringify(workProgress, null, 2)}
+          </div>
+        </div>
+      )}
 
-          // Compute location-level completed by fuzzy matching progress rows to this location name
-          const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim()
-          const ln = norm(locName)
-          let locationCompleted = 0
-          for (const row of progressRows) {
-            const rName = norm(row.operation_name || row.status_name || statusIdToName[row.status_id])
-            if (!rName) continue
-            if (rName === ln || rName.includes(ln) || ln.includes(rName)) {
-              locationCompleted += row.completed_qty || 0
+      {locationMaps.length === 0 ? (
+        <div style={{ background: '#fff3cd', border: '1px solid #ffeaa7', padding: '0.75rem', borderRadius: '6px' }}>
+          No locations/operations returned from Cetec for this work order.
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '0.85rem' }}>
+          {locationMaps.map((loc, idx) => {
+            const ops = loc.operations || []
+            const locName = loc.name || loc.location_name || loc.location || loc.title || `Location ${idx + 1}`
+            const ln = norm(locName)
+
+            let locationCompleted = 0
+            for (const row of progressRows) {
+              const rName = norm(row.operation_name || row.status_name || statusIdToName[row.status_id])
+              if (!rName) continue
+              if (rName === ln || rName.includes(ln) || ln.includes(rName)) {
+                locationCompleted += row.completed_qty || 0
+              }
+              if (!locationCompleted && ln.includes('smt') && rName.includes('production')) {
+                locationCompleted += row.completed_qty || 0
+              }
             }
-            // Also count if row mentions a known alias (e.g., SMT PRODUCTION vs SMT ASSEMBLY)
-            if (!locationCompleted && ln.includes('smt') && rName.includes('production')) {
-              locationCompleted += row.completed_qty || 0
-            }
-          }
-          return (
-            <div key={idx} className="card" style={{ background: 'white', marginBottom: '0.15rem' }}>
-              <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.25rem 0.5rem' }}>
-                <strong style={{ fontSize: '0.85rem' }}>{locName}</strong>
-                <span style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
-                  {locationCompleted > 0 && (
-                    <span style={{
-                      fontSize: '0.7rem',
-                      background: 'var(--success)',
-                      color: 'white',
-                      padding: '0 6px',
-                      borderRadius: '999px'
-                    }}>
-                      {locationCompleted.toLocaleString()}
-                    </span>
-                  )}
-                  <span style={{ fontSize: '0.75rem', color: '#666' }}>{ops.length} ops</span>
-                </span>
-              </div>
-              <div className="card-body" style={{ padding: 0 }}>
-                <table style={{ width: '100%', fontSize: '0.8rem' }}>
-                  <thead>
-                    <tr style={{ background: '#f8f9fa' }}>
-                      <th style={{ padding: '0.3rem 0.4rem', textAlign: 'left' }}>Operation</th>
-                      <th style={{ padding: '0.3rem 0.4rem', textAlign: 'right' }}>Completed</th>
-                      <th style={{ padding: '0.3rem 0.4rem', textAlign: 'right' }}>%</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ops.length === 0 && (
-                      <tr>
-                        <td colSpan={3} style={{ padding: '0.35rem' }}>
-                          <em>No operations defined for this location.</em>
-                        </td>
-                      </tr>
+
+            return (
+              <div
+                key={idx}
+                className="card"
+                style={{
+                  background: '#fff',
+                  borderRadius: '10px',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.8rem 0.4rem' }}>
+                  <div>
+                    <strong style={{ fontSize: '0.9rem' }}>{locName}</strong>
+                    <div style={{ fontSize: '0.7rem', color: '#868e96' }}>{ops.length} operation{ops.length === 1 ? '' : 's'}</div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    {locationCompleted > 0 && (
+                      <span style={{
+                        fontSize: '0.7rem',
+                        background: 'var(--success)',
+                        color: '#fff',
+                        padding: '0.2rem 0.5rem',
+                        borderRadius: '999px'
+                      }}>
+                        {locationCompleted.toLocaleString()} pcs
+                      </span>
                     )}
-                    {ops.map((op, j) => {
-                      const name = op.name || op.operation || `Operation ${j + 1}`
-                      const key = String(op.id ?? op.operation_id ?? name)
-                      let completed = completedByKey[key] || 0
-                      if (!completed) {
-                        // Fallback fuzzy match by name tokens (case-insensitive)
-                        const opName = norm(name)
-                        for (const row of progressRows) {
-                          const rName = norm(row.operation_name || row.status_name || statusIdToName[row.status_id])
-                          if (rName && (rName === opName || rName.includes(opName) || opName.includes(rName))) {
-                            completed += row.completed_qty || 0
-                          }
-                        }
-                        // Special-case: if this looks like SMT Assembly and location has production completions, attribute to this op
-                        if (completed === 0 && opName.includes('assembly') && ln.includes('smt') && locationCompleted > 0) {
-                          completed = locationCompleted
+                    <button
+                      onClick={() => onSelectLocation(locName)}
+                      style={{
+                        padding: '0.25rem 0.6rem',
+                        borderRadius: '999px',
+                        border: '1px solid var(--primary)',
+                        background: 'transparent',
+                        color: 'var(--primary)',
+                        fontSize: '0.7rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Focus
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ padding: '0.4rem 0.8rem 0.8rem', display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                  {ops.length === 0 && (
+                    <div style={{ fontSize: '0.8rem', color: '#868e96' }}>
+                      <em>No operations defined for this location.</em>
+                    </div>
+                  )}
+
+                  {ops.map((op, j) => {
+                    const name = op.name || op.operation || `Operation ${j + 1}`
+                    const key = String(op.id ?? op.operation_id ?? name)
+                    let completed = completedByKey[key] || 0
+
+                    if (!completed) {
+                      const opName = norm(name)
+                      for (const row of progressRows) {
+                        const rName = norm(row.operation_name || row.status_name || statusIdToName[row.status_id])
+                        if (rName && (rName === opName || rName.includes(opName) || opName.includes(rName))) {
+                          completed += row.completed_qty || 0
                         }
                       }
-                      const orderQty = (workOrder.cetec_original_qty || workOrder.quantity || 0)
-                      const pct = orderQty > 0 ? Math.round((completed / orderQty) * 100) : 0
-                      return (
-                        <tr key={j} style={{ borderTop: '1px solid #f1f3f5' }}>
-                          <td style={{ padding: '0.3rem 0.4rem' }}>{name}</td>
-                          <td style={{ padding: '0.3rem 0.4rem', textAlign: 'right' }}>{completed.toLocaleString()}</td>
-                          <td style={{ padding: '0.3rem 0.4rem', textAlign: 'right' }}>{pct}%</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+
+                      if (completed === 0 && opName.includes('assembly') && ln.includes('smt') && locationCompleted > 0) {
+                        completed = locationCompleted
+                      }
+                    }
+
+                    const pct = orderQty > 0 ? Math.round((completed / orderQty) * 100) : 0
+
+                    return (
+                      <div key={j} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '0.82rem', color: '#495057' }}>
+                          <span>{name}</span>
+                          <span style={{ color: '#343a40', fontWeight: 600 }}>{completed.toLocaleString()} pcs&nbsp;<span style={{ color: '#868e96', fontSize: '0.75rem' }}>({pct}%)</span></span>
+                        </div>
+                        <div style={{
+                          width: '100%',
+                          height: '6px',
+                          borderRadius: '999px',
+                          background: '#e9ecef',
+                          overflow: 'hidden'
+                        }}>
+                          <div style={{
+                            width: `${pct}%`,
+                            height: '100%',
+                            background: pct === 100 ? 'var(--success)' : 'var(--primary)',
+                            transition: 'width 0.3s ease'
+                          }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
