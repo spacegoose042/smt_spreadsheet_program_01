@@ -1,49 +1,121 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getWorkOrders, getLines, getCetecCombinedData, getCetecOrdlineWorkProgress, getCetecOrdlineStatuses } from '../api'
-import { Package, Clock, CheckCircle, AlertCircle, TrendingUp, BarChart3 } from 'lucide-react'
+import { getWorkOrders, getCetecCombinedData, getCetecOrdlineWorkProgress, getCetecOrdlineStatuses } from '../api'
+import { Package, Clock, AlertCircle, TrendingUp, BarChart3 } from 'lucide-react'
 
-function ProgressCard({ title, icon: Icon, data, color = 'blue' }) {
-  const total = data.total || 0
-  const completed = data.completed || 0
-  const remaining = data.remaining || 0
-  const percentage = total > 0 ? Math.round((completed / total) * 100) : 0
-
+function KpiCard({ title, icon: Icon, accent = 'var(--primary)', headline, subtitle, items = [], footer }) {
   return (
-    <div className="card" style={{ marginBottom: '1rem' }}>
-      <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-        <Icon size={20} style={{ color: `var(--${color})` }} />
-        <h3 style={{ margin: 0 }}>{title}</h3>
-      </div>
-      <div className="card-body">
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-          <span>Total: <strong>{total.toLocaleString()}</strong></span>
-          <span>Completed: <strong style={{ color: 'var(--success)' }}>{completed.toLocaleString()}</strong></span>
-          <span>Remaining: <strong style={{ color: 'var(--warning)' }}>{remaining.toLocaleString()}</strong></span>
-        </div>
-        
-        <div style={{ 
-          width: '100%', 
-          height: '8px', 
-          backgroundColor: '#e9ecef', 
-          borderRadius: '4px',
-          overflow: 'hidden',
-          marginBottom: '0.5rem'
+    <div className="card" style={{ padding: '1rem', borderLeft: `4px solid ${accent}`, minHeight: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+        <div style={{
+          width: '32px',
+          height: '32px',
+          borderRadius: '999px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: accent,
+          color: '#fff'
         }}>
-          <div style={{
-            width: `${percentage}%`,
-            height: '100%',
-            backgroundColor: `var(--${color})`,
-            transition: 'width 0.3s ease'
-          }} />
+          <Icon size={18} />
         </div>
-        
-        <div style={{ textAlign: 'center', fontSize: '0.9rem', color: '#666' }}>
-          {percentage}% Complete
+        <div>
+          <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6c757d' }}>{title}</div>
+          {subtitle && <div style={{ fontSize: '0.75rem', color: '#adb5bd' }}>{subtitle}</div>}
         </div>
       </div>
+      <div style={{ fontSize: '1.75rem', fontWeight: 600, color: accent, lineHeight: 1 }}>
+        {headline}
+      </div>
+      {items.length > 0 && (
+        <div style={{
+          marginTop: '0.75rem',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+          gap: '0.35rem'
+        }}>
+          {items.map(({ label, value, tone }, index) => (
+            <div
+              key={index}
+              style={{
+                fontSize: '0.8rem',
+                color: '#495057',
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: '0.5rem'
+              }}
+            >
+              <span style={{ color: '#868e96' }}>{label}</span>
+              <strong style={{ color: tone || '#212529' }}>{value}</strong>
+            </div>
+          ))}
+        </div>
+      )}
+      {footer && (
+        <div style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: '#6c757d' }}>
+          {footer}
+        </div>
+      )}
     </div>
   )
+}
+
+const formatNumber = (value) => {
+  if (value === null || value === undefined) return '—'
+  return Number.isFinite(value) ? value.toLocaleString() : String(value)
+}
+
+const formatDuration = (ms) => {
+  if (!Number.isFinite(ms)) return 'unknown'
+  const minutes = Math.floor(ms / 60000)
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h`
+  const days = Math.floor(hours / 24)
+  const remainingHours = hours % 24
+  if (days >= 7) {
+    const weeks = Math.floor(days / 7)
+    const leftoverDays = days % 7
+    return leftoverDays ? `${weeks}w ${leftoverDays}d` : `${weeks}w`
+  }
+  return remainingHours ? `${days}d ${remainingHours}h` : `${days}d`
+}
+
+const formatRelativeTime = (baseDate, targetDate) => {
+  if (!targetDate || !Number.isFinite(targetDate.getTime())) return '—'
+  const diffMs = baseDate.getTime() - targetDate.getTime()
+  if (diffMs <= 0) return 'just now'
+  const minutes = Math.floor(diffMs / 60000)
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 7) {
+    const leftoverHours = hours % 24
+    return leftoverHours ? `${days}d ${leftoverHours}h ago` : `${days}d ago`
+  }
+  const weeks = Math.floor(days / 7)
+  const leftoverDays = days % 7
+  return leftoverDays ? `${weeks}w ${leftoverDays}d ago` : `${weeks}w ago`
+}
+
+const getLocationGroup = (location) => {
+  if (!location) return 'Unassigned'
+  const normalized = location.toUpperCase()
+  if (normalized.includes('SMT')) {
+    if (normalized.includes('AOI')) return 'AOI'
+    if (normalized.includes('WASH')) return 'Wash'
+    return 'SMT'
+  }
+  if (normalized.includes('AOI')) return 'AOI'
+  if (normalized.includes('WASH')) return 'Wash'
+  if (normalized.includes('REWORK')) return 'Rework'
+  if (normalized.includes('WARE')) return 'Warehouse'
+  if (normalized.includes('KIT')) return 'Kitting'
+  if (normalized.includes('TEST')) return 'Test'
+  if (normalized.includes('DOC')) return 'Doc Control'
+  return 'Other'
 }
 
 function ProcessTable({ title, data, columns }) {
@@ -102,13 +174,20 @@ export default function ProgressDashboard() {
   const { data: workOrders, isLoading: loadingWOs } = useQuery({
     queryKey: ['workOrders', 'progress'],
     queryFn: () => getWorkOrders({ include_completed_work: true }),
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000 // Refresh every 30 seconds
   })
 
-  const { data: lines } = useQuery({
-    queryKey: ['lines'],
-    queryFn: () => getLines(),
-  })
+  const locationOptions = useMemo(() => {
+    const set = new Set()
+    ;(workOrders?.data || []).forEach(wo => {
+      set.add(wo.current_location || 'Unknown')
+    })
+    return Array.from(set).sort()
+  }, [workOrders])
+
+  const workOrderOptions = useMemo(() => {
+    return Array.from(new Set((workOrders?.data || []).map(wo => wo.wo_number))).sort()
+  }, [workOrders])
 
   if (loadingWOs) {
     return (
@@ -139,84 +218,256 @@ export default function ProgressDashboard() {
     return true
   })
 
-  // Process work orders data with status ID breakdown
-  const processData = filteredWorkOrders.reduce((acc, wo) => {
-    const location = wo.current_location || 'Unknown'
-    const lineName = wo.line?.name || 'Unscheduled'
-    
-    // Initialize location data
-    if (!acc.locations[location]) {
-      acc.locations[location] = {
-        total: 0,
-        completed: 0,
-        remaining: 0,
-        workOrders: [],
-        statusBreakdown: {}
-      }
-    }
-    
-    // Initialize line data
-    if (!acc.lines[lineName]) {
-      acc.lines[lineName] = {
-        total: 0,
-        completed: 0,
-        remaining: 0,
-        workOrders: [],
-        statusBreakdown: {}
-      }
-    }
+  const processData = useMemo(() => {
+    return filteredWorkOrders.reduce((acc, wo) => {
+      const location = wo.current_location || 'Unknown'
+      const department = getLocationGroup(location)
+      const originalQty = wo.cetec_original_qty ?? wo.quantity ?? 0
+      const completedQty = wo.cetec_completed_qty ?? 0
+      const rawRemaining = wo.cetec_remaining_qty ?? (originalQty - completedQty)
+      const remainingQty = Math.max(0, rawRemaining)
+      const isActive = remainingQty > 0
 
-    // Calculate quantities
-    const originalQty = wo.cetec_original_qty || wo.quantity || 0
-    const completedQty = wo.cetec_completed_qty || 0
-    const remainingQty = wo.cetec_remaining_qty || (originalQty - completedQty)
+      if (!acc.locations[location]) {
+        acc.locations[location] = {
+          total: 0,
+          completed: 0,
+          remaining: 0,
+          active: 0,
+          workOrders: []
+        }
+      }
 
-    // Update location totals
-    acc.locations[location].total += originalQty
-    acc.locations[location].completed += completedQty
-    acc.locations[location].remaining += Math.max(0, remainingQty)
-    acc.locations[location].workOrders.push({
-      wo_number: wo.wo_number,
-      customer: wo.customer,
-      original: originalQty,
-      completed: completedQty,
-      remaining: Math.max(0, remainingQty),
-      percentage: originalQty > 0 ? Math.round((completedQty / originalQty) * 100) : 0
+      if (!acc.departments[department]) {
+        acc.departments[department] = {
+          total: 0,
+          completed: 0,
+          remaining: 0,
+          active: 0,
+          workOrders: []
+        }
+      }
+
+      const summary = {
+        wo_number: wo.wo_number,
+        customer: wo.customer,
+        original: originalQty,
+        completed: completedQty,
+        remaining: remainingQty,
+        percentage: originalQty > 0 ? Math.round((completedQty / originalQty) * 100) : 0
+      }
+
+      acc.locations[location].total += originalQty
+      acc.locations[location].completed += completedQty
+      acc.locations[location].remaining += remainingQty
+      acc.locations[location].workOrders.push(summary)
+      if (isActive) acc.locations[location].active += 1
+
+      acc.departments[department].total += originalQty
+      acc.departments[department].completed += completedQty
+      acc.departments[department].remaining += remainingQty
+      acc.departments[department].workOrders.push(summary)
+      if (isActive) acc.departments[department].active += 1
+
+      return acc
+    }, { locations: {}, departments: {} })
+  }, [filteredWorkOrders])
+
+  const metrics = useMemo(() => {
+    const now = new Date()
+    const dayMs = 24 * 60 * 60 * 1000
+    const weekMs = dayMs * 7
+
+    let wipCount = 0
+    let totalOriginal = 0
+    let totalCompleted = 0
+    let totalRemaining = 0
+    let piecesCompleted24h = 0
+    let piecesCompleted7d = 0
+    let recentOrders24h = 0
+    let recentOrders7d = 0
+    let stalled24h = 0
+    let stalled72h = 0
+    let missingTimestamp = 0
+    let negativeRemaining = 0
+    let canceledCount = 0
+    let deletedCount = 0
+    let missingOriginal = 0
+    let latestSync = null
+
+    const throughputByLocation = {}
+    const stalledCandidates = []
+
+    filteredWorkOrders.forEach(wo => {
+      const originalQty = wo.cetec_original_qty ?? wo.quantity ?? 0
+      const completedQty = wo.cetec_completed_qty ?? 0
+      const rawRemaining = wo.cetec_remaining_qty ?? (originalQty - completedQty)
+      const remainingQty = Math.max(0, rawRemaining)
+      const location = wo.current_location || 'Unknown'
+
+      totalOriginal += originalQty
+      totalCompleted += completedQty
+      totalRemaining += remainingQty
+
+      if (rawRemaining < 0) {
+        negativeRemaining += 1
+      }
+
+      if (remainingQty > 0) {
+        wipCount += 1
+      }
+
+      const updatedAt = wo.updated_at ? new Date(wo.updated_at) : null
+      if (updatedAt && Number.isFinite(updatedAt.getTime())) {
+        const ageMs = now - updatedAt
+        if (ageMs <= dayMs) {
+          piecesCompleted24h += completedQty
+          recentOrders24h += 1
+          throughputByLocation[location] = (throughputByLocation[location] || 0) + completedQty
+        }
+        if (ageMs <= weekMs) {
+          piecesCompleted7d += completedQty
+          recentOrders7d += 1
+        }
+        if (remainingQty > 0 && ageMs > dayMs) {
+          stalled24h += 1
+          stalledCandidates.push({ wo: wo.wo_number, location, ageMs })
+          if (ageMs > 3 * dayMs) {
+            stalled72h += 1
+          }
+        }
+      } else {
+        missingTimestamp += 1
+        if (remainingQty > 0) {
+          stalled24h += 1
+          stalledCandidates.push({ wo: wo.wo_number, location, ageMs: Number.POSITIVE_INFINITY })
+        }
+      }
+
+      if (wo.is_canceled) canceledCount += 1
+      if (wo.is_deleted) deletedCount += 1
+      if (!wo.cetec_original_qty) missingOriginal += 1
+
+      if (wo.last_cetec_sync) {
+        const syncDate = new Date(wo.last_cetec_sync)
+        if (Number.isFinite(syncDate.getTime())) {
+          if (!latestSync || syncDate > latestSync) {
+            latestSync = syncDate
+          }
+        }
+      }
     })
 
-    // Update line totals
-    acc.lines[lineName].total += originalQty
-    acc.lines[lineName].completed += completedQty
-    acc.lines[lineName].remaining += Math.max(0, remainingQty)
-    acc.lines[lineName].workOrders.push({
-      wo_number: wo.wo_number,
-      customer: wo.customer,
-      original: originalQty,
-      completed: completedQty,
-      remaining: Math.max(0, remainingQty),
-      percentage: originalQty > 0 ? Math.round((completedQty / originalQty) * 100) : 0
-    })
+    const topThroughputLocations = Object.entries(throughputByLocation)
+      .filter(([, value]) => value > 0)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([name, value]) => ({ name, value }))
 
-    return acc
-  }, { locations: {}, lines: {} })
+    const stalledExamples = stalledCandidates
+      .sort((a, b) => b.ageMs - a.ageMs)
+      .slice(0, 3)
 
-  // Calculate overall totals
-  const overallTotals = Object.values(processData.locations).reduce((acc, location) => ({
-    total: acc.total + location.total,
-    completed: acc.completed + location.completed,
-    remaining: acc.remaining + location.remaining
-  }), { total: 0, completed: 0, remaining: 0 })
+    const avgComplete = totalOriginal > 0 ? Math.round((totalCompleted / totalOriginal) * 100) : 0
 
-  // Filter data based on selected location
-  const filteredData = selectedLocation === 'all' 
-    ? processData 
-    : { 
-        locations: { [selectedLocation]: processData.locations[selectedLocation] || {} },
-        lines: processData.lines 
-      }
+    const exceptionCounts = {
+      stalled24h,
+      stalled72h,
+      negativeRemaining,
+      missingOriginal,
+      canceled: canceledCount,
+      deleted: deletedCount,
+      missingTimestamp,
+      total: stalled24h + negativeRemaining + canceledCount + deletedCount
+    }
 
-  const locationList = Object.keys(processData.locations).sort()
-  const lineList = Object.keys(processData.lines).sort()
+    return {
+      generatedAt: now,
+      wipCount,
+      totalOriginal,
+      totalCompleted,
+      totalRemaining,
+      avgComplete,
+      piecesCompleted24h,
+      piecesCompleted7d,
+      recentOrders24h,
+      recentOrders7d,
+      throughputByLocation,
+      topThroughputLocations,
+      latestSync,
+      exceptionCounts,
+      stalledExamples
+    }
+  }, [filteredWorkOrders])
+
+  const datasetSize = workOrders?.data?.length || 0
+
+  const locationRows = Object.entries(processData.locations).map(([location, data]) => ({
+    Location: location,
+    'WIP': data.active,
+    'Total Qty': data.total,
+    'Completed Qty': data.completed,
+    'Remaining Qty': data.remaining,
+    Orders: data.workOrders.length
+  }))
+
+  const departmentRows = Object.entries(processData.departments).map(([group, data]) => ({
+    'Department/Area': group,
+    'WIP': data.active,
+    'Total Qty': data.total,
+    'Completed Qty': data.completed,
+    'Remaining Qty': data.remaining,
+    Orders: data.workOrders.length
+  }))
+
+  const throughputFooter = metrics.topThroughputLocations.length
+    ? (
+        <div>
+          Top locations:{' '}
+          {metrics.topThroughputLocations.map((entry, index) => (
+            <span key={entry.name}>
+              {entry.name} · {formatNumber(entry.value)} pcs
+              {index < metrics.topThroughputLocations.length - 1 ? ' • ' : ''}
+            </span>
+          ))}
+        </div>
+      )
+    : 'No updates logged in the last 24 hours.'
+
+  const dataGapNote = metrics.exceptionCounts.missingOriginal || metrics.exceptionCounts.missingTimestamp
+    ? (
+        <div style={{ marginTop: '0.3rem', color: '#adb5bd' }}>
+          Data gaps: {formatNumber(metrics.exceptionCounts.missingOriginal)} missing qty · {formatNumber(metrics.exceptionCounts.missingTimestamp)} missing timestamps
+        </div>
+      )
+    : null
+
+  const stalledFooter = metrics.stalledExamples.length
+    ? (
+        <div>
+          <div>
+            Oldest:{' '}
+            {metrics.stalledExamples.map((entry, index) => (
+              <span key={`${entry.wo}-${index}`}>
+                {entry.wo} · {entry.location} · {formatDuration(entry.ageMs)}
+                {index < metrics.stalledExamples.length - 1 ? ' • ' : ''}
+              </span>
+            ))}
+          </div>
+          {dataGapNote}
+        </div>
+      )
+    : (
+        <div>
+          Flow looks good — no stalled jobs flagged.
+          {dataGapNote}
+        </div>
+      )
+
+  const latestSyncText = formatRelativeTime(metrics.generatedAt, metrics.latestSync)
+  const generatedLabel = metrics.generatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const activeThroughputLocations = Object.keys(metrics.throughputByLocation || {}).length
+  const datasetSummary = `${formatNumber(filteredWorkOrders.length)} / ${formatNumber(datasetSize)}`
 
   return (
     <div className="container">
@@ -235,7 +486,7 @@ export default function ProgressDashboard() {
               style={{ padding: '0.5rem' }}
             >
               <option value="all">All Locations</option>
-              {locationList.map(location => (
+              {locationOptions.map(location => (
                 <option key={location} value={location}>{location}</option>
               ))}
             </select>
@@ -249,7 +500,7 @@ export default function ProgressDashboard() {
               style={{ padding: '0.5rem', minWidth: '150px' }}
             >
               <option value="all">All Work Orders</option>
-              {Array.from(new Set((workOrders?.data || []).map(wo => wo.wo_number))).sort().map(woNumber => (
+              {workOrderOptions.map(woNumber => (
                 <option key={woNumber} value={woNumber}>{woNumber}</option>
               ))}
             </select>
@@ -266,6 +517,65 @@ export default function ProgressDashboard() {
             />
           </label>
         </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+        <KpiCard
+          title="Production WIP"
+          icon={Package}
+          accent="var(--primary)"
+          headline={formatNumber(metrics.wipCount)}
+          subtitle="Active work orders"
+          items={[
+            { label: 'Remaining pcs', value: `${formatNumber(metrics.totalRemaining)}`, tone: 'var(--warning)' },
+            { label: 'Completed pcs', value: `${formatNumber(metrics.totalCompleted)}`, tone: 'var(--success)' },
+            { label: 'Avg complete', value: `${metrics.avgComplete}%`, tone: 'var(--success)' }
+          ]}
+          footer={`Total qty: ${formatNumber(metrics.totalOriginal)} pcs`}
+        />
+
+        <KpiCard
+          title="Throughput"
+          icon={TrendingUp}
+          accent="var(--success)"
+          headline={`${formatNumber(metrics.piecesCompleted24h)} pcs`}
+          subtitle="Logged in last 24h"
+          items={[
+            { label: '7 day total', value: `${formatNumber(metrics.piecesCompleted7d)} pcs` },
+            { label: 'Active locations', value: formatNumber(activeThroughputLocations) },
+            { label: 'Orders touched', value: formatNumber(metrics.recentOrders24h) }
+          ]}
+          footer={throughputFooter}
+        />
+
+        <KpiCard
+          title="Sync & Activity"
+          icon={Clock}
+          accent="var(--info)"
+          headline={latestSyncText}
+          subtitle="Latest Cetec sync"
+          items={[
+            { label: 'Orders touched 24h', value: formatNumber(metrics.recentOrders24h) },
+            { label: 'Orders touched 7d', value: formatNumber(metrics.recentOrders7d) },
+            { label: 'Dataset', value: datasetSummary }
+          ]}
+          footer={`Snapshot at ${generatedLabel}`}
+        />
+
+        <KpiCard
+          title="Exceptions"
+          icon={AlertCircle}
+          accent="var(--danger)"
+          headline={formatNumber(metrics.exceptionCounts.total)}
+          subtitle="Needs attention"
+          items={[
+            { label: 'Stalled >24h', value: formatNumber(metrics.exceptionCounts.stalled24h), tone: 'var(--warning)' },
+            { label: 'Stalled >72h', value: formatNumber(metrics.exceptionCounts.stalled72h), tone: 'var(--danger)' },
+            { label: 'Negative remaining', value: formatNumber(metrics.exceptionCounts.negativeRemaining), tone: 'var(--danger)' },
+            { label: 'Canceled/Deleted', value: formatNumber(metrics.exceptionCounts.canceled + metrics.exceptionCounts.deleted), tone: 'var(--danger)' }
+          ]}
+          footer={stalledFooter}
+        />
       </div>
 
       {/* Work Order Distribution (when specific WO selected) */}
@@ -450,65 +760,24 @@ export default function ProgressDashboard() {
               {searchTerm && <span> matching "<code>{searchTerm}</code>"</span>}
             </div>
             <div style={{ fontSize: '0.9rem', color: '#666' }}>
-              Total: {workOrders?.data?.length || 0} work orders
+              Total: {formatNumber(datasetSize)} work orders
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Overall Summary */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
-        <ProgressCard 
-          title="Overall Progress" 
-          icon={TrendingUp} 
-          data={overallTotals} 
-          color="primary"
-        />
-        
-        {selectedLocation === 'all' && Object.entries(processData.locations).map(([location, data]) => (
-          <ProgressCard 
-            key={location}
-            title={location} 
-            icon={Package} 
-            data={data} 
-            color={location.includes('SMT') ? 'success' : location.includes('HOLD') ? 'danger' : 'info'}
-          />
-        ))}
-        
-        {selectedLocation !== 'all' && processData.locations[selectedLocation] && (
-          <ProgressCard 
-            title={selectedLocation} 
-            icon={Package} 
-            data={processData.locations[selectedLocation]} 
-            color="info"
-          />
-        )}
       </div>
 
       {/* Process Tables */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', marginBottom: '2rem' }}>
         <ProcessTable
           title="Work Orders by Location"
-          data={Object.entries(filteredData.locations).map(([location, data]) => ({
-            Location: location,
-            'Total Qty': data.total,
-            'Completed': data.completed,
-            'Remaining': data.remaining,
-            'Work Orders': data.workOrders.length
-          }))}
-          columns={['Location', 'Total Qty', 'Completed', 'Remaining', 'Work Orders']}
+          data={locationRows}
+          columns={['Location', 'WIP', 'Total Qty', 'Completed Qty', 'Remaining Qty', 'Orders']}
         />
         
         <ProcessTable
-          title="Work Orders by Line"
-          data={Object.entries(filteredData.lines).map(([line, data]) => ({
-            Line: line,
-            'Total Qty': data.total,
-            'Completed': data.completed,
-            'Remaining': data.remaining,
-            'Work Orders': data.workOrders.length
-          }))}
-          columns={['Line', 'Total Qty', 'Completed', 'Remaining', 'Work Orders']}
+          title="Departments / Areas"
+          data={departmentRows}
+          columns={['Department/Area', 'WIP', 'Total Qty', 'Completed Qty', 'Remaining Qty', 'Orders']}
         />
       </div>
 
