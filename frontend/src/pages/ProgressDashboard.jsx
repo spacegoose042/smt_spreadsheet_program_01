@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getWorkOrders, getCetecCombinedData, getCetecOrdlineWorkProgress, getCetecOrdlineStatuses } from '../api'
 import { Package, Clock, AlertCircle, TrendingUp, BarChart3 } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
 
 function KpiCard({ title, icon: Icon, accent = 'var(--primary)', headline, subtitle, items = [], footer }) {
   return (
@@ -118,6 +119,66 @@ const getLocationGroup = (location) => {
   return 'Other'
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000
+const WEEK_MS = 7 * DAY_MS
+const THIRTY_D_MS = 30 * DAY_MS
+const LIVE_REFETCH_INTERVAL_MS = 30_000
+
+const DATE_WINDOW_OPTIONS = [
+  { value: 'all', label: 'All dates' },
+  { value: 'today', label: 'Today' },
+  { value: '7d', label: 'Last 7 days' },
+  { value: '30d', label: 'Last 30 days' }
+]
+
+const SHIFT_OPTIONS = [
+  { value: 'all', label: 'All shifts' },
+  { value: 'day', label: 'Day shift' },
+  { value: 'night', label: 'Night shift' }
+]
+
+const parseISODate = (value) => {
+  if (!value) return null
+  const dt = new Date(value)
+  return Number.isNaN(dt.getTime()) ? null : dt
+}
+
+const getOrderActivityTimestamp = (wo) => {
+  return (
+    parseISODate(wo.updated_at) ||
+    parseISODate(wo.last_cetec_sync) ||
+    parseISODate(wo.calculated_end_datetime) ||
+    parseISODate(wo.calculated_start_datetime) ||
+    parseISODate(wo.wo_start_datetime) ||
+    parseISODate(wo.min_start_date)
+  )
+}
+
+const getShiftBucketForOrder = (wo) => {
+  const start = parseISODate(
+    wo.calculated_start_datetime ||
+    wo.wo_start_datetime ||
+    wo.min_start_date
+  )
+  if (!start) return 'unknown'
+  const hour = start.getHours()
+  return hour >= 6 && hour < 18 ? 'day' : 'night'
+}
+
+const isOrderStalled = (wo, nowMs) => {
+  const originalQty = wo.cetec_original_qty ?? wo.quantity ?? 0
+  const completedQty = wo.cetec_completed_qty ?? 0
+  const remainingQty = wo.cetec_remaining_qty ?? Math.max(0, originalQty - completedQty)
+  if (remainingQty <= 0) {
+    return false
+  }
+  const activity = getOrderActivityTimestamp(wo)
+  if (!activity) {
+    return true
+  }
+  return nowMs - activity.getTime() > DAY_MS
+}
+
 function ProcessTable({ title, data, columns }) {
   if (!data || data.length === 0) {
     return (
@@ -170,11 +231,34 @@ export default function ProgressDashboard() {
   const [selectedWorkOrder, setSelectedWorkOrder] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [expandedWOs, setExpandedWOs] = useState({})
+  const [selectedLocationGroup, setSelectedLocationGroup] = useState('all')
+  const [dateWindow, setDateWindow] = useState('7d')
+  const [shiftFilter, setShiftFilter] = useState('all')
+  const [selectedCustomer, setSelectedCustomer] = useState('all')
+  const [onlyWip, setOnlyWip] = useState(false)
+  const [onlyWithCompletions, setOnlyWithCompletions] = useState(false)
+  const [onlyStalled, setOnlyStalled] = useState(false)
+  const [livePolling, setLivePolling] = useState(true)
+  const [includeDocControl, setIncludeDocControl] = useState(false)
 
-  const { data: workOrders, isLoading: loadingWOs } = useQuery({
-    queryKey: ['workOrders', 'progress'],
-    queryFn: () => getWorkOrders({ include_completed_work: true }),
-    refetchInterval: 30000 // Refresh every 30 seconds
+  const { isAdmin, isScheduler } = useAuth()
+  const canToggleDocControl = isAdmin || isScheduler
+
+  const workOrderParams = useMemo(() => {
+    const params = {
+      include_completed_work: true
+    }
+    if (includeDocControl) {
+      params.include_doc_control = true
+    }
+    return params
+  }, [includeDocControl])
+
+  const { data: workOrders, isLoading: loadingWOs, isFetching, dataUpdatedAt, refetch } = useQuery({
+    queryKey: ['workOrders', 'progress', { includeDocControl }],
+    queryFn: () => getWorkOrders(workOrderParams),
+    refetchInterval: livePolling ? LIVE_REFETCH_INTERVAL_MS : false,
+    keepPreviousData: true
   })
 
   const rawWorkOrders = workOrders?.data ?? []
@@ -191,25 +275,107 @@ export default function ProgressDashboard() {
     return Array.from(new Set(rawWorkOrders.map(wo => wo.wo_number))).sort()
   }, [rawWorkOrders])
 
+  const locationGroupOptions = useMemo(() => {
+    const set = new Set()
+    rawWorkOrders.forEach(wo => set.add(getLocationGroup(wo.current_location)))
+    return Array.from(set).sort()
+  }, [rawWorkOrders])
+
+  const customerOptions = useMemo(() => {
+    const set = new Set()
+    rawWorkOrders.forEach(wo => {
+      if (wo.customer) {
+        set.add(wo.customer)
+      }
+    })
+    return Array.from(set).sort()
+  }, [rawWorkOrders])
+
   const filteredWorkOrders = useMemo(() => {
     const searchLower = searchTerm.trim().toLowerCase()
+    const nowMs = Date.now()
 
-    // Location filter
-    const matchesLocation = (wo) => selectedLocation === 'all' || wo.current_location === selectedLocation
+    return rawWorkOrders.filter(wo => {
+      const location = wo.current_location || 'Unknown'
+      const locationGroup = getLocationGroup(location)
 
-    // Work order filter
-    const matchesWorkOrder = (wo) => selectedWorkOrder === 'all' || wo.wo_number === selectedWorkOrder
+      if (selectedLocation !== 'all' && location !== selectedLocation) {
+        return false
+      }
 
-    // Search filter
-    const matchesSearch = (wo) => {
-      if (!searchLower) return true
-      const woNumber = (wo.wo_number || '').toLowerCase()
-      const customer = (wo.customer || '').toLowerCase()
-      return woNumber.includes(searchLower) || customer.includes(searchLower)
-    }
+      if (selectedLocationGroup !== 'all' && locationGroup !== selectedLocationGroup) {
+        return false
+      }
 
-    return rawWorkOrders.filter(wo => matchesLocation(wo) && matchesWorkOrder(wo) && matchesSearch(wo))
-  }, [rawWorkOrders, selectedLocation, selectedWorkOrder, searchTerm])
+      if (selectedWorkOrder !== 'all' && wo.wo_number !== selectedWorkOrder) {
+        return false
+      }
+
+      if (selectedCustomer !== 'all' && wo.customer !== selectedCustomer) {
+        return false
+      }
+
+      if (searchLower) {
+        const woNumber = (wo.wo_number || '').toLowerCase()
+        const customer = (wo.customer || '').toLowerCase()
+        if (!woNumber.includes(searchLower) && !customer.includes(searchLower)) {
+          return false
+        }
+      }
+
+      const originalQty = wo.cetec_original_qty ?? wo.quantity ?? 0
+      const completedQty = wo.cetec_completed_qty ?? 0
+      const remainingQty = wo.cetec_remaining_qty ?? Math.max(0, originalQty - completedQty)
+
+      if (onlyWip && remainingQty <= 0) {
+        return false
+      }
+
+      if (onlyWithCompletions && completedQty <= 0) {
+        return false
+      }
+
+      if (onlyStalled && !isOrderStalled(wo, nowMs)) {
+        return false
+      }
+
+      const activity = getOrderActivityTimestamp(wo)
+      if (dateWindow !== 'all') {
+        if (!activity) {
+          return false
+        }
+        const ageMs = nowMs - activity.getTime()
+        if (dateWindow === 'today' && ageMs > DAY_MS) {
+          return false
+        }
+        if (dateWindow === '7d' && ageMs > WEEK_MS) {
+          return false
+        }
+        if (dateWindow === '30d' && ageMs > THIRTY_D_MS) {
+          return false
+        }
+      }
+
+      const shiftBucket = getShiftBucketForOrder(wo)
+      if (shiftFilter !== 'all' && shiftBucket !== shiftFilter) {
+        return false
+      }
+
+      return true
+    })
+  }, [
+    rawWorkOrders,
+    selectedLocation,
+    selectedLocationGroup,
+    selectedWorkOrder,
+    selectedCustomer,
+    searchTerm,
+    onlyWip,
+    onlyWithCompletions,
+    onlyStalled,
+    dateWindow,
+    shiftFilter
+  ])
 
   const processData = useMemo(() => {
     return filteredWorkOrders.reduce((acc, wo) => {
@@ -268,8 +434,8 @@ export default function ProgressDashboard() {
 
   const metrics = useMemo(() => {
     const now = new Date()
-    const dayMs = 24 * 60 * 60 * 1000
-    const weekMs = dayMs * 7
+    const dayMs = DAY_MS
+    const weekMs = WEEK_MS
 
     let wipCount = 0
     let totalOriginal = 0
@@ -310,9 +476,9 @@ export default function ProgressDashboard() {
         wipCount += 1
       }
 
-      const updatedAt = wo.updated_at ? new Date(wo.updated_at) : null
-      if (updatedAt && Number.isFinite(updatedAt.getTime())) {
-        const ageMs = now - updatedAt
+      const activityTimestamp = getOrderActivityTimestamp(wo)
+      if (activityTimestamp && Number.isFinite(activityTimestamp.getTime())) {
+        const ageMs = now - activityTimestamp
         if (ageMs <= dayMs) {
           piecesCompleted24h += completedQty
           recentOrders24h += 1
@@ -461,6 +627,12 @@ export default function ProgressDashboard() {
   const generatedLabel = metrics.generatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   const activeThroughputLocations = Object.keys(metrics.throughputByLocation || {}).length
   const datasetSummary = `${formatNumber(filteredWorkOrders.length)} / ${formatNumber(datasetSize)}`
+  const lastUpdatedDate = dataUpdatedAt ? new Date(dataUpdatedAt) : null
+  const lastUpdatedLabel = lastUpdatedDate && Number.isFinite(lastUpdatedDate.getTime())
+    ? formatRelativeTime(new Date(), lastUpdatedDate)
+    : 'waiting…'
+  const liveDotColor = livePolling ? (isFetching ? '#f59f00' : '#2f9e44') : '#adb5bd'
+  const liveStatusLabel = livePolling ? 'Live' : 'Paused'
 
   if (loadingWOs && rawWorkOrders.length === 0) {
     return (
@@ -472,51 +644,212 @@ export default function ProgressDashboard() {
 
   return (
     <div className="container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <h1 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
           <BarChart3 size={24} />
           Work Order Progress Dashboard
         </h1>
-        
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            Filter by Location:
-            <select 
-              value={selectedLocation} 
-              onChange={(e) => setSelectedLocation(e.target.value)}
-              style={{ padding: '0.5rem' }}
-            >
-              <option value="all">All Locations</option>
-              {locationOptions.map(location => (
-                <option key={location} value={location}>{location}</option>
-              ))}
-            </select>
-          </label>
-          
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            Filter by Work Order:
-            <select 
-              value={selectedWorkOrder} 
-              onChange={(e) => setSelectedWorkOrder(e.target.value)}
-              style={{ padding: '0.5rem', minWidth: '150px' }}
-            >
-              <option value="all">All Work Orders</option>
-              {workOrderOptions.map(woNumber => (
-                <option key={woNumber} value={woNumber}>{woNumber}</option>
-              ))}
-            </select>
-          </label>
-          
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            Search:
-            <input
-              type="text"
-              placeholder="Search WO# or Customer..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{ padding: '0.5rem', minWidth: '200px' }}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: '#6c757d' }}>
+            <span
+              style={{
+                width: '10px',
+                height: '10px',
+                borderRadius: '999px',
+                backgroundColor: liveDotColor,
+                boxShadow: livePolling ? '0 0 0 6px rgba(47, 158, 68, 0.12)' : 'none',
+                transition: 'all 0.3s ease'
+              }}
             />
-          </label>
+            <span>{liveStatusLabel}</span>
+            <span>• Updated {lastUpdatedLabel}{isFetching ? ' (syncing…)' : ''}</span>
+          </div>
+          <button
+            onClick={() => setLivePolling(prev => !prev)}
+            style={{
+              padding: '0.4rem 0.85rem',
+              borderRadius: '6px',
+              border: '1px solid #ced4da',
+              background: livePolling ? 'white' : 'var(--primary)',
+              color: livePolling ? '#495057' : '#fff',
+              cursor: 'pointer',
+              fontSize: '0.85rem'
+            }}
+          >
+            {livePolling ? 'Pause live' : 'Resume live'}
+          </button>
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            style={{
+              padding: '0.4rem 0.85rem',
+              borderRadius: '6px',
+              border: '1px solid var(--primary)',
+              background: 'var(--primary)',
+              color: '#fff',
+              cursor: isFetching ? 'wait' : 'pointer',
+              fontSize: '0.85rem',
+              opacity: isFetching ? 0.7 : 1
+            }}
+          >
+            {isFetching ? 'Refreshing…' : 'Refresh now'}
+          </button>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
+            <label style={{ display: 'flex', flexDirection: 'column', fontSize: '0.8rem', color: '#6c757d', minWidth: '180px' }}>
+              <span style={{ marginBottom: '0.25rem' }}>Location</span>
+              <select
+                value={selectedLocation}
+                onChange={(e) => setSelectedLocation(e.target.value)}
+                style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid #ced4da' }}
+              >
+                <option value="all">All locations</option>
+                {locationOptions.map(location => (
+                  <option key={location} value={location}>{location}</option>
+                ))}
+              </select>
+            </label>
+
+            <label style={{ display: 'flex', flexDirection: 'column', fontSize: '0.8rem', color: '#6c757d', minWidth: '180px' }}>
+              <span style={{ marginBottom: '0.25rem' }}>Location group</span>
+              <select
+                value={selectedLocationGroup}
+                onChange={(e) => setSelectedLocationGroup(e.target.value)}
+                style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid #ced4da' }}
+              >
+                <option value="all">All groups</option>
+                {locationGroupOptions.map(group => (
+                  <option key={group} value={group}>{group}</option>
+                ))}
+              </select>
+            </label>
+
+            <label style={{ display: 'flex', flexDirection: 'column', fontSize: '0.8rem', color: '#6c757d', minWidth: '180px' }}>
+              <span style={{ marginBottom: '0.25rem' }}>Work order</span>
+              <select
+                value={selectedWorkOrder}
+                onChange={(e) => setSelectedWorkOrder(e.target.value)}
+                style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid #ced4da' }}
+              >
+                <option value="all">All work orders</option>
+                {workOrderOptions.map(woNumber => (
+                  <option key={woNumber} value={woNumber}>{woNumber}</option>
+                ))}
+              </select>
+            </label>
+
+            <label style={{ display: 'flex', flexDirection: 'column', fontSize: '0.8rem', color: '#6c757d', minWidth: '200px' }}>
+              <span style={{ marginBottom: '0.25rem' }}>Customer</span>
+              <select
+                value={selectedCustomer}
+                onChange={(e) => setSelectedCustomer(e.target.value)}
+                style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid #ced4da' }}
+              >
+                <option value="all">All customers</option>
+                {customerOptions.map(customer => (
+                  <option key={customer} value={customer}>{customer}</option>
+                ))}
+              </select>
+            </label>
+
+            <label style={{ display: 'flex', flexDirection: 'column', fontSize: '0.8rem', color: '#6c757d', minWidth: '170px' }}>
+              <span style={{ marginBottom: '0.25rem' }}>Date window</span>
+              <select
+                value={dateWindow}
+                onChange={(e) => setDateWindow(e.target.value)}
+                style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid #ced4da' }}
+              >
+                {DATE_WINDOW_OPTIONS.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+
+            <label style={{ display: 'flex', flexDirection: 'column', fontSize: '0.8rem', color: '#6c757d', minWidth: '160px' }}>
+              <span style={{ marginBottom: '0.25rem' }}>Shift</span>
+              <select
+                value={shiftFilter}
+                onChange={(e) => setShiftFilter(e.target.value)}
+                style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid #ced4da' }}
+              >
+                {SHIFT_OPTIONS.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+
+            <label style={{ display: 'flex', flexDirection: 'column', fontSize: '0.8rem', color: '#6c757d', flex: '1 1 220px', minWidth: '220px' }}>
+              <span style={{ marginBottom: '0.25rem' }}>Search</span>
+              <input
+                type="text"
+                placeholder="Search WO# or customer…"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid #ced4da' }}
+              />
+            </label>
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+            <strong style={{ fontSize: '0.85rem', color: '#6c757d' }}>Quick segments:</strong>
+            <button
+              onClick={() => setOnlyWip(prev => !prev)}
+              style={{
+                padding: '0.35rem 0.8rem',
+                borderRadius: '999px',
+                border: onlyWip ? '1px solid var(--primary)' : '1px solid #ced4da',
+                background: onlyWip ? 'var(--primary)' : '#f8f9fa',
+                color: onlyWip ? '#fff' : '#495057',
+                fontSize: '0.8rem',
+                cursor: 'pointer'
+              }}
+            >
+              Only WIP
+            </button>
+            <button
+              onClick={() => setOnlyWithCompletions(prev => !prev)}
+              style={{
+                padding: '0.35rem 0.8rem',
+                borderRadius: '999px',
+                border: onlyWithCompletions ? '1px solid var(--primary)' : '1px solid #ced4da',
+                background: onlyWithCompletions ? 'var(--primary)' : '#f8f9fa',
+                color: onlyWithCompletions ? '#fff' : '#495057',
+                fontSize: '0.8rem',
+                cursor: 'pointer'
+              }}
+            >
+              Only with completions
+            </button>
+            <button
+              onClick={() => setOnlyStalled(prev => !prev)}
+              style={{
+                padding: '0.35rem 0.8rem',
+                borderRadius: '999px',
+                border: onlyStalled ? '1px solid #dc3545' : '1px solid #ced4da',
+                background: onlyStalled ? '#dc3545' : '#f8f9fa',
+                color: onlyStalled ? '#fff' : '#495057',
+                fontSize: '0.8rem',
+                cursor: 'pointer'
+              }}
+            >
+              Only stalled
+            </button>
+
+            {canToggleDocControl && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: '#495057', marginLeft: 'auto' }}>
+                <input
+                  type="checkbox"
+                  checked={includeDocControl}
+                  onChange={(e) => setIncludeDocControl(e.target.checked)}
+                />
+                Include DOC CONTROL orders
+              </label>
+            )}
+          </div>
         </div>
       </div>
 
