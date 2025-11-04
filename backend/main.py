@@ -1724,6 +1724,8 @@ def diagnose_prodline_data(
                 
                 response = requests.get(endpoint['url'], params=endpoint['params'], timeout=30)
                 
+                print(f"   ✅ Response received: Status {response.status_code}, Size: {len(response.text)} bytes")
+                
                 api_call_info = {
                     "endpoint_name": endpoint['name'],
                     "url": endpoint['url'],
@@ -1737,8 +1739,11 @@ def diagnose_prodline_data(
                 diagnostics["api_calls"].append(api_call_info)
                 
                 if response.status_code == 200:
+                    print(f"   📦 Parsing JSON response...")
                     try:
                         data = response.json()
+                        print(f"   ✅ JSON parsed successfully: Type={type(data).__name__}, Length={len(data) if isinstance(data, list) else 'N/A'}")
+                        
                         diagnostics["raw_responses"][endpoint['name']] = {
                             "type": type(data).__name__,
                             "sample": str(data)[:500] if isinstance(data, (dict, list)) else str(data),
@@ -1748,22 +1753,37 @@ def diagnose_prodline_data(
                         
                         # Try to extract order lines from various response shapes
                         if isinstance(data, list):
+                            print(f"   ✅ Found list with {len(data)} items")
+                            if len(data) > 0:
+                                print(f"   📋 First item keys: {list(data[0].keys())[:10] if isinstance(data[0], dict) else 'Not a dict'}")
                             all_ordlines = data
                             successful_endpoint = endpoint['name']
-                            break
+                            if len(all_ordlines) > 0:
+                                print(f"   ✅ Using this endpoint - found {len(all_ordlines)} order lines")
+                                break
+                            else:
+                                print(f"   ⚠️  List is empty, continuing to next endpoint...")
                         elif isinstance(data, dict):
+                            print(f"   📦 Found dict with keys: {list(data.keys())[:10]}")
                             # Try common keys
                             for key in ['data', 'ordlines', 'rows', 'results', 'items']:
                                 if key in data and isinstance(data[key], list):
+                                    print(f"   ✅ Found list in key '{key}' with {len(data[key])} items")
                                     all_ordlines = data[key]
                                     successful_endpoint = endpoint['name']
-                                    break
-                            if all_ordlines:
+                                    if len(all_ordlines) > 0:
+                                        print(f"   ✅ Using this endpoint - found {len(all_ordlines)} order lines")
+                                        break
+                            if all_ordlines and len(all_ordlines) > 0:
                                 break
                             
                             # If no nested list, store the whole dict for inspection
+                            print(f"   ⚠️  No list found in dict, storing structure for inspection")
                             diagnostics["raw_responses"][endpoint['name']]["full_structure"] = str(data)[:1000]
+                            diagnostics["raw_responses"][endpoint['name']]["all_keys"] = list(data.keys())
                     except Exception as e:
+                        print(f"   ❌ JSON parse error: {str(e)}")
+                        print(f"   📄 Response preview: {response.text[:200]}")
                         api_call_info["json_error"] = str(e)
                         api_call_info["response_preview"] = response.text[:500]
                         diagnostics["raw_responses"][endpoint['name']] = {
@@ -1772,6 +1792,7 @@ def diagnose_prodline_data(
                             "response_preview": response.text[:500]
                         }
                 else:
+                    print(f"   ❌ HTTP {response.status_code}: {response.text[:200] if response.text else 'No error message'}")
                     api_call_info["error"] = response.text[:200] if response.text else "No error message"
                     diagnostics["raw_responses"][endpoint['name']] = {
                         "error": f"HTTP {response.status_code}",
@@ -1779,13 +1800,23 @@ def diagnose_prodline_data(
                     }
                     
             except Exception as e:
+                print(f"   ❌ Exception: {str(e)}")
+                import traceback
+                print(f"   📋 Traceback: {traceback.format_exc()}")
                 api_call_info = {
                     "endpoint_name": endpoint['name'],
                     "url": endpoint['url'],
                     "error": str(e),
-                    "success": False
+                    "success": False,
+                    "traceback": traceback.format_exc()
                 }
                 diagnostics["api_calls"].append(api_call_info)
+        
+        print(f"\n📊 Summary: Tested {len(endpoint_variations)} endpoints, found {len(all_ordlines)} order lines")
+        if successful_endpoint:
+            print(f"   ✅ Successful endpoint: {successful_endpoint}")
+        else:
+            print(f"   ⚠️  No successful endpoint found")
         
         # Analyze what we got
         diagnostics["response_analysis"] = {
