@@ -1670,15 +1670,138 @@ def diagnose_prodline_data(
     Diagnostic endpoint to see what production line data actually exists in Cetec.
     Returns sample order lines and their production line field values.
     """
+    diagnostics = {
+        "api_calls": [],
+        "raw_responses": {},
+        "response_analysis": {}
+    }
+    
     try:
-        ordlines_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines/list"
-        ordlines_params = {
-            "preshared_token": CETEC_CONFIG["token"],
-            "format": "json"
+        # Try multiple API endpoint variations
+        endpoint_variations = [
+            {
+                "name": "Standard /ordlines/list",
+                "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines/list",
+                "params": {
+                    "preshared_token": CETEC_CONFIG["token"],
+                    "format": "json"
+                }
+            },
+            {
+                "name": "With rows parameter",
+                "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines/list",
+                "params": {
+                    "preshared_token": CETEC_CONFIG["token"],
+                    "format": "json",
+                    "rows": "1000"
+                }
+            },
+            {
+                "name": "Without format",
+                "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines/list",
+                "params": {
+                    "preshared_token": CETEC_CONFIG["token"]
+                }
+            },
+            {
+                "name": "Alternative endpoint",
+                "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines",
+                "params": {
+                    "preshared_token": CETEC_CONFIG["token"],
+                    "format": "json"
+                }
+            }
+        ]
+        
+        all_ordlines = []
+        successful_endpoint = None
+        
+        for endpoint in endpoint_variations:
+            try:
+                print(f"🔍 Testing endpoint: {endpoint['name']}")
+                print(f"   URL: {endpoint['url']}")
+                print(f"   Params: {endpoint['params']}")
+                
+                response = requests.get(endpoint['url'], params=endpoint['params'], timeout=30)
+                
+                api_call_info = {
+                    "endpoint_name": endpoint['name'],
+                    "url": endpoint['url'],
+                    "params": endpoint['params'],
+                    "status_code": response.status_code,
+                    "response_size": len(response.text),
+                    "content_type": response.headers.get('content-type', 'unknown'),
+                    "success": response.status_code == 200
+                }
+                
+                diagnostics["api_calls"].append(api_call_info)
+                
+                if response.status_code == 200:
+                    try:
+                        data = response.json()
+                        diagnostics["raw_responses"][endpoint['name']] = {
+                            "type": type(data).__name__,
+                            "sample": str(data)[:500] if isinstance(data, (dict, list)) else str(data),
+                            "keys": list(data.keys())[:20] if isinstance(data, dict) else None,
+                            "length": len(data) if isinstance(data, list) else "N/A"
+                        }
+                        
+                        # Try to extract order lines from various response shapes
+                        if isinstance(data, list):
+                            all_ordlines = data
+                            successful_endpoint = endpoint['name']
+                            break
+                        elif isinstance(data, dict):
+                            # Try common keys
+                            for key in ['data', 'ordlines', 'rows', 'results', 'items']:
+                                if key in data and isinstance(data[key], list):
+                                    all_ordlines = data[key]
+                                    successful_endpoint = endpoint['name']
+                                    break
+                            if all_ordlines:
+                                break
+                            
+                            # If no nested list, store the whole dict for inspection
+                            diagnostics["raw_responses"][endpoint['name']]["full_structure"] = str(data)[:1000]
+                    except Exception as e:
+                        api_call_info["json_error"] = str(e)
+                        api_call_info["response_preview"] = response.text[:500]
+                        diagnostics["raw_responses"][endpoint['name']] = {
+                            "error": "Failed to parse JSON",
+                            "error_message": str(e),
+                            "response_preview": response.text[:500]
+                        }
+                else:
+                    api_call_info["error"] = response.text[:200] if response.text else "No error message"
+                    diagnostics["raw_responses"][endpoint['name']] = {
+                        "error": f"HTTP {response.status_code}",
+                        "error_message": response.text[:500] if response.text else "No response body"
+                    }
+                    
+            except Exception as e:
+                api_call_info = {
+                    "endpoint_name": endpoint['name'],
+                    "url": endpoint['url'],
+                    "error": str(e),
+                    "success": False
+                }
+                diagnostics["api_calls"].append(api_call_info)
+        
+        # Analyze what we got
+        diagnostics["response_analysis"] = {
+            "total_ordlines_found": len(all_ordlines),
+            "successful_endpoint": successful_endpoint,
+            "first_order_line_keys": list(all_ordlines[0].keys()) if all_ordlines else None,
+            "first_order_line_sample": dict(list(all_ordlines[0].items())[:10]) if all_ordlines else None
         }
-        ordlines_response = requests.get(ordlines_url, params=ordlines_params, timeout=30)
-        ordlines_response.raise_for_status()
-        all_ordlines = ordlines_response.json() or []
+        
+        if not all_ordlines:
+            return {
+                "error": "No order lines found in any endpoint",
+                "requested_prodline": prodline,
+                "diagnostics": diagnostics,
+                "message": "Check the 'diagnostics' section to see what each API endpoint returned"
+            }
         
         # Collect all unique production line values
         prodline_values = set()
@@ -1719,13 +1842,17 @@ def diagnose_prodline_data(
             "unique_prodline_values_found": list(prodline_values)[:20],
             "prodline_value_counts": prodline_counts,
             "sample_lines_with_prodline_info": sample_lines[:10],
-            "all_field_names": list(all_ordlines[0].keys()) if all_ordlines else []
+            "all_field_names": list(all_ordlines[0].keys()) if all_ordlines else [],
+            "diagnostics": diagnostics,
+            "successful_endpoint": successful_endpoint
         }
         
     except Exception as e:
+        import traceback
         return {
             "error": f"Failed to fetch order lines: {str(e)}",
-            "traceback": str(e.__traceback__) if hasattr(e, '__traceback__') else None
+            "traceback": traceback.format_exc(),
+            "diagnostics": diagnostics
         }
 
 

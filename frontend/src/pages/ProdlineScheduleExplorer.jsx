@@ -127,10 +127,102 @@ export default function ProdlineScheduleExplorer() {
           </div>
           <div className="card-body">
             {diagnoseData.error ? (
-              <div style={{ padding: '1rem', backgroundColor: '#f8d7da', borderRadius: '6px', color: '#721c24' }}>
+              <div style={{ padding: '1rem', backgroundColor: '#f8d7da', borderRadius: '6px', color: '#721c24', marginBottom: '1rem' }}>
                 <strong>Error:</strong> {diagnoseData.error}
+                {diagnoseData.message && <div style={{ marginTop: '0.5rem' }}>{diagnoseData.message}</div>}
               </div>
-            ) : (
+            ) : null}
+
+            {/* API Diagnostics Section */}
+            {diagnoseData.diagnostics && (
+              <div style={{ marginBottom: '2rem', padding: '1rem', backgroundColor: '#fff3cd', borderRadius: '6px', border: '1px solid #ffeaa7' }}>
+                <h4 style={{ marginTop: 0, marginBottom: '1rem', color: '#856404' }}>
+                  🔍 API Call Diagnostics
+                  {diagnoseData.successful_endpoint && (
+                    <span style={{ marginLeft: '0.5rem', fontSize: '0.9rem', fontWeight: 'normal' }}>
+                      (Successful: {diagnoseData.successful_endpoint})
+                    </span>
+                  )}
+                </h4>
+                
+                {/* API Calls Summary */}
+                {diagnoseData.diagnostics.api_calls && diagnoseData.diagnostics.api_calls.length > 0 && (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <h5 style={{ marginBottom: '0.5rem' }}>API Endpoints Tested:</h5>
+                    {diagnoseData.diagnostics.api_calls.map((call, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          padding: '0.75rem',
+                          backgroundColor: call.success ? '#d4edda' : '#f8d7da',
+                          borderRadius: '4px',
+                          marginBottom: '0.5rem',
+                          fontSize: '0.85rem'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                          <div>
+                            <strong>{call.endpoint_name}</strong>
+                            <div style={{ fontSize: '0.8rem', color: '#6c757d', marginTop: '0.25rem' }}>
+                              Status: {call.status_code} | Size: {call.response_size} bytes | Content-Type: {call.content_type}
+                            </div>
+                            {call.url && (
+                              <div style={{ fontSize: '0.75rem', color: '#6c757d', marginTop: '0.25rem', wordBreak: 'break-all' }}>
+                                {call.url}
+                              </div>
+                            )}
+                          </div>
+                          {call.success ? (
+                            <CheckCircle2 size={20} style={{ color: '#155724' }} />
+                          ) : (
+                            <XCircle size={20} style={{ color: '#721c24' }} />
+                          )}
+                        </div>
+                        {call.error && (
+                          <div style={{ marginTop: '0.5rem', padding: '0.5rem', backgroundColor: 'white', borderRadius: '4px', fontSize: '0.8rem' }}>
+                            <strong>Error:</strong> {call.error}
+                          </div>
+                        )}
+                        {call.json_error && (
+                          <div style={{ marginTop: '0.5rem', padding: '0.5rem', backgroundColor: 'white', borderRadius: '4px', fontSize: '0.8rem' }}>
+                            <strong>JSON Parse Error:</strong> {call.json_error}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Raw Response Details */}
+                {diagnoseData.diagnostics.raw_responses && Object.keys(diagnoseData.diagnostics.raw_responses).length > 0 && (
+                  <details style={{ marginTop: '1rem' }}>
+                    <summary style={{ cursor: 'pointer', fontWeight: 600, marginBottom: '0.5rem' }}>
+                      Raw Response Details (Click to expand)
+                    </summary>
+                    {Object.entries(diagnoseData.diagnostics.raw_responses).map(([endpoint, response]) => (
+                      <div key={endpoint} style={{ marginBottom: '1rem', padding: '0.75rem', backgroundColor: 'white', borderRadius: '4px' }}>
+                        <strong>{endpoint}:</strong>
+                        <pre style={{ marginTop: '0.5rem', padding: '0.75rem', backgroundColor: '#f8f9fa', borderRadius: '4px', fontSize: '0.75rem', overflow: 'auto', maxHeight: '300px' }}>
+                          {JSON.stringify(response, null, 2)}
+                        </pre>
+                      </div>
+                    ))}
+                  </details>
+                )}
+
+                {/* Response Analysis */}
+                {diagnoseData.diagnostics.response_analysis && (
+                  <div style={{ marginTop: '1rem', padding: '0.75rem', backgroundColor: 'white', borderRadius: '4px' }}>
+                    <h5 style={{ marginTop: 0, marginBottom: '0.5rem' }}>Response Analysis:</h5>
+                    <pre style={{ fontSize: '0.8rem', overflow: 'auto' }}>
+                      {JSON.stringify(diagnoseData.diagnostics.response_analysis, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!diagnoseData.error && (
               <>
                 <div style={{ marginBottom: '1.5rem' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
