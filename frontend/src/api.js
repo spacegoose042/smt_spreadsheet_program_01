@@ -144,6 +144,8 @@ export const testCetecScheduleEndpoints = (prodline) =>
   api.get(`/api/cetec/prodline/${prodline}/test-endpoints`)
 export const getScheduledWorkForProdline = (prodline) =>
   api.get(`/api/cetec/prodline/${prodline}/scheduled-work`)
+export const diagnoseProdlineData = (prodline) =>
+  api.get(`/api/cetec/prodline/${prodline}/diagnose`)
 
 export default api
 

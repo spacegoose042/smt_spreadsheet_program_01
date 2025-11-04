@@ -1661,6 +1661,74 @@ CETEC_CONFIG = {
 # PROD LINE 300 (WIRE HARNESS) SCHEDULE EXPLORATION
 # ============================================================================
 
+@app.get("/api/cetec/prodline/{prodline}/diagnose")
+def diagnose_prodline_data(
+    prodline: str,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Diagnostic endpoint to see what production line data actually exists in Cetec.
+    Returns sample order lines and their production line field values.
+    """
+    try:
+        ordlines_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines/list"
+        ordlines_params = {
+            "preshared_token": CETEC_CONFIG["token"],
+            "format": "json"
+        }
+        ordlines_response = requests.get(ordlines_url, params=ordlines_params, timeout=30)
+        ordlines_response.raise_for_status()
+        all_ordlines = ordlines_response.json() or []
+        
+        # Collect all unique production line values
+        prodline_values = set()
+        prodline_fields = {}
+        
+        # Sample of order lines with their prodline-related fields
+        sample_lines = []
+        for line in all_ordlines[:100]:  # Check first 100
+            # Look for any field that might contain production line info
+            line_prodline_info = {}
+            for key, value in line.items():
+                key_lower = str(key).lower()
+                if 'prod' in key_lower or 'line' in key_lower or '300' in str(value) or '200' in str(value) or '100' in str(value):
+                    line_prodline_info[key] = value
+                    if value:
+                        prodline_values.add(str(value))
+            
+            if line_prodline_info:
+                sample_lines.append({
+                    "ordline_id": line.get("ordline_id"),
+                    "wo_number": f"{line.get('ordernum')}-{line.get('lineitem')}",
+                    "prodline_fields": line_prodline_info,
+                    "all_keys": list(line.keys())[:20]  # First 20 keys for reference
+                })
+        
+        # Count occurrences of each prodline value
+        prodline_counts = {}
+        for line in all_ordlines:
+            for key, value in line.items():
+                key_lower = str(key).lower()
+                if 'production_line' in key_lower or 'prodline' in key_lower:
+                    val_str = str(value) if value else "None"
+                    prodline_counts[val_str] = prodline_counts.get(val_str, 0) + 1
+        
+        return {
+            "total_ordlines": len(all_ordlines),
+            "requested_prodline": prodline,
+            "unique_prodline_values_found": list(prodline_values)[:20],
+            "prodline_value_counts": prodline_counts,
+            "sample_lines_with_prodline_info": sample_lines[:10],
+            "all_field_names": list(all_ordlines[0].keys()) if all_ordlines else []
+        }
+        
+    except Exception as e:
+        return {
+            "error": f"Failed to fetch order lines: {str(e)}",
+            "traceback": str(e.__traceback__) if hasattr(e, '__traceback__') else None
+        }
+
+
 @app.get("/api/cetec/prodline/{prodline}/test-endpoints")
 def test_cetec_schedule_endpoints(
     prodline: str,
@@ -1689,24 +1757,53 @@ def test_cetec_schedule_endpoints(
         ordlines_response.raise_for_status()
         all_ordlines = ordlines_response.json() or []
         
-        # Filter by prodline
-        prodline_ordlines = [
-            line for line in all_ordlines 
-            if line.get("production_line_description") == prodline
-        ]
+        # Try multiple possible field names and values for prodline
+        prodline_ordlines = []
+        for line in all_ordlines:
+            # Try different field names
+            prodline_field = (
+                line.get("production_line_description") or 
+                line.get("production_line") or 
+                line.get("prodline") or 
+                line.get("prod_line") or
+                line.get("productionline_description") or
+                line.get("line_description")
+            )
+            
+            # Try matching as string or number
+            if str(prodline_field) == str(prodline) or prodline_field == int(prodline) if prodline.isdigit() else None:
+                prodline_ordlines.append(line)
         
+        # If still no matches, get first few order lines for testing anyway
+        if not prodline_ordlines and all_ordlines:
+            results["warning"] = f"No exact matches for prodline '{prodline}', using first available order lines for testing"
+            prodline_ordlines = all_ordlines[:5]
+        
+        results["total_ordlines"] = len(all_ordlines)
         results["total_ordlines_found"] = len(prodline_ordlines)
         results["sample_ordline_ids"] = [line.get("ordline_id") for line in prodline_ordlines[:5] if line.get("ordline_id")]
         
         if not results["sample_ordline_ids"]:
             return {
                 **results,
-                "error": f"No order lines found for prodline '{prodline}'",
-                "message": "Cannot test endpoints without sample order line IDs"
+                "error": f"No order lines found. Total in Cetec: {len(all_ordlines)}",
+                "message": "Cannot test endpoints without sample order line IDs. Try the /diagnose endpoint to see available data."
             }
         
         test_ordline_id = results["sample_ordline_ids"][0]
         results["test_ordline_id"] = test_ordline_id
+        
+        # Include sample order line data for debugging
+        if prodline_ordlines:
+            sample_line = prodline_ordlines[0]
+            results["sample_order_line"] = {
+                "ordline_id": sample_line.get("ordline_id"),
+                "wo_number": f"{sample_line.get('ordernum')}-{sample_line.get('lineitem')}",
+                "production_line_fields": {
+                    k: v for k, v in sample_line.items() 
+                    if 'prod' in str(k).lower() or 'line' in str(k).lower()
+                }
+            }
         
     except Exception as e:
         return {

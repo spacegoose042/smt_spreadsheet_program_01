@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { testCetecScheduleEndpoints, getScheduledWorkForProdline } from '../api'
-import { Search, Loader2, CheckCircle2, XCircle, Info } from 'lucide-react'
+import { testCetecScheduleEndpoints, getScheduledWorkForProdline, diagnoseProdlineData } from '../api'
+import { Search, Loader2, CheckCircle2, XCircle, Info, Stethoscope } from 'lucide-react'
 
 export default function ProdlineScheduleExplorer() {
   const [prodline, setProdline] = useState('300')
-  const [testMode, setTestMode] = useState('test') // 'test' or 'scheduled'
+  const [testMode, setTestMode] = useState('diagnose') // 'diagnose', 'test', or 'scheduled'
 
   const { data: testResults, isLoading: isLoadingTest, refetch: refetchTest } = useQuery({
     queryKey: ['testCetecEndpoints', prodline],
@@ -19,7 +19,13 @@ export default function ProdlineScheduleExplorer() {
     enabled: testMode === 'scheduled' && !!prodline,
   })
 
-  const isLoading = isLoadingTest || isLoadingScheduled
+  const { data: diagnoseData, isLoading: isLoadingDiagnose, refetch: refetchDiagnose } = useQuery({
+    queryKey: ['diagnoseProdline', prodline],
+    queryFn: () => diagnoseProdlineData(prodline),
+    enabled: testMode === 'diagnose' && !!prodline,
+  })
+
+  const isLoading = isLoadingTest || isLoadingScheduled || isLoadingDiagnose
 
   return (
     <div className="container">
@@ -64,12 +70,17 @@ export default function ProdlineScheduleExplorer() {
                   fontSize: '1rem'
                 }}
               >
+                <option value="diagnose">Diagnose Data (Recommended First)</option>
                 <option value="test">Test Endpoints</option>
                 <option value="scheduled">Get Scheduled Work</option>
               </select>
             </label>
             <button
-              onClick={() => testMode === 'test' ? refetchTest() : refetchScheduled()}
+              onClick={() => {
+                if (testMode === 'diagnose') refetchDiagnose()
+                else if (testMode === 'test') refetchTest()
+                else refetchScheduled()
+              }}
               disabled={isLoading}
               className="btn btn-primary"
               style={{ marginTop: '1.5rem' }}
@@ -81,8 +92,22 @@ export default function ProdlineScheduleExplorer() {
                 </>
               ) : (
                 <>
-                  <Search size={18} style={{ marginRight: '0.5rem' }} />
-                  {testMode === 'test' ? 'Test Endpoints' : 'Get Scheduled Work'}
+                  {testMode === 'diagnose' ? (
+                    <>
+                      <Stethoscope size={18} style={{ marginRight: '0.5rem' }} />
+                      Diagnose
+                    </>
+                  ) : testMode === 'test' ? (
+                    <>
+                      <Search size={18} style={{ marginRight: '0.5rem' }} />
+                      Test Endpoints
+                    </>
+                  ) : (
+                    <>
+                      <Search size={18} style={{ marginRight: '0.5rem' }} />
+                      Get Scheduled Work
+                    </>
+                  )}
                 </>
               )}
             </button>
@@ -93,6 +118,101 @@ export default function ProdlineScheduleExplorer() {
           </div>
         </div>
       </div>
+
+      {/* Diagnose Results */}
+      {testMode === 'diagnose' && diagnoseData && (
+        <div className="card" style={{ marginBottom: '2rem' }}>
+          <div className="card-header">
+            <h3>Diagnostic Results - What Production Line Data Exists?</h3>
+          </div>
+          <div className="card-body">
+            {diagnoseData.error ? (
+              <div style={{ padding: '1rem', backgroundColor: '#f8d7da', borderRadius: '6px', color: '#721c24' }}>
+                <strong>Error:</strong> {diagnoseData.error}
+              </div>
+            ) : (
+              <>
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                    <div>
+                      <strong>Total Order Lines in Cetec:</strong> {diagnoseData.total_ordlines || 0}
+                    </div>
+                    <div>
+                      <strong>Requested Prod Line:</strong> {diagnoseData.requested_prodline}
+                    </div>
+                    <div>
+                      <strong>Unique Prod Line Values Found:</strong> {diagnoseData.unique_prodline_values_found?.length || 0}
+                    </div>
+                  </div>
+                </div>
+
+                {diagnoseData.all_field_names && diagnoseData.all_field_names.length > 0 && (
+                  <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#e7f3ff', borderRadius: '6px' }}>
+                    <h4 style={{ marginTop: 0, marginBottom: '0.5rem' }}>All Field Names in Order Lines:</h4>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      {diagnoseData.all_field_names.map((field, idx) => (
+                        <code key={idx} style={{ padding: '0.25rem 0.5rem', backgroundColor: 'white', borderRadius: '4px', fontSize: '0.85rem' }}>
+                          {field}
+                        </code>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {diagnoseData.prodline_value_counts && Object.keys(diagnoseData.prodline_value_counts).length > 0 && (
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <h4>Production Line Value Counts:</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.5rem' }}>
+                      {Object.entries(diagnoseData.prodline_value_counts).map(([value, count]) => (
+                        <div key={value} style={{ padding: '0.75rem', backgroundColor: '#f8f9fa', borderRadius: '6px' }}>
+                          <strong>{value}:</strong> {count} order lines
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {diagnoseData.unique_prodline_values_found && diagnoseData.unique_prodline_values_found.length > 0 && (
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <h4>Unique Production Line Values Found:</h4>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      {diagnoseData.unique_prodline_values_found.map((value, idx) => (
+                        <span key={idx} style={{ padding: '0.5rem', backgroundColor: '#d4edda', borderRadius: '4px', fontSize: '0.9rem' }}>
+                          {value}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {diagnoseData.sample_lines_with_prodline_info && diagnoseData.sample_lines_with_prodline_info.length > 0 && (
+                  <div>
+                    <h4>Sample Order Lines with Production Line Fields:</h4>
+                    {diagnoseData.sample_lines_with_prodline_info.map((line, idx) => (
+                      <div key={idx} style={{ padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '6px', marginBottom: '1rem', border: '1px solid #dee2e6' }}>
+                        <div style={{ marginBottom: '0.5rem' }}>
+                          <strong>WO: {line.wo_number}</strong> | Ordline ID: {line.ordline_id}
+                        </div>
+                        <div style={{ marginBottom: '0.5rem' }}>
+                          <strong>Production Line Fields:</strong>
+                          <pre style={{ marginTop: '0.5rem', padding: '0.75rem', backgroundColor: 'white', borderRadius: '4px', fontSize: '0.85rem', overflow: 'auto' }}>
+                            {JSON.stringify(line.prodline_fields, null, 2)}
+                          </pre>
+                        </div>
+                        {line.all_keys && (
+                          <div style={{ fontSize: '0.85rem', color: '#6c757d' }}>
+                            <strong>Sample Keys:</strong> {line.all_keys.join(', ')}...
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Test Endpoints Results */}
       {testMode === 'test' && testResults && (
