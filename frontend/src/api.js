@@ -140,6 +140,10 @@ export const runCetecImport = (data) =>
 export const getCetecSyncLogs = (days = 30) =>
   api.get('/api/cetec/sync-logs', { params: { days } })
 export const getCetecHealth = () => api.get('/api/cetec/health')
+export const testCetecScheduleEndpoints = (prodline) =>
+  api.get(`/api/cetec/prodline/${prodline}/test-endpoints`)
+export const getScheduledWorkForProdline = (prodline) =>
+  api.get(`/api/cetec/prodline/${prodline}/scheduled-work`)
 
 export default api
 

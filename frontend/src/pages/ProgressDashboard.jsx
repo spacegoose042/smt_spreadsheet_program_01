@@ -1,12 +1,36 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getWorkOrders, getCetecCombinedData, getCetecOrdlineWorkProgress, getCetecOrdlineStatuses, getCetecHealth } from '../api'
 import { Package, Clock, AlertCircle, TrendingUp, BarChart3, Info } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
-function KpiCard({ title, icon: Icon, accent = 'var(--primary)', headline, subtitle, items = [], footer }) {
+function KpiCard({ title, icon: Icon, accent = 'var(--primary)', headline, subtitle, items = [], footer, onClick, isActive = false }) {
   return (
-    <div className="card" style={{ padding: '1rem', borderLeft: `4px solid ${accent}`, minHeight: '100%' }}>
+    <div 
+      className="card" 
+      onClick={onClick}
+      style={{ 
+        padding: '1rem', 
+        borderLeft: `4px solid ${accent}`, 
+        minHeight: '100%',
+        cursor: onClick ? 'pointer' : 'default',
+        transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+        transform: isActive ? 'scale(1.02)' : 'scale(1)',
+        boxShadow: isActive ? '0 4px 8px rgba(0,0,0,0.15)' : '0 1px 3px rgba(0,0,0,0.1)',
+      }}
+      onMouseEnter={(e) => {
+        if (onClick) {
+          e.currentTarget.style.transform = 'scale(1.02)'
+          e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)'
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (onClick && !isActive) {
+          e.currentTarget.style.transform = 'scale(1)'
+          e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)'
+        }
+      }}
+    >
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
         <div style={{
           width: '32px',
@@ -247,7 +271,7 @@ const renderOrderBadge = (orderValue, tone = '#1971c2') => (
   </span>
 )
 
-function ProcessTable({ title, data, columns }) {
+function ProcessTable({ title, data, columns, onRowClick, clickableKey }) {
   if (!data || data.length === 0) {
     return (
       <div className="card">
@@ -265,6 +289,9 @@ function ProcessTable({ title, data, columns }) {
     <div className="card">
       <div className="card-header">
         <h3>{title}</h3>
+        {onRowClick && (
+          <small style={{ color: '#6c757d', fontWeight: 'normal' }}>Click a row to filter</small>
+        )}
       </div>
       <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
         <table style={{ width: '100%', fontSize: '0.9rem' }}>
@@ -278,15 +305,36 @@ function ProcessTable({ title, data, columns }) {
             </tr>
           </thead>
           <tbody>
-            {data.map((item, index) => (
-              <tr key={index} style={{ borderBottom: '1px solid #dee2e6' }}>
-                {Object.values(item).map((value, cellIndex) => (
-                  <td key={cellIndex} style={{ padding: '0.75rem' }}>
-                    {typeof value === 'number' ? value.toLocaleString() : value}
-                  </td>
-                ))}
-              </tr>
-            ))}
+            {data.map((item, index) => {
+              const clickable = onRowClick && clickableKey && item[clickableKey]
+              return (
+                <tr
+                  key={index}
+                  onClick={clickable ? () => onRowClick(item[clickableKey]) : undefined}
+                  style={{
+                    borderBottom: '1px solid #dee2e6',
+                    cursor: clickable ? 'pointer' : 'default',
+                    transition: clickable ? 'background-color 0.2s' : 'none'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (clickable) {
+                      e.currentTarget.style.backgroundColor = '#e7f5ff'
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (clickable) {
+                      e.currentTarget.style.backgroundColor = 'transparent'
+                    }
+                  }}
+                >
+                  {Object.values(item).map((value, cellIndex) => (
+                    <td key={cellIndex} style={{ padding: '0.75rem' }}>
+                      {typeof value === 'number' ? value.toLocaleString() : value}
+                    </td>
+                  ))}
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -452,6 +500,74 @@ export default function ProgressDashboard() {
     dateWindow,
     shiftFilter
   ])
+
+  const handleExportCsv = useCallback(() => {
+    if (!filteredWorkOrders.length) {
+      return
+    }
+
+    const headers = [
+      'WO Number',
+      'Customer',
+      'Location',
+      'Location Group',
+      'Line',
+      'Original Qty',
+      'Completed Qty',
+      'Remaining Qty',
+      'Progress %',
+      'Material Status',
+      'Priority',
+      'Last Cetec Sync'
+    ]
+
+    const rows = filteredWorkOrders.map((wo) => {
+      const location = wo.current_location || 'Unknown'
+      const locationGroup = getLocationGroup(location)
+      const lineName = wo.line?.name || 'Unscheduled'
+      const originalQty = wo.cetec_original_qty ?? wo.quantity ?? 0
+      const completedQty = wo.cetec_completed_qty ?? 0
+      const remainingQty = wo.cetec_remaining_qty ?? Math.max(0, originalQty - completedQty)
+      const pct = originalQty > 0 ? Math.round((completedQty / originalQty) * 100) : 0
+      const lastSync = wo.last_cetec_sync ? new Date(wo.last_cetec_sync).toLocaleString() : ''
+      return [
+        wo.wo_number,
+        wo.customer,
+        location,
+        locationGroup,
+        lineName,
+        originalQty,
+        completedQty,
+        remainingQty,
+        pct,
+        wo.material_status || '',
+        wo.priority || '',
+        lastSync
+      ]
+    })
+
+    const escapeCell = (value) => {
+      const stringValue = value === null || value === undefined ? '' : String(value)
+      const needsQuotes = /[",\n]/.test(stringValue)
+      const escaped = stringValue.replace(/"/g, '""')
+      return needsQuotes ? `"${escaped}"` : escaped
+    }
+
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map(escapeCell).join(','))
+      .join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+    link.href = url
+    link.setAttribute('download', `progress-export-${timestamp}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }, [filteredWorkOrders])
 
   const processData = useMemo(() => {
     return filteredWorkOrders.reduce((acc, wo) => {
@@ -990,6 +1106,8 @@ export default function ProgressDashboard() {
             { label: 'Avg complete', value: `${metrics.avgComplete}%`, tone: 'var(--success)' }
           ]}
           footer={`Total qty: ${formatNumber(metrics.totalOriginal)} pcs`}
+          onClick={() => setOnlyWip(prev => !prev)}
+          isActive={onlyWip}
         />
 
         <KpiCard
@@ -1004,6 +1122,8 @@ export default function ProgressDashboard() {
             { label: 'Orders touched', value: formatNumber(metrics.recentOrders24h) }
           ]}
           footer={throughputFooter}
+          onClick={() => setOnlyWithCompletions(prev => !prev)}
+          isActive={onlyWithCompletions}
         />
 
         <KpiCard
@@ -1033,6 +1153,8 @@ export default function ProgressDashboard() {
             { label: 'Canceled/Deleted', value: formatNumber(metrics.exceptionCounts.canceled + metrics.exceptionCounts.deleted), tone: 'var(--danger)' }
           ]}
           footer={stalledFooter}
+          onClick={() => setOnlyStalled(prev => !prev)}
+          isActive={onlyStalled}
         />
       </div>
 
@@ -1210,15 +1332,33 @@ export default function ProgressDashboard() {
       {/* Filter Summary */}
       <div className="card" style={{ marginBottom: '2rem', backgroundColor: '#f8f9fa' }}>
         <div className="card-body">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
               <strong>Showing {filteredWorkOrders.length} work orders</strong>
               {selectedWorkOrder !== 'all' && <span> for work order <code>{selectedWorkOrder}</code></span>}
               {selectedLocation !== 'all' && <span> in location <code>{selectedLocation}</code></span>}
               {searchTerm && <span> matching "<code>{searchTerm}</code>"</span>}
             </div>
-            <div style={{ fontSize: '0.9rem', color: '#666' }}>
-              Total: {formatNumber(datasetSize)} work orders
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginLeft: 'auto' }}>
+              <div style={{ fontSize: '0.9rem', color: '#666' }}>
+                Total: {formatNumber(datasetSize)} work orders
+              </div>
+              <button
+                onClick={handleExportCsv}
+                disabled={!filteredWorkOrders.length}
+                style={{
+                  padding: '0.45rem 0.9rem',
+                  borderRadius: '6px',
+                  border: '1px solid var(--primary)',
+                  background: filteredWorkOrders.length ? 'var(--primary)' : '#adb5bd',
+                  color: '#fff',
+                  cursor: filteredWorkOrders.length ? 'pointer' : 'not-allowed',
+                  fontSize: '0.85rem',
+                  opacity: filteredWorkOrders.length ? 1 : 0.7
+                }}
+              >
+                Export CSV
+              </button>
             </div>
           </div>
         </div>
@@ -1230,12 +1370,22 @@ export default function ProgressDashboard() {
           title="Work Orders by Location"
           data={locationRows}
           columns={['Location', 'WIP', 'Total Qty', 'Completed Qty', 'Remaining Qty', 'Orders']}
+          onRowClick={(location) => {
+            setSelectedLocation(location)
+            setSelectedLocationGroup('all') // Clear location group filter when selecting a specific location
+          }}
+          clickableKey="Location"
         />
         
         <ProcessTable
           title="Departments / Areas"
           data={departmentRows}
           columns={['Department/Area', 'WIP', 'Total Qty', 'Completed Qty', 'Remaining Qty', 'Orders']}
+          onRowClick={(group) => {
+            setSelectedLocationGroup(group)
+            setSelectedLocation('all') // Clear location filter when selecting a group
+          }}
+          clickableKey="Department/Area"
         />
       </div>
 

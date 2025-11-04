@@ -20,6 +20,7 @@ import Issues from './pages/Issues'
 import CetecImport from './pages/CetecImport'
 import CetecSyncReport from './pages/CetecSyncReport'
 import ProgressDashboard from './pages/ProgressDashboard'
+import ProdlineScheduleExplorer from './pages/ProdlineScheduleExplorer'
 import './App.css'
 
 function ProtectedRoute({ children, requireAuth = true }) {
@@ -43,7 +44,7 @@ function Navigation() {
   const settingsRef = useRef(null)
   
   const isActive = (path) => location.pathname === path
-  const isSettingsActive = ['/capacity', '/shifts', '/users', '/statuses', '/issue-types', '/resolution-types', '/cetec-import', '/cetec-sync-report', '/settings', '/change-password'].includes(location.pathname)
+  const isSettingsActive = ['/capacity', '/shifts', '/users', '/statuses', '/issue-types', '/resolution-types', '/cetec-import', '/cetec-sync-report', '/prodline-explorer', '/settings', '/change-password'].includes(location.pathname)
   
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -151,6 +152,14 @@ function Navigation() {
                 >
                   <RefreshCw size={16} />
                   Cetec Sync Report
+                </Link>
+                <Link 
+                  to="/prodline-explorer" 
+                  className={isActive('/prodline-explorer') ? 'active' : ''}
+                  onClick={() => setSettingsOpen(false)}
+                >
+                  <Database size={16} />
+                  Prod Line Schedule Explorer
                 </Link>
                 {isAdmin && (
                   <>
@@ -261,6 +270,7 @@ function AppContent() {
           <Route path="/resolution-types" element={<ProtectedRoute><ResolutionTypeManagement /></ProtectedRoute>} />
           <Route path="/cetec-import" element={<ProtectedRoute><CetecImport /></ProtectedRoute>} />
           <Route path="/cetec-sync-report" element={<ProtectedRoute><CetecSyncReport /></ProtectedRoute>} />
+          <Route path="/prodline-explorer" element={<ProtectedRoute><ProdlineScheduleExplorer /></ProtectedRoute>} />
           <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
         </Routes>

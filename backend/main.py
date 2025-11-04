@@ -1657,6 +1657,299 @@ CETEC_CONFIG = {
     "token": "123matthatesbrant123"
 }
 
+# ============================================================================
+# PROD LINE 300 (WIRE HARNESS) SCHEDULE EXPLORATION
+# ============================================================================
+
+@app.get("/api/cetec/prodline/{prodline}/test-endpoints")
+def test_cetec_schedule_endpoints(
+    prodline: str,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Test various Cetec API endpoints to find schedule/labor/routing data for a production line.
+    Returns results from all endpoints that respond successfully.
+    """
+    results = {
+        "prodline": prodline,
+        "tested_endpoints": [],
+        "successful_endpoints": [],
+        "failed_endpoints": [],
+        "sample_data": {}
+    }
+    
+    # First, get some order lines for this prodline to use as test data
+    try:
+        ordlines_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines/list"
+        ordlines_params = {
+            "preshared_token": CETEC_CONFIG["token"],
+            "format": "json"
+        }
+        ordlines_response = requests.get(ordlines_url, params=ordlines_params, timeout=30)
+        ordlines_response.raise_for_status()
+        all_ordlines = ordlines_response.json() or []
+        
+        # Filter by prodline
+        prodline_ordlines = [
+            line for line in all_ordlines 
+            if line.get("production_line_description") == prodline
+        ]
+        
+        results["total_ordlines_found"] = len(prodline_ordlines)
+        results["sample_ordline_ids"] = [line.get("ordline_id") for line in prodline_ordlines[:5] if line.get("ordline_id")]
+        
+        if not results["sample_ordline_ids"]:
+            return {
+                **results,
+                "error": f"No order lines found for prodline '{prodline}'",
+                "message": "Cannot test endpoints without sample order line IDs"
+            }
+        
+        test_ordline_id = results["sample_ordline_ids"][0]
+        results["test_ordline_id"] = test_ordline_id
+        
+    except Exception as e:
+        return {
+            **results,
+            "error": f"Failed to fetch order lines: {str(e)}"
+        }
+    
+    # Test endpoints that might contain schedule data
+    test_endpoints = [
+        # Labor planning endpoints
+        {
+            "name": "Labor Plan List",
+            "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/laborplan/list",
+            "params": {"preshared_token": CETEC_CONFIG["token"]},
+            "type": "list"
+        },
+        {
+            "name": "Labor Plan (per ordline)",
+            "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{test_ordline_id}/laborplan",
+            "params": {"preshared_token": CETEC_CONFIG["token"]},
+            "type": "detail"
+        },
+        {
+            "name": "Labor Plan (alt)",
+            "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/labor/plan",
+            "params": {"preshared_token": CETEC_CONFIG["token"], "ordline_id": test_ordline_id},
+            "type": "detail"
+        },
+        {
+            "name": "Labor List",
+            "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/labor/list",
+            "params": {"preshared_token": CETEC_CONFIG["token"], "ordline_id": test_ordline_id},
+            "type": "list"
+        },
+        {
+            "name": "Order Lines Labor",
+            "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines/labor",
+            "params": {"preshared_token": CETEC_CONFIG["token"], "prodline": prodline},
+            "type": "list"
+        },
+        # Routing endpoints
+        {
+            "name": "Routing List",
+            "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/routing/list",
+            "params": {"preshared_token": CETEC_CONFIG["token"]},
+            "type": "list"
+        },
+        {
+            "name": "Routing (per ordline)",
+            "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{test_ordline_id}/routing",
+            "params": {"preshared_token": CETEC_CONFIG["token"]},
+            "type": "detail"
+        },
+        # Operations endpoints
+        {
+            "name": "Operations List",
+            "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/operations/list",
+            "params": {"preshared_token": CETEC_CONFIG["token"]},
+            "type": "list"
+        },
+        # Schedule/Assignment endpoints (guesses)
+        {
+            "name": "Schedule List",
+            "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/schedule/list",
+            "params": {"preshared_token": CETEC_CONFIG["token"], "prodline": prodline},
+            "type": "list"
+        },
+        {
+            "name": "Schedule (per ordline)",
+            "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{test_ordline_id}/schedule",
+            "params": {"preshared_token": CETEC_CONFIG["token"]},
+            "type": "detail"
+        },
+        {
+            "name": "Assignment List",
+            "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/assignment/list",
+            "params": {"preshared_token": CETEC_CONFIG["token"], "prodline": prodline},
+            "type": "list"
+        },
+        {
+            "name": "Work Plan",
+            "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/workplan/list",
+            "params": {"preshared_token": CETEC_CONFIG["token"], "prodline": prodline},
+            "type": "list"
+        },
+    ]
+    
+    # Test each endpoint
+    for endpoint in test_endpoints:
+        endpoint_name = endpoint["name"]
+        results["tested_endpoints"].append(endpoint_name)
+        
+        try:
+            response = requests.get(endpoint["url"], params=endpoint["params"], timeout=10)
+            
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                    results["successful_endpoints"].append({
+                        "name": endpoint_name,
+                        "url": endpoint["url"],
+                        "status_code": response.status_code,
+                        "response_type": type(data).__name__,
+                        "response_size": len(str(data)),
+                        "sample_keys": list(data.keys())[:10] if isinstance(data, dict) else "list",
+                        "sample_data": str(data)[:500] if len(str(data)) > 500 else data
+                    })
+                    results["sample_data"][endpoint_name] = data
+                except:
+                    results["successful_endpoints"].append({
+                        "name": endpoint_name,
+                        "url": endpoint["url"],
+                        "status_code": response.status_code,
+                        "response_type": "text",
+                        "response_preview": response.text[:500]
+                    })
+            else:
+                results["failed_endpoints"].append({
+                    "name": endpoint_name,
+                    "url": endpoint["url"],
+                    "status_code": response.status_code,
+                    "error": response.text[:200] if response.text else "No error message"
+                })
+        except requests.exceptions.RequestException as e:
+            results["failed_endpoints"].append({
+                "name": endpoint_name,
+                "url": endpoint["url"],
+                "error": str(e)
+            })
+    
+    return results
+
+
+@app.get("/api/cetec/prodline/{prodline}/scheduled-work")
+def get_scheduled_work_for_prodline(
+    prodline: str,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Get all scheduled work orders for a production line (e.g., "300" for Wire Harness).
+    Returns work orders with their locations and operations.
+    """
+    try:
+        # Step 1: Get all order lines for this prodline
+        ordlines_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines/list"
+        ordlines_params = {
+            "preshared_token": CETEC_CONFIG["token"],
+            "format": "json"
+        }
+        
+        ordlines_response = requests.get(ordlines_url, params=ordlines_params, timeout=30)
+        ordlines_response.raise_for_status()
+        all_ordlines = ordlines_response.json() or []
+        
+        # Filter by prodline
+        prodline_ordlines = [
+            line for line in all_ordlines 
+            if line.get("production_line_description") == prodline
+        ]
+        
+        if not prodline_ordlines:
+            return {
+                "prodline": prodline,
+                "work_orders": [],
+                "message": f"No order lines found for production line {prodline}"
+            }
+        
+        # Step 2: For each order line, get location maps and operations
+        scheduled_work = []
+        
+        for order_line in prodline_ordlines[:50]:  # Limit to first 50 for now
+            ordline_id = order_line.get("ordline_id")
+            if not ordline_id:
+                continue
+            
+            try:
+                # Get location maps
+                location_maps_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/location_maps"
+                location_params = {
+                    "preshared_token": CETEC_CONFIG["token"],
+                    "include_children": "true"
+                }
+                
+                location_response = requests.get(location_maps_url, params=location_params, timeout=30)
+                location_response.raise_for_status()
+                location_maps = location_response.json() or []
+                
+                # Extract all locations and operations
+                locations = []
+                for loc_map in location_maps:
+                    location_info = {
+                        "location_id": loc_map.get("id"),
+                        "location_name": loc_map.get("name") or loc_map.get("description"),
+                        "operations": []
+                    }
+                    
+                    # Get operations for this location
+                    operations = loc_map.get("operations", [])
+                    for op in operations:
+                        location_info["operations"].append({
+                            "operation_id": op.get("id"),
+                            "operation_name": op.get("name"),
+                            "sequence": op.get("sequence") or op.get("step") or op.get("build_order"),
+                            "estimated_time": op.get("estimated_time") or op.get("time_minutes"),
+                            "status": op.get("status")
+                        })
+                    
+                    locations.append(location_info)
+                
+                # Build work order summary
+                wo_number = f"{order_line.get('ordernum')}-{order_line.get('lineitem')}"
+                scheduled_work.append({
+                    "ordline_id": ordline_id,
+                    "wo_number": wo_number,
+                    "customer": order_line.get("customer"),
+                    "assembly": order_line.get("prcpart"),
+                    "revision": order_line.get("revision"),
+                    "quantity": order_line.get("oorderqty") or order_line.get("quantity"),
+                    "balance_due": order_line.get("balancedue") or order_line.get("balance_due"),
+                    "ship_date": order_line.get("shipdate") or order_line.get("ship_date"),
+                    "current_location": order_line.get("work_location") or order_line.get("current_location"),
+                    "locations": locations,
+                    "total_locations": len(locations),
+                    "total_operations": sum(len(loc["operations"]) for loc in locations)
+                })
+                
+            except Exception as e:
+                print(f"Error processing ordline {ordline_id}: {str(e)}")
+                continue
+        
+        return {
+            "prodline": prodline,
+            "total_found": len(prodline_ordlines),
+            "processed": len(scheduled_work),
+            "work_orders": scheduled_work
+        }
+        
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch from Cetec: {str(e)}"
+        )
+
 @app.get("/api/cetec/ordline/{ordline_id}/location_maps")
 def get_cetec_location_maps(
     ordline_id: int,
