@@ -236,7 +236,7 @@ export default function WireHarnessTimeline() {
         }
       })
       .sort((a, b) => a.name.localeCompare(b.name))
-  }, [scheduleData])
+  }, [scheduleDetailData, scheduleData])
 
   // Extract unique values for filters
   const { uniqueWorkcenters, uniqueProdStatuses } = useMemo(() => {
