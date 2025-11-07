@@ -1657,6 +1657,390 @@ CETEC_CONFIG = {
     "token": "123matthatesbrant123"
 }
 
+METABASE_CONFIG = {
+    "base_url": "https://sandy-metabase.cetecerp.com",
+    "api_key": "mb_UfMbPhr9R640GAR5wLpUPMcSSxb98weRladg5TUvWLs="
+}
+
+# ============================================================================
+# METABASE API INTEGRATION
+# ============================================================================
+
+def get_metabase_headers():
+    """Get headers for Metabase API requests"""
+    return {
+        "X-Metabase-Api-Key": METABASE_CONFIG["api_key"],
+        "Content-Type": "application/json"
+    }
+
+@app.get("/api/metabase/test")
+def test_metabase_connection(
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Test connection to Metabase API
+    """
+    try:
+        url = f"{METABASE_CONFIG['base_url']}/api/session/properties"
+        headers = get_metabase_headers()
+        
+        print(f"🔍 Testing Metabase connection: {url}")
+        
+        response = requests.get(url, headers=headers, timeout=30)
+        
+        print(f"   ✅ Response: Status {response.status_code}")
+        
+        if response.status_code == 200:
+            return {
+                "success": True,
+                "status_code": response.status_code,
+                "message": "Successfully connected to Metabase",
+                "data": response.json()
+            }
+        else:
+            return {
+                "success": False,
+                "status_code": response.status_code,
+                "message": f"Unexpected status code: {response.status_code}",
+                "response_text": response.text[:500]
+            }
+            
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Metabase connection error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to connect to Metabase: {str(e)}"
+        )
+
+@app.get("/api/metabase/databases")
+def get_metabase_databases(
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Get list of databases available in Metabase
+    """
+    try:
+        url = f"{METABASE_CONFIG['base_url']}/api/database"
+        headers = get_metabase_headers()
+        
+        print(f"🔍 Fetching Metabase databases: {url}")
+        
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+        
+        databases = response.json()
+        
+        print(f"   ✅ Found {len(databases.get('data', []))} databases")
+        
+        return {
+            "success": True,
+            "count": len(databases.get('data', [])),
+            "databases": databases.get('data', [])
+        }
+        
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Metabase API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch databases from Metabase: {str(e)}"
+        )
+
+@app.get("/api/metabase/database/{database_id}/tables")
+def get_metabase_tables(
+    database_id: int,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Get list of tables in a specific database
+    """
+    try:
+        url = f"{METABASE_CONFIG['base_url']}/api/database/{database_id}/metadata"
+        headers = get_metabase_headers()
+        
+        print(f"🔍 Fetching tables for database {database_id}: {url}")
+        
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+        
+        metadata = response.json()
+        tables = metadata.get('tables', [])
+        
+        print(f"   ✅ Found {len(tables)} tables")
+        
+        return {
+            "success": True,
+            "database_id": database_id,
+            "count": len(tables),
+            "tables": tables
+        }
+        
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Metabase API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch tables from Metabase: {str(e)}"
+        )
+
+@app.get("/api/metabase/database/{database_id}/table/{table_id}/fields")
+def get_metabase_table_fields(
+    database_id: int,
+    table_id: int,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Get fields/columns for a specific table
+    """
+    try:
+        url = f"{METABASE_CONFIG['base_url']}/api/table/{table_id}/query_metadata"
+        headers = get_metabase_headers()
+        
+        print(f"🔍 Fetching fields for table {table_id}: {url}")
+        
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+        
+        metadata = response.json()
+        fields = metadata.get('fields', [])
+        
+        print(f"   ✅ Found {len(fields)} fields")
+        
+        return {
+            "success": True,
+            "database_id": database_id,
+            "table_id": table_id,
+            "count": len(fields),
+            "fields": fields
+        }
+        
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Metabase API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch fields from Metabase: {str(e)}"
+        )
+
+@app.post("/api/metabase/database/{database_id}/query")
+def execute_metabase_query(
+    database_id: int,
+    query: dict,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Execute a native SQL query or query builder query against a Metabase database
+    """
+    try:
+        url = f"{METABASE_CONFIG['base_url']}/api/database/{database_id}/query"
+        headers = get_metabase_headers()
+        
+        print(f"🔍 Executing query on database {database_id}: {url}")
+        print(f"   Query: {query}")
+        
+        response = requests.post(url, headers=headers, json=query, timeout=60)
+        response.raise_for_status()
+        
+        result = response.json()
+        
+        print(f"   ✅ Query executed successfully")
+        
+        return {
+            "success": True,
+            "database_id": database_id,
+            "result": result
+        }
+        
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Metabase API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to execute query: {str(e)}"
+        )
+
+@app.get("/api/metabase/cards")
+def get_metabase_cards(
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Get list of saved questions/cards in Metabase
+    """
+    try:
+        url = f"{METABASE_CONFIG['base_url']}/api/card"
+        headers = get_metabase_headers()
+        
+        print(f"🔍 Fetching Metabase cards: {url}")
+        
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+        
+        cards = response.json()
+        
+        print(f"   ✅ Found {len(cards)} cards")
+        
+        return {
+            "success": True,
+            "count": len(cards),
+            "cards": cards
+        }
+        
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Metabase API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch cards from Metabase: {str(e)}"
+        )
+
+@app.get("/api/metabase/card/{card_id}/query")
+def execute_metabase_card(
+    card_id: int,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Execute a saved Metabase card/question
+    """
+    try:
+        url = f"{METABASE_CONFIG['base_url']}/api/card/{card_id}/query"
+        headers = get_metabase_headers()
+        
+        print(f"🔍 Executing card {card_id}: {url}")
+        
+        response = requests.post(url, headers=headers, json={}, timeout=60)
+        response.raise_for_status()
+        
+        result = response.json()
+        
+        print(f"   ✅ Card executed successfully")
+        
+        return {
+            "success": True,
+            "card_id": card_id,
+            "result": result
+        }
+        
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Metabase API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to execute card: {str(e)}"
+        )
+
+@app.get("/api/metabase/explore/prodline/{prodline}")
+def explore_prodline_in_metabase(
+    prodline: str,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Explore Metabase to find data related to a production line
+    This will search through databases, tables, and fields to find prodline-related data
+    """
+    try:
+        results = {
+            "prodline": prodline,
+            "databases": [],
+            "tables_with_prodline": [],
+            "sample_queries": []
+        }
+        
+        # Get all databases
+        url = f"{METABASE_CONFIG['base_url']}/api/database"
+        headers = get_metabase_headers()
+        
+        print(f"🔍 Exploring Metabase for prodline {prodline}")
+        
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+        databases = response.json().get('data', [])
+        
+        print(f"   Found {len(databases)} databases")
+        
+        for db in databases:
+            db_id = db.get('id')
+            db_name = db.get('name', 'Unknown')
+            
+            results["databases"].append({
+                "id": db_id,
+                "name": db_name,
+                "engine": db.get('engine', 'Unknown')
+            })
+            
+            # Get tables for this database
+            try:
+                meta_url = f"{METABASE_CONFIG['base_url']}/api/database/{db_id}/metadata"
+                meta_response = requests.get(meta_url, headers=headers, timeout=30)
+                meta_response.raise_for_status()
+                metadata = meta_response.json()
+                tables = metadata.get('tables', [])
+                
+                print(f"   Database {db_name}: {len(tables)} tables")
+                
+                for table in tables:
+                    table_id = table.get('id')
+                    table_name = table.get('name', 'Unknown')
+                    
+                    # Get fields for this table
+                    try:
+                        fields_url = f"{METABASE_CONFIG['base_url']}/api/table/{table_id}/query_metadata"
+                        fields_response = requests.get(fields_url, headers=headers, timeout=30)
+                        fields_response.raise_for_status()
+                        fields_meta = fields_response.json()
+                        fields = fields_meta.get('fields', [])
+                        
+                        # Check if any field name contains "prodline", "prod_line", "production_line", etc.
+                        prodline_fields = []
+                        for field in fields:
+                            field_name = field.get('name', '').lower()
+                            if 'prodline' in field_name or 'prod_line' in field_name or 'production_line' in field_name or 'line' in field_name:
+                                prodline_fields.append(field)
+                        
+                        if prodline_fields:
+                            results["tables_with_prodline"].append({
+                                "database_id": db_id,
+                                "database_name": db_name,
+                                "table_id": table_id,
+                                "table_name": table_name,
+                                "fields": prodline_fields
+                            })
+                            
+                            # Try a sample query
+                            try:
+                                query = {
+                                    "type": "native",
+                                    "native": {
+                                        "query": f"SELECT * FROM {table_name} WHERE prodline = '{prodline}' OR prod_line = '{prodline}' LIMIT 10"
+                                    }
+                                }
+                                
+                                query_url = f"{METABASE_CONFIG['base_url']}/api/database/{db_id}/query"
+                                query_response = requests.post(query_url, headers=headers, json=query, timeout=60)
+                                
+                                if query_response.status_code == 200:
+                                    results["sample_queries"].append({
+                                        "database_id": db_id,
+                                        "table_name": table_name,
+                                        "query": query["native"]["query"],
+                                        "result_count": len(query_response.json().get('data', {}).get('rows', []))
+                                    })
+                            except Exception as e:
+                                print(f"   ⚠️  Could not execute sample query for {table_name}: {str(e)}")
+                                
+                    except Exception as e:
+                        print(f"   ⚠️  Could not fetch fields for table {table_name}: {str(e)}")
+                        continue
+                        
+            except Exception as e:
+                print(f"   ⚠️  Could not fetch metadata for database {db_name}: {str(e)}")
+                continue
+        
+        return {
+            "success": True,
+            "results": results
+        }
+        
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Metabase API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to explore Metabase: {str(e)}"
+        )
+
 # ============================================================================
 # PROD LINE 300 (WIRE HARNESS) SCHEDULE EXPLORATION
 # ============================================================================

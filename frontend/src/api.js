@@ -147,5 +147,23 @@ export const getScheduledWorkForProdline = (prodline) =>
 export const diagnoseProdlineData = (prodline) =>
   api.get(`/api/cetec/prodline/${prodline}/diagnose`)
 
+// Metabase API Integration
+export const testMetabaseConnection = () =>
+  api.get('/api/metabase/test')
+export const getMetabaseDatabases = () =>
+  api.get('/api/metabase/databases')
+export const getMetabaseTables = (databaseId) =>
+  api.get(`/api/metabase/database/${databaseId}/tables`)
+export const getMetabaseTableFields = (databaseId, tableId) =>
+  api.get(`/api/metabase/database/${databaseId}/table/${tableId}/fields`)
+export const executeMetabaseQuery = (databaseId, query) =>
+  api.post(`/api/metabase/database/${databaseId}/query`, query)
+export const getMetabaseCards = () =>
+  api.get('/api/metabase/cards')
+export const executeMetabaseCard = (cardId) =>
+  api.get(`/api/metabase/card/${cardId}/query`)
+export const exploreProdlineInMetabase = (prodline) =>
+  api.get(`/api/metabase/explore/prodline/${prodline}`)
+
 export default api
 
