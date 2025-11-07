@@ -7,7 +7,7 @@ import {
   ZoomIn, ZoomOut
 } from 'lucide-react'
 import { 
-  format, parseISO, addDays, differenceInDays, differenceInMinutes, 
+  format, parseISO, addDays, 
   startOfWeek, startOfDay, endOfDay, isWithinInterval 
 } from 'date-fns'
 
@@ -202,7 +202,6 @@ export default function WireHarnessTimeline() {
       } else {
         const jobEntry = {
           order: workOrder,
-          orderNumber: workOrder,
           lineItem,
           orderDisplay: workOrderDisplay,
           part: partNumber,
@@ -414,250 +413,180 @@ export default function WireHarnessTimeline() {
     }
   }
 
-  // Calculate row assignments for all jobs in a day (for day view)
-  const calculateJobRowsForDay = (allDayJobs, day) => {
-    const workDayStartMinutes = 7 * 60 + 30 // 7:30 AM = 450 minutes
-    const workDayEndMinutes = 16 * 60 + 30 // 4:30 PM = 990 minutes
-    
-    // Build list of ALL jobs with their time ranges
-    const allJobsWithRanges = allDayJobs.map((j, idx) => {
-      const range = getJobTimeRangeForDay(j, day)
-      if (!range.startTime || !range.endTime) {
-        // Jobs without times span full work day
-        const fullDayStart = new Date(day.getTime() + workDayStartMinutes * 60 * 1000)
-        const fullDayEnd = new Date(day.getTime() + workDayEndMinutes * 60 * 1000)
-        return {
-          job: j,
-          index: idx,
-          start: fullDayStart.getTime(),
-          end: fullDayEnd.getTime(),
-          hasNoTime: true
-        }
-      }
-      return {
-        job: j,
-        index: idx,
-        start: range.startTime.getTime(),
-        end: range.endTime.getTime(),
-        hasNoTime: false
-      }
-    })
-    
-    // Sort by start time, then by original index
-    allJobsWithRanges.sort((a, b) => {
-      if (a.start !== b.start) return a.start - b.start
-      return a.index - b.index
-    })
-    
-    // Assign rows using greedy algorithm for ALL jobs
-    const rows = []
-    for (let i = 0; i < allJobsWithRanges.length; i++) {
-      const jobToPlace = allJobsWithRanges[i]
-      let placed = false
-      
-      for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
-        const row = rows[rowIdx]
-        const overlaps = row.some(existingJob => {
-          return !(existingJob.end <= jobToPlace.start || existingJob.start >= jobToPlace.end)
-        })
-        
-        if (!overlaps) {
-          row.push(jobToPlace)
-          placed = true
-          break
-        }
-      }
-      
-      if (!placed) {
-        rows.push([jobToPlace])
-      }
-    }
-    
-    // Create a map from job to row index
-    const jobToRowMap = new Map()
-    for (let i = 0; i < rows.length; i++) {
-      for (const jobRange of rows[i]) {
-        jobToRowMap.set(jobRange.job, i)
-      }
-    }
-    
-    return jobToRowMap
+  const DAY_START_HOUR = 7
+  const DAY_START_MINUTE = 30
+  const DAY_END_HOUR = 16
+  const DAY_END_MINUTE = 30
+  const MIN_DAY_BLOCK_WIDTH_PERCENT = 1.5
+  const MIN_TIMELINE_BLOCK_WIDTH_PERCENT = 0.5
+
+  const getDayStart = (date) => {
+    const d = new Date(date)
+    d.setHours(DAY_START_HOUR, DAY_START_MINUTE, 0, 0)
+    return d
   }
 
-  // Calculate row assignments for all jobs across the timeline (for week/month view)
-  const calculateJobRowsForTimeline = (allJobs, timelineStart, timelineDays) => {
-    const workDayStartMinutes = 7 * 60 + 30 // 7:30 AM = 450 minutes
-    const workDayEndMinutes = 16 * 60 + 30 // 4:30 PM = 990 minutes
-    
-    // Build list of ALL jobs with their time ranges across the timeline
-    const allJobsWithRanges = allJobs.map((j, idx) => {
-      if (!j.startDateTime || !j.endDateTime) {
-        // Jobs without times - use date range
-        if (!j.startDate || !j.endDate) return null
-        
-        const jobStart = startOfDay(j.startDate)
-        const jobEnd = endOfDay(j.endDate)
-        
-        // For jobs without times, span full work days
-        const firstDayStart = new Date(jobStart.getTime() + workDayStartMinutes * 60 * 1000)
-        const lastDayEnd = new Date(jobEnd.getTime() + workDayEndMinutes * 60 * 1000)
-        
-        return {
-          job: j,
-          index: idx,
-          start: firstDayStart.getTime(),
-          end: lastDayEnd.getTime(),
-          hasNoTime: true
-        }
-      }
-      
-      // Jobs with specific times
-      return {
-        job: j,
-        index: idx,
-        start: j.startDateTime.getTime(),
-        end: j.endDateTime.getTime(),
-        hasNoTime: false
-      }
-    }).filter(j => j !== null)
-    
-    // Sort by start time, then by original index
-    allJobsWithRanges.sort((a, b) => {
-      if (a.start !== b.start) return a.start - b.start
-      return a.index - b.index
-    })
-    
-    // Assign rows using greedy algorithm for ALL jobs
-    const rows = []
-    for (let i = 0; i < allJobsWithRanges.length; i++) {
-      const jobToPlace = allJobsWithRanges[i]
-      let placed = false
-      
-      for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
-        const row = rows[rowIdx]
-        const overlaps = row.some(existingJob => {
-          return !(existingJob.end <= jobToPlace.start || existingJob.start >= jobToPlace.end)
-        })
-        
-        if (!overlaps) {
-          row.push(jobToPlace)
-          placed = true
-          break
-        }
-      }
-      
-      if (!placed) {
-        rows.push([jobToPlace])
-      }
-    }
-    
-    // Create a map from job to row index
-    const jobToRowMap = new Map()
-    for (let i = 0; i < rows.length; i++) {
-      for (const jobRange of rows[i]) {
-        jobToRowMap.set(jobRange.job, i)
-      }
-    }
-    
-    return jobToRowMap
+  const getDayEnd = (date) => {
+    const d = new Date(date)
+    d.setHours(DAY_END_HOUR, DAY_END_MINUTE, 0, 0)
+    return d
   }
 
-  // Calculate position for a job across the timeline (for week/month view)
-  const getJobPositionForTimeline = (job, timelineStart, timelineDays, jobToRowMap, jobIndex) => {
-    const workDayStartMinutes = 7 * 60 + 30 // 7:30 AM = 450 minutes
-    const workDayEndMinutes = 16 * 60 + 30 // 4:30 PM = 990 minutes
-    
-    // Get row index
-    const rowIndex = jobToRowMap.get(job) ?? jobIndex
-    
-    if (!job.startDateTime || !job.endDateTime) {
-      // Jobs without times - use date range
-      if (!job.startDate || !job.endDate) {
-        return {
-          left: '0%',
-          width: '100%',
-          top: `${rowIndex * 28}px`,
-          zIndex: 2
-        }
-      }
-      
-      const jobStart = startOfDay(job.startDate)
-      const jobEnd = endOfDay(job.endDate)
-      const timelineStartDay = startOfDay(timelineStart)
-      
-      const startDiff = differenceInDays(jobStart, timelineStartDay)
-      const duration = differenceInDays(jobEnd, jobStart) + 1
-      
-      // Each day is 1/timelineDays of the width
-      const leftPercent = (startDiff / timelineDays) * 100
-      const widthPercent = (duration / timelineDays) * 100
-      
-      return {
-        left: `${Math.max(0, leftPercent)}%`,
-        width: `${Math.min(100, widthPercent)}%`,
-        top: `${rowIndex * 28}px`,
-        zIndex: 2
-      }
+  const assignLanes = (jobs, resolveRange) => {
+    if (!jobs || jobs.length === 0) {
+      return { laneMap: new Map(), laneCount: 0 }
     }
-    
-    // Jobs with specific times
-    const jobStart = job.startDateTime
-    const jobEnd = job.endDateTime
-    const timelineStartDay = startOfDay(timelineStart)
-    
-    // Calculate position relative to timeline start
-    const totalMinutes = timelineDays * 24 * 60 // Total minutes in timeline
-    const startMinutes = differenceInMinutes(jobStart, timelineStartDay)
-    const durationMinutes = differenceInMinutes(jobEnd, jobStart)
-    
-    const leftPercent = (startMinutes / totalMinutes) * 100
-    const widthPercent = (durationMinutes / totalMinutes) * 100
-    
+
+    const ranges = jobs
+      .map((job) => {
+        const { startMs, endMs } = resolveRange(job)
+        if (startMs === undefined || endMs === undefined || Number.isNaN(startMs) || Number.isNaN(endMs)) {
+          return null
+        }
+        const safeEnd = Math.max(endMs, startMs + 60 * 1000) // ensure at least 1 minute duration
+        return {
+          job,
+          startMs,
+          endMs: safeEnd
+        }
+      })
+      .filter(Boolean)
+      .sort((a, b) => {
+        if (a.startMs !== b.startMs) return a.startMs - b.startMs
+        return a.endMs - b.endMs
+      })
+
+    const laneEndTimes = []
+    const laneMap = new Map()
+
+    ranges.forEach((range) => {
+      let laneIndex = laneEndTimes.findIndex((endTime) => endTime <= range.startMs)
+      if (laneIndex === -1) {
+        laneIndex = laneEndTimes.length
+        laneEndTimes.push(range.endMs)
+      } else {
+        laneEndTimes[laneIndex] = range.endMs
+      }
+      laneMap.set(range.job, laneIndex)
+    })
+
+    return { laneMap, laneCount: laneEndTimes.length }
+  }
+
+  const assignLanesForDay = (jobs, day) => {
+    const dayStartMs = getDayStart(day).getTime()
+    const dayEndMs = getDayEnd(day).getTime()
+
+    return assignLanes(jobs, (job) => {
+      let startMs = job.startDateTime ? job.startDateTime.getTime() : dayStartMs
+      let endMs = job.endDateTime ? job.endDateTime.getTime() : dayEndMs
+      startMs = Math.min(Math.max(startMs, dayStartMs), dayEndMs)
+      endMs = Math.min(Math.max(endMs, dayStartMs), dayEndMs)
+      if (endMs < startMs) endMs = startMs
+      return { startMs, endMs }
+    })
+  }
+
+  const assignLanesForTimeline = (jobs, timelineStart, timelineDays) => {
+    const timelineStartMs = startOfDay(timelineStart).getTime()
+    const timelineEndMs = timelineStartMs + timelineDays * 24 * 60 * 60 * 1000
+
+    return assignLanes(jobs, (job) => {
+      let startMs
+      if (job.startDateTime) {
+        startMs = job.startDateTime.getTime()
+      } else if (job.startDate) {
+        startMs = getDayStart(job.startDate).getTime()
+      } else {
+        startMs = timelineStartMs
+      }
+
+      let endMs
+      if (job.endDateTime) {
+        endMs = job.endDateTime.getTime()
+      } else if (job.endDate) {
+        endMs = getDayEnd(job.endDate).getTime()
+      } else {
+        endMs = timelineEndMs
+      }
+
+      startMs = Math.min(Math.max(startMs, timelineStartMs), timelineEndMs)
+      endMs = Math.min(Math.max(endMs, timelineStartMs), timelineEndMs)
+      if (endMs < startMs) endMs = startMs
+      return { startMs, endMs }
+    })
+  }
+
+  const getJobPositionForDay = (job, day, laneMap) => {
+    const laneIndex = laneMap.get(job) ?? 0
+    const dayStartMs = getDayStart(day).getTime()
+    const dayEndMs = getDayEnd(day).getTime()
+
+    let startMs = job.startDateTime ? job.startDateTime.getTime() : dayStartMs
+    let endMs = job.endDateTime ? job.endDateTime.getTime() : dayEndMs
+    startMs = Math.min(Math.max(startMs, dayStartMs), dayEndMs)
+    endMs = Math.min(Math.max(endMs, dayStartMs), dayEndMs)
+    if (endMs <= startMs) endMs = Math.min(dayEndMs, startMs + 5 * 60 * 1000)
+
+    const totalMs = Math.max(dayEndMs - dayStartMs, 1)
+    let leftPercent = ((startMs - dayStartMs) / totalMs) * 100
+    leftPercent = Math.min(Math.max(leftPercent, 0), 100)
+
+    let widthPercent = ((endMs - startMs) / totalMs) * 100
+    widthPercent = Math.max(widthPercent, MIN_DAY_BLOCK_WIDTH_PERCENT)
+    if (leftPercent + widthPercent > 100) {
+      widthPercent = Math.max(MIN_DAY_BLOCK_WIDTH_PERCENT, 100 - leftPercent)
+    }
+
     return {
-      left: `${Math.max(0, leftPercent)}%`,
-      width: `${Math.min(100, widthPercent)}%`,
-      top: `${rowIndex * 28}px`,
+      left: `${leftPercent}%`,
+      width: `${Math.min(widthPercent, 100)}%`,
+      top: `${laneIndex * 28}px`,
       zIndex: 2
     }
   }
 
-  // Calculate position and dimensions for a job block within a day
-  const getJobPositionInDay = (job, day, allDayJobs, jobIndex, jobToRowMap) => {
-    const timeRange = getJobTimeRangeForDay(job, day)
-    
-    // Work day: 7:30 AM (7.5 hours = 450 minutes from midnight) to 4:30 PM (16.5 hours = 990 minutes)
-    const workDayStartMinutes = 7 * 60 + 30 // 7:30 AM = 450 minutes
-    const workDayEndMinutes = 16 * 60 + 30 // 4:30 PM = 990 minutes
-    const workDayDurationMinutes = workDayEndMinutes - workDayStartMinutes // 540 minutes (9 hours)
-    
-    // Get row index from the pre-calculated map
-    const rowIndex = jobToRowMap.get(job) ?? jobIndex
-    
-    // Handle jobs without specific times - they take full day
-    if (!timeRange.startTime || !timeRange.endTime) {
-      return {
-        left: '0%',
-        width: '100%',
-        top: `${rowIndex * 28}px`,
-        zIndex: 2
-      }
+  const getJobPositionForTimeline = (job, timelineStart, timelineDays, laneMap) => {
+    const laneIndex = laneMap.get(job) ?? 0
+    const timelineStartMs = startOfDay(timelineStart).getTime()
+    const timelineEndMs = timelineStartMs + timelineDays * 24 * 60 * 60 * 1000
+
+    let startMs
+    if (job.startDateTime) {
+      startMs = job.startDateTime.getTime()
+    } else if (job.startDate) {
+      startMs = getDayStart(job.startDate).getTime()
+    } else {
+      startMs = timelineStartMs
     }
-    
-    // Jobs with specific times
-    const jobStartMinutes = timeRange.startTime.getHours() * 60 + timeRange.startTime.getMinutes()
-    const jobEndMinutes = timeRange.endTime.getHours() * 60 + timeRange.endTime.getMinutes()
-    
-    // Position relative to work day start
-    const jobStartOffset = Math.max(0, jobStartMinutes - workDayStartMinutes)
-    const jobDuration = Math.min(workDayDurationMinutes, jobEndMinutes - workDayStartMinutes) - jobStartOffset
-    
-    const leftPercent = (jobStartOffset / workDayDurationMinutes) * 100
-    const widthPercent = (jobDuration / workDayDurationMinutes) * 100
-    
+
+    let endMs
+    if (job.endDateTime) {
+      endMs = job.endDateTime.getTime()
+    } else if (job.endDate) {
+      endMs = getDayEnd(job.endDate).getTime()
+    } else {
+      endMs = timelineEndMs
+    }
+
+    startMs = Math.min(Math.max(startMs, timelineStartMs), timelineEndMs)
+    endMs = Math.min(Math.max(endMs, timelineStartMs), timelineEndMs)
+    if (endMs <= startMs) endMs = Math.min(timelineEndMs, startMs + 5 * 60 * 1000)
+
+    const totalMs = Math.max(timelineDays * 24 * 60 * 60 * 1000, 1)
+    let leftPercent = ((startMs - timelineStartMs) / totalMs) * 100
+    leftPercent = Math.min(Math.max(leftPercent, 0), 100)
+
+    let widthPercent = ((endMs - startMs) / totalMs) * 100
+    widthPercent = Math.max(widthPercent, MIN_TIMELINE_BLOCK_WIDTH_PERCENT)
+    if (leftPercent + widthPercent > 100) {
+      widthPercent = Math.max(MIN_TIMELINE_BLOCK_WIDTH_PERCENT, 100 - leftPercent)
+    }
+
     return {
-      left: `${Math.max(0, leftPercent)}%`,
-      width: `${Math.min(100, widthPercent)}%`,
-      top: `${rowIndex * 28}px`, // 28px per row (22px height + 6px gap)
+      left: `${leftPercent}%`,
+      width: `${Math.min(widthPercent, 100)}%`,
+      top: `${laneIndex * 28}px`,
       zIndex: 2
     }
   }
@@ -1286,22 +1215,19 @@ export default function WireHarnessTimeline() {
                               {isWeekend ? 'Weekend' : ''}
                             </div>
                           ) : (() => {
-                            // Calculate row assignments once for all jobs in this day
-                            const jobToRowMap = calculateJobRowsForDay(sortedDayJobs, day)
-                            const rowValues = Array.from(jobToRowMap.values())
-                            const maxRow = rowValues.length > 0 ? Math.max(...rowValues) : -1
+                            const { laneMap, laneCount } = assignLanesForDay(sortedDayJobs, day)
                             
                             return (
                               <div style={{ 
                                 position: 'relative', 
-                                marginTop: zoomLevel === 'day' ? '20px' : '0',
-                                minHeight: `${Math.max(100, (maxRow + 1) * 28 + 20)}px` // Dynamic height based on actual rows needed
+                                marginTop: '20px',
+                                minHeight: `${Math.max(100, (laneCount || 1) * 28 + 20)}px`
                               }}>
-                                {sortedDayJobs.map((job, jobIdx) => {
+                                {sortedDayJobs.map((job) => {
                                   const jobKey = `${job.orderDisplay}-${job.operation}-${dayIdx}`
-                                  const position = getJobPositionInDay(job, day, sortedDayJobs, jobIdx, jobToRowMap)
+                                  const position = getJobPositionForDay(job, day, laneMap)
                                   const timeRange = getJobTimeRangeForDay(job, day)
-                                  const blockWidth = Math.max(0, parseFloat(position.width.replace('%', '')) || 0)
+                                  const blockWidth = Math.max(0, parseFloat(position.width) || 0)
 
                                   return (
                                     <div
@@ -1399,23 +1325,46 @@ ${timeRange.start && timeRange.end ? `Scheduled: ${timeRange.start} - ${timeRang
                     (() => {
                       // Get all jobs that appear in the timeline
                       const allTimelineJobs = workcenter.jobs.filter(job => {
-                        const jobStart = job.startDateTime ? startOfDay(job.startDateTime) : (job.startDate ? startOfDay(job.startDate) : null)
-                        const jobEnd = job.endDateTime ? startOfDay(job.endDateTime) : (job.endDate ? startOfDay(job.endDate) : null)
+                        const jobStart = job.startDateTime || job.startDate
+                        const jobEnd = job.endDateTime || job.endDate
                         if (!jobStart || !jobEnd) return false
                         
                         const timelineEnd = addDays(timelineStart, timelineDays - 1)
                         return !(jobEnd < timelineStart || jobStart > timelineEnd)
                       })
                       
-                      // Calculate row assignments across all jobs in the timeline
-                      const jobToRowMap = calculateJobRowsForTimeline(allTimelineJobs, timelineStart, timelineDays)
-                      const rowValues = Array.from(jobToRowMap.values())
-                      const maxRow = rowValues.length > 0 ? Math.max(...rowValues) : -1
+                      if (allTimelineJobs.length === 0) {
+                        return (
+                          <div style={{ position: 'relative', minHeight: '100px', backgroundColor: '#fafafa' }}>
+                            {days.map((day, dayIdx) => {
+                              const isWeekend = day.getDay() === 0 || day.getDay() === 6
+                              const isToday = format(day, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')
+                              return (
+                                <div
+                                  key={dayIdx}
+                                  style={{
+                                    position: 'absolute',
+                                    left: `${(dayIdx / timelineDays) * 100}%`,
+                                    top: 0,
+                                    bottom: 0,
+                                    width: '1px',
+                                    backgroundColor: dayIdx === 0 ? '#3b82f6' : (isWeekend ? '#e5e7eb' : '#d1d5db'),
+                                    zIndex: 1,
+                                    borderLeft: isToday ? '2px solid #3b82f6' : 'none'
+                                  }}
+                                />
+                              )
+                            })}
+                          </div>
+                        )
+                      }
+                      
+                      const { laneMap: timelineLaneMap, laneCount: timelineLaneCount } = assignLanesForTimeline(allTimelineJobs, timelineStart, timelineDays)
                       
                       return (
                         <div style={{
                           position: 'relative',
-                          minHeight: `${Math.max(100, (maxRow + 1) * 28 + 20)}px`,
+                          minHeight: `${Math.max(100, (timelineLaneCount || 1) * 28 + 20)}px`,
                           backgroundColor: '#fafafa'
                         }}>
                           {/* Day dividers */}
@@ -1440,12 +1389,12 @@ ${timeRange.start && timeRange.end ? `Scheduled: ${timeRange.start} - ${timeRang
                           })}
                           
                           {/* Job blocks - continuous across days */}
-                          {allTimelineJobs.map((job, jobIdx) => {
-                            const position = getJobPositionForTimeline(job, timelineStart, timelineDays, jobToRowMap, jobIdx)
+                          {allTimelineJobs.map((job) => {
+                            const position = getJobPositionForTimeline(job, timelineStart, timelineDays, timelineLaneMap)
                             if (!position) return null
                             
-                            const jobKey = `${job.orderDisplay}-${job.operation}-${jobIdx}`
-                            const blockWidth = Math.max(0, parseFloat(position.width.replace('%', '')) || 0)
+                            const jobKey = `${job.orderDisplay}-${job.operation}-${position.top}`
+                            const blockWidth = Math.max(0, parseFloat(position.width) || 0)
                             
                             return (
                               <div
