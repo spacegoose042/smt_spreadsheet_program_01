@@ -414,28 +414,28 @@ export default function MetabaseDashboardExplorer() {
               Execution Results
             </h2>
             
-            {dashboardResults.data ? (
+            {dashboardResults && (dashboardResults.success !== undefined || dashboardResults.results) ? (
               <div>
                 <div style={{ 
                   marginBottom: '1rem', 
                   padding: '1rem', 
-                  backgroundColor: dashboardResults.data.success ? '#d4edda' : '#f8d7da', 
+                  backgroundColor: dashboardResults.success ? '#d4edda' : '#f8d7da', 
                   borderRadius: '6px',
-                  color: dashboardResults.data.success ? '#155724' : '#721c24'
+                  color: dashboardResults.success ? '#155724' : '#721c24'
                 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                    <div><strong>Dashboard:</strong> {dashboardResults.data.dashboard_name || 'Unknown'}</div>
-                    <div><strong>Cards Executed:</strong> {dashboardResults.data.cards_executed || 0}</div>
-                    {dashboardResults.data.success ? (
+                    <div><strong>Dashboard:</strong> {dashboardResults.dashboard_name || 'Unknown'}</div>
+                    <div><strong>Cards Executed:</strong> {dashboardResults.cards_executed || 0}</div>
+                    {dashboardResults.success ? (
                       <>
-                        <div><strong>Cards Succeeded:</strong> {dashboardResults.data.cards_succeeded || 0}</div>
-                        <div><strong>Total Rows:</strong> {dashboardResults.data.results?.reduce((sum, r) => sum + (r.row_count || 0), 0) || 0}</div>
+                        <div><strong>Cards Succeeded:</strong> {dashboardResults.cards_succeeded || 0}</div>
+                        <div><strong>Total Rows:</strong> {dashboardResults.results?.reduce((sum, r) => sum + (r.row_count || 0), 0) || 0}</div>
                       </>
                     ) : (
-                      <div><strong>Cards Failed:</strong> {dashboardResults.data.cards_failed || 0}</div>
+                      <div><strong>Cards Failed:</strong> {dashboardResults.cards_failed || 0}</div>
                     )}
                   </div>
-                  {dashboardResults.data.parameters && Object.keys(dashboardResults.data.parameters).length > 0 && (
+                  {dashboardResults.parameters && Object.keys(dashboardResults.parameters).length > 0 && (
                     <details style={{ marginTop: '0.5rem' }}>
                       <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Parameters Applied</summary>
                       <pre style={{ 
@@ -445,11 +445,11 @@ export default function MetabaseDashboardExplorer() {
                         borderRadius: '4px',
                         fontSize: '0.85rem'
                       }}>
-                        {JSON.stringify(dashboardResults.data.parameters, null, 2)}
+                        {JSON.stringify(dashboardResults.parameters, null, 2)}
                       </pre>
                     </details>
                   )}
-                  {dashboardResults.data.metabase_parameters && Object.keys(dashboardResults.data.metabase_parameters).length > 0 && (
+                  {dashboardResults.metabase_parameters && Object.keys(dashboardResults.metabase_parameters).length > 0 && (
                     <details style={{ marginTop: '0.5rem' }}>
                       <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Metabase Parameters (for debugging)</summary>
                       <pre style={{ 
@@ -459,16 +459,16 @@ export default function MetabaseDashboardExplorer() {
                         borderRadius: '4px',
                         fontSize: '0.85rem'
                       }}>
-                        {JSON.stringify(dashboardResults.data.metabase_parameters, null, 2)}
+                        {JSON.stringify(dashboardResults.metabase_parameters, null, 2)}
                       </pre>
                     </details>
                   )}
                 </div>
 
-                {dashboardResults.data.results && dashboardResults.data.results.length > 0 && (
+                {dashboardResults.results && dashboardResults.results.length > 0 && (
                   <div>
                     <h3 style={{ marginBottom: '1rem' }}>Card Results:</h3>
-                    {dashboardResults.data.results.map((result, idx) => (
+                    {dashboardResults.results.map((result, idx) => (
                       <div key={idx} style={{ 
                         marginBottom: '1.5rem',
                         padding: '1rem',
@@ -607,9 +607,27 @@ export default function MetabaseDashboardExplorer() {
                 )}
               </div>
             ) : (
-              <div style={{ color: '#dc3545' }}>
-                <XCircle size={20} style={{ marginRight: '0.5rem' }} />
-                Failed to execute dashboard
+              <div>
+                <div style={{ color: '#dc3545', marginBottom: '1rem' }}>
+                  <XCircle size={20} style={{ marginRight: '0.5rem' }} />
+                  Failed to execute dashboard or unexpected response format
+                </div>
+                {dashboardResults && (
+                  <details style={{ marginTop: '0.5rem' }}>
+                    <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Raw Response (for debugging)</summary>
+                    <pre style={{ 
+                      marginTop: '0.5rem', 
+                      padding: '1rem', 
+                      backgroundColor: '#f8f9fa', 
+                      borderRadius: '6px',
+                      overflow: 'auto',
+                      maxHeight: '400px',
+                      fontSize: '0.85rem'
+                    }}>
+                      {JSON.stringify(dashboardResults, null, 2)}
+                    </pre>
+                  </details>
+                )}
               </div>
             )}
           </div>
