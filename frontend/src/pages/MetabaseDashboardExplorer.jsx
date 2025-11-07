@@ -12,24 +12,65 @@ export default function MetabaseDashboardExplorer() {
   const [prcPartPartial, setPrcPartPartial] = useState('')
   const [prodStatus, setProdStatus] = useState('')
   const [mode, setMode] = useState('info') // 'info' or 'execute'
+  const [hasRequested, setHasRequested] = useState(false) // Track if user has clicked a button
 
-  const { data: dashboardInfo, isLoading: isLoadingInfo, refetch: refetchInfo } = useQuery({
+  const { data: dashboardInfo, isLoading: isLoadingInfo, error: errorInfo, refetch: refetchInfo } = useQuery({
     queryKey: ['metabaseDashboard', dashboardId],
-    queryFn: () => getMetabaseDashboard(dashboardId),
-    enabled: mode === 'info' && !!dashboardId,
+    queryFn: async () => {
+      try {
+        const response = await getMetabaseDashboard(dashboardId)
+        return response.data || response
+      } catch (error) {
+        console.error('Metabase dashboard error:', error)
+        // Extract error message but don't let it redirect
+        const errorMessage = error.response?.data?.detail || 
+                            error.response?.data?.message || 
+                            error.message || 
+                            'Failed to fetch dashboard'
+        const statusCode = error.response?.status
+        
+        // Create a custom error that won't trigger redirect
+        const customError = new Error(errorMessage)
+        customError.statusCode = statusCode
+        customError.response = error.response
+        throw customError
+      }
+    },
+    enabled: mode === 'info' && !!dashboardId && hasRequested,
+    retry: false, // Don't retry on error
   })
 
-  const { data: dashboardResults, isLoading: isLoadingResults, refetch: refetchResults } = useQuery({
+  const { data: dashboardResults, isLoading: isLoadingResults, error: errorResults, refetch: refetchResults } = useQuery({
     queryKey: ['metabaseDashboardQuery', dashboardId, prodline, buildOperation, orderNumber, ordlineStatus, prcPartPartial, prodStatus],
-    queryFn: () => executeDashboardWithParams(dashboardId, {
-      prodline: prodline || undefined,
-      build_operation: buildOperation || undefined,
-      order_number: orderNumber || undefined,
-      ordline_status: ordlineStatus || undefined,
-      prc_part_partial: prcPartPartial || undefined,
-      prod_status: prodStatus || undefined,
-    }),
-    enabled: mode === 'execute' && !!dashboardId,
+    queryFn: async () => {
+      try {
+        const response = await executeDashboardWithParams(dashboardId, {
+          prodline: prodline || undefined,
+          build_operation: buildOperation || undefined,
+          order_number: orderNumber || undefined,
+          ordline_status: ordlineStatus || undefined,
+          prc_part_partial: prcPartPartial || undefined,
+          prod_status: prodStatus || undefined,
+        })
+        return response.data || response
+      } catch (error) {
+        console.error('Metabase dashboard query error:', error)
+        // Extract error message but don't let it redirect
+        const errorMessage = error.response?.data?.detail || 
+                            error.response?.data?.message || 
+                            error.message || 
+                            'Failed to execute dashboard'
+        const statusCode = error.response?.status
+        
+        // Create a custom error that won't trigger redirect
+        const customError = new Error(errorMessage)
+        customError.statusCode = statusCode
+        customError.response = error.response
+        throw customError
+      }
+    },
+    enabled: mode === 'execute' && !!dashboardId && hasRequested,
+    retry: false, // Don't retry on error
   })
 
   const isLoading = isLoadingInfo || isLoadingResults
@@ -83,8 +124,12 @@ export default function MetabaseDashboardExplorer() {
             </label>
             <button
               onClick={() => {
-                if (mode === 'info') refetchInfo()
-                else refetchResults()
+                setHasRequested(true)
+                // Small delay to ensure state is set before query runs
+                setTimeout(() => {
+                  if (mode === 'info') refetchInfo()
+                  else refetchResults()
+                }, 100)
               }}
               disabled={isLoading}
               className="btn btn-primary"
@@ -403,20 +448,86 @@ export default function MetabaseDashboardExplorer() {
       )}
 
       {/* Error State */}
-      {!isLoading && mode === 'info' && dashboardInfo?.error && (
+      {!isLoading && hasRequested && mode === 'info' && (errorInfo || dashboardInfo?.error) && (
         <div className="card">
-          <div className="card-body" style={{ color: '#dc3545' }}>
-            <XCircle size={20} style={{ marginRight: '0.5rem' }} />
-            Error: {dashboardInfo.error.message || 'Failed to fetch dashboard'}
+          <div className="card-body" style={{ 
+            color: '#dc3545',
+            padding: '1.5rem',
+            backgroundColor: '#fff3cd',
+            border: '1px solid #ffc107'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <XCircle size={20} style={{ marginRight: '0.5rem' }} />
+              <strong>Error Loading Dashboard</strong>
+            </div>
+            <div style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>
+              {errorInfo?.message || 
+               errorInfo?.response?.data?.detail || 
+               dashboardInfo?.error?.message || 
+               'Failed to fetch dashboard'}
+            </div>
+            {errorInfo?.response?.status && (
+              <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#6c757d' }}>
+                Status Code: {errorInfo.response.status}
+              </div>
+            )}
+            {errorInfo?.response?.data && (
+              <details style={{ marginTop: '0.5rem' }}>
+                <summary style={{ cursor: 'pointer', fontSize: '0.85rem' }}>Show Full Error Details</summary>
+                <pre style={{ 
+                  marginTop: '0.5rem', 
+                  padding: '1rem', 
+                  backgroundColor: '#f8f9fa', 
+                  borderRadius: '6px',
+                  overflow: 'auto',
+                  fontSize: '0.8rem'
+                }}>
+                  {JSON.stringify(errorInfo.response.data, null, 2)}
+                </pre>
+              </details>
+            )}
           </div>
         </div>
       )}
 
-      {!isLoading && mode === 'execute' && dashboardResults?.error && (
+      {!isLoading && hasRequested && mode === 'execute' && (errorResults || dashboardResults?.error) && (
         <div className="card">
-          <div className="card-body" style={{ color: '#dc3545' }}>
-            <XCircle size={20} style={{ marginRight: '0.5rem' }} />
-            Error: {dashboardResults.error.message || 'Failed to execute dashboard'}
+          <div className="card-body" style={{ 
+            color: '#dc3545',
+            padding: '1.5rem',
+            backgroundColor: '#fff3cd',
+            border: '1px solid #ffc107'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <XCircle size={20} style={{ marginRight: '0.5rem' }} />
+              <strong>Error Executing Dashboard</strong>
+            </div>
+            <div style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>
+              {errorResults?.message || 
+               errorResults?.response?.data?.detail || 
+               dashboardResults?.error?.message || 
+               'Failed to execute dashboard'}
+            </div>
+            {errorResults?.response?.status && (
+              <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#6c757d' }}>
+                Status Code: {errorResults.response.status}
+              </div>
+            )}
+            {errorResults?.response?.data && (
+              <details style={{ marginTop: '0.5rem' }}>
+                <summary style={{ cursor: 'pointer', fontSize: '0.85rem' }}>Show Full Error Details</summary>
+                <pre style={{ 
+                  marginTop: '0.5rem', 
+                  padding: '1rem', 
+                  backgroundColor: '#f8f9fa', 
+                  borderRadius: '6px',
+                  overflow: 'auto',
+                  fontSize: '0.8rem'
+                }}>
+                  {JSON.stringify(errorResults.response.data, null, 2)}
+                </pre>
+              </details>
+            )}
           </div>
         </div>
       )}
