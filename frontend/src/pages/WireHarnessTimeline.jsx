@@ -1102,22 +1102,23 @@ export default function WireHarnessTimeline() {
                               {isWeekend ? 'Weekend' : ''}
                             </div>
                           ) : (
-                            <div style={{ 
-                              position: 'relative', 
-                              marginTop: zoomLevel === 'day' ? '20px' : '0',
-                              minHeight: `${Math.max(100, sortedDayJobs.length * 28 + 20)}px` // Dynamic height based on number of jobs
-                            }}>
-                              {(() => {
-                                // Calculate row assignments once for all jobs in this day
-                                const jobToRowMap = calculateJobRowsForDay(sortedDayJobs, day)
-                                const maxRow = Math.max(...Array.from(jobToRowMap.values()), -1)
-                                
-                                return sortedDayJobs.map((job, jobIdx) => {
-                                  const jobKey = `${job.orderNumber}-${job.operation}-${dayIdx}`
-                                  const position = getJobPositionInDay(job, day, sortedDayJobs, jobIdx, jobToRowMap)
-                                  const timeRange = getJobTimeRangeForDay(job, day)
-                                
-                                return (
+                            {(() => {
+                              // Calculate row assignments once for all jobs in this day
+                              const jobToRowMap = calculateJobRowsForDay(sortedDayJobs, day)
+                              const maxRow = Math.max(...Array.from(jobToRowMap.values()), -1)
+                              
+                              return (
+                                <div style={{ 
+                                  position: 'relative', 
+                                  marginTop: zoomLevel === 'day' ? '20px' : '0',
+                                  minHeight: `${Math.max(100, (maxRow + 1) * 28 + 20)}px` // Dynamic height based on actual rows needed
+                                }}>
+                                  {sortedDayJobs.map((job, jobIdx) => {
+                                    const jobKey = `${job.orderNumber}-${job.operation}-${dayIdx}`
+                                    const position = getJobPositionInDay(job, day, sortedDayJobs, jobIdx, jobToRowMap)
+                                    const timeRange = getJobTimeRangeForDay(job, day)
+                                  
+                                    return (
                                   <div
                                     key={jobKey}
                                     style={{
