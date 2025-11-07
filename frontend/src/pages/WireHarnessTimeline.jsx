@@ -1341,7 +1341,130 @@ ${timeRange.start && timeRange.end ? `Scheduled: ${timeRange.start} - ${timeRang
                         </div>
                       )
                     })}
-                  </div>
+                    </div>
+                  ) : (
+                    // Week/Month view: Show jobs as continuous blocks across timeline
+                    (() => {
+                      // Get all jobs that appear in the timeline
+                      const allTimelineJobs = workcenter.jobs.filter(job => {
+                        const jobStart = job.startDateTime ? startOfDay(job.startDateTime) : (job.startDate ? startOfDay(job.startDate) : null)
+                        const jobEnd = job.endDateTime ? startOfDay(job.endDateTime) : (job.endDate ? startOfDay(job.endDate) : null)
+                        if (!jobStart || !jobEnd) return false
+                        
+                        const timelineEnd = addDays(timelineStart, timelineDays - 1)
+                        return !(jobEnd < timelineStart || jobStart > timelineEnd)
+                      })
+                      
+                      // Calculate row assignments across all jobs in the timeline
+                      const jobToRowMap = calculateJobRowsForTimeline(allTimelineJobs, timelineStart, timelineDays)
+                      const rowValues = Array.from(jobToRowMap.values())
+                      const maxRow = rowValues.length > 0 ? Math.max(...rowValues) : -1
+                      
+                      return (
+                        <div style={{
+                          position: 'relative',
+                          minHeight: `${Math.max(100, (maxRow + 1) * 28 + 20)}px`,
+                          backgroundColor: '#fafafa'
+                        }}>
+                          {/* Day dividers */}
+                          {days.map((day, dayIdx) => {
+                            const isWeekend = day.getDay() === 0 || day.getDay() === 6
+                            const isToday = format(day, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')
+                            return (
+                              <div
+                                key={dayIdx}
+                                style={{
+                                  position: 'absolute',
+                                  left: `${(dayIdx / timelineDays) * 100}%`,
+                                  top: 0,
+                                  bottom: 0,
+                                  width: '1px',
+                                  backgroundColor: dayIdx === 0 ? '#3b82f6' : (isWeekend ? '#e5e7eb' : '#d1d5db'),
+                                  zIndex: 1,
+                                  borderLeft: isToday ? '2px solid #3b82f6' : 'none'
+                                }}
+                              />
+                            )
+                          })}
+                          
+                          {/* Job blocks - continuous across days */}
+                          {allTimelineJobs.map((job, jobIdx) => {
+                            const position = getJobPositionForTimeline(job, timelineStart, timelineDays, jobToRowMap, jobIdx)
+                            if (!position) return null
+                            
+                            const jobKey = `${job.orderNumber}-${job.operation}-${jobIdx}`
+                            
+                            return (
+                              <div
+                                key={jobKey}
+                                style={{
+                                  position: 'absolute',
+                                  left: position.left,
+                                  width: position.width,
+                                  top: position.top,
+                                  height: '22px',
+                                  zIndex: position.zIndex || 2,
+                                  minWidth: '40px'
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    height: '100%',
+                                    backgroundColor: getStatusColor(job.prodStatus),
+                                    color: 'white',
+                                    borderRadius: '4px',
+                                    padding: '0.25rem 0.4rem',
+                                    fontSize: '0.7rem',
+                                    fontWeight: 600,
+                                    border: '1px solid rgba(0,0,0,0.1)',
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    overflow: 'hidden'
+                                  }}
+                                  title={`${job.orderNumber} - ${job.part}
+Operation: ${job.operation}
+Status: ${job.prodStatus || 'N/A'}
+Hours: ${parseFloat(job.hours || 0).toFixed(2)}h
+${job.startDateTime ? `Start: ${format(job.startDateTime, 'MMM d, yyyy h:mm a')}` : (job.startDate ? `Start: ${format(job.startDate, 'MMM d, yyyy')}` : '')}
+${job.endDateTime ? `End: ${format(job.endDateTime, 'MMM d, yyyy h:mm a')}` : (job.endDate ? `End: ${format(job.endDate, 'MMM d, yyyy')}` : '')}
+${job.notes ? `Notes: ${job.notes}` : ''}`}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.transform = 'scale(1.05)'
+                                    e.currentTarget.style.zIndex = '10'
+                                    e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)'
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.transform = 'scale(1)'
+                                    e.currentTarget.style.zIndex = position.zIndex || 2
+                                    e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)'
+                                  }}
+                                >
+                                  <div style={{ 
+                                    overflow: 'hidden', 
+                                    textOverflow: 'ellipsis', 
+                                    whiteSpace: 'nowrap',
+                                    flex: 1
+                                  }}>
+                                    <div style={{ fontWeight: 700, fontSize: '0.7rem' }}>
+                                      {job.orderNumber}
+                                    </div>
+                                    {job.operation && parseFloat(position.width.replace('%', '')) > 15 && (
+                                      <div style={{ fontSize: '0.6rem', opacity: 0.9, marginTop: '0.05rem' }}>
+                                        {job.operation}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })()
+                  )}
                 </div>
               ))}
             </div>
