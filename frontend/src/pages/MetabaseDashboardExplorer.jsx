@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getMetabaseDashboard, executeDashboardWithParams, testMetabaseConnection } from '../api'
+import { getMetabaseDashboard, executeDashboardWithParams, testMetabaseConnection, metabaseLogin } from '../api'
 import { Search, Loader2, CheckCircle2, XCircle, Info, Database, Play, TestTube } from 'lucide-react'
 
 export default function MetabaseDashboardExplorer() {
@@ -14,6 +14,10 @@ export default function MetabaseDashboardExplorer() {
   const [mode, setMode] = useState('info') // 'info' or 'execute'
   const [hasRequested, setHasRequested] = useState(false) // Track if user has clicked a button
   const [testConnection, setTestConnection] = useState(false) // Track if testing connection
+  const [showLogin, setShowLogin] = useState(false) // Show login form
+  const [metabaseUsername, setMetabaseUsername] = useState('')
+  const [metabasePassword, setMetabasePassword] = useState('')
+  const [loginStatus, setLoginStatus] = useState(null) // Login result
 
   const { data: connectionTest, isLoading: isLoadingConnection, error: connectionError, refetch: refetchConnection } = useQuery({
     queryKey: ['metabaseConnectionTest'],

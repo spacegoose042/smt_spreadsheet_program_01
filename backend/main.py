@@ -1659,7 +1659,10 @@ CETEC_CONFIG = {
 
 METABASE_CONFIG = {
     "base_url": "https://sandy-metabase.cetecerp.com",
-    "api_key": "mb_UfMbPhr9R640GAR5wLpUPMcSSxb98weRladg5TUvWLs="
+    "api_key": "mb_UfMbPhr9R640GAR5wLpUPMcSSxb98weRladg5TUvWLs=",
+    # Session-based auth (alternative to API key)
+    "use_session_auth": False,  # Set to True to use session auth instead
+    "session_token": None  # Will be set after login
 }
 
 # ============================================================================
@@ -1668,11 +1671,99 @@ METABASE_CONFIG = {
 
 def get_metabase_headers():
     """Get headers for Metabase API requests"""
-    # Use X-Metabase-Api-Key format (confirmed working from connection test)
-    return {
-        "X-Metabase-Api-Key": METABASE_CONFIG["api_key"],
-        "Content-Type": "application/json"
-    }
+    # Use session token if available, otherwise use API key
+    if METABASE_CONFIG.get("use_session_auth") and METABASE_CONFIG.get("session_token"):
+        return {
+            "X-Metabase-Session": METABASE_CONFIG["session_token"],
+            "Content-Type": "application/json"
+        }
+    else:
+        # Use X-Metabase-Api-Key format (confirmed working from connection test)
+        return {
+            "X-Metabase-Api-Key": METABASE_CONFIG["api_key"],
+            "Content-Type": "application/json"
+        }
+
+@app.post("/api/metabase/login")
+def metabase_login(
+    credentials: dict,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Login to Metabase and get a session token
+    This allows access to endpoints that the API key cannot access
+    """
+    try:
+        url = f"{METABASE_CONFIG['base_url']}/api/session"
+        headers = {"Content-Type": "application/json"}
+        
+        print(f"🔍 Logging into Metabase: {url}")
+        
+        username = credentials.get('username')
+        password = credentials.get('password')
+        
+        if not username or not password:
+            raise HTTPException(
+                status_code=400,
+                detail="Username and password are required"
+            )
+        
+        response = requests.post(
+            url, 
+            headers=headers, 
+            json={"username": username, "password": password},
+            timeout=30
+        )
+        
+        print(f"   Response status: {response.status_code}")
+        
+        if response.status_code == 200:
+            data = response.json()
+            session_token = data.get('id')
+            
+            if session_token:
+                METABASE_CONFIG["session_token"] = session_token
+                METABASE_CONFIG["use_session_auth"] = True
+                print(f"   ✅ Session token obtained: {session_token[:20]}...")
+                
+                return {
+                    "success": True,
+                    "message": "Successfully logged into Metabase",
+                    "session_token_preview": session_token[:20] + "..."
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": "Login successful but no session token in response",
+                    "response": data
+                }
+        else:
+            error_text = response.text[:500] if response.text else "No error message"
+            print(f"   ❌ Login failed: {error_text}")
+            return {
+                "success": False,
+                "status_code": response.status_code,
+                "message": f"Login failed: {error_text}"
+            }
+            
+    except requests.exceptions.RequestException as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ Metabase login error: {str(e)}")
+        print(f"   Traceback: {error_trace}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to login to Metabase: {str(e)}"
+        )
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ Unexpected error: {str(e)}")
+        print(f"   Traceback: {error_trace}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error: {str(e)}"
+        )
 
 @app.get("/api/metabase/test")
 def test_metabase_connection(

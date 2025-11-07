@@ -162,6 +162,8 @@ export const diagnoseProdlineData = (prodline) =>
 // Metabase API Integration
 export const testMetabaseConnection = () =>
   api.get('/api/metabase/test')
+export const metabaseLogin = (username, password) =>
+  api.post('/api/metabase/login', { username, password })
 export const getMetabaseDatabases = () =>
   api.get('/api/metabase/databases')
 export const getMetabaseTables = (databaseId) =>
