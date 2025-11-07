@@ -22,6 +22,7 @@ import CetecSyncReport from './pages/CetecSyncReport'
 import ProgressDashboard from './pages/ProgressDashboard'
 import ProdlineScheduleExplorer from './pages/ProdlineScheduleExplorer'
 import MetabaseDashboardExplorer from './pages/MetabaseDashboardExplorer'
+import WireHarnessDashboard from './pages/WireHarnessDashboard'
 import WireHarnessSchedule from './pages/WireHarnessSchedule'
 import WireHarnessTimeline from './pages/WireHarnessTimeline'
 import './App.css'
@@ -44,9 +45,13 @@ function Navigation() {
   const location = useLocation()
   const { user, logout, isAdmin } = useAuth()
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [wireHarnessOpen, setWireHarnessOpen] = useState(false)
   const settingsRef = useRef(null)
+  const wireHarnessRef = useRef(null)
   
   const isActive = (path) => location.pathname === path
+  const wireHarnessPaths = ['/wire-harness-dashboard', '/wire-harness', '/wire-harness-timeline']
+  const isWireHarnessActive = wireHarnessPaths.includes(location.pathname)
   const isSettingsActive = ['/capacity', '/shifts', '/users', '/statuses', '/issue-types', '/resolution-types', '/cetec-import', '/cetec-sync-report', '/prodline-explorer', '/metabase-explorer', '/settings', '/change-password'].includes(location.pathname)
   
   // Close dropdown when clicking outside
@@ -55,10 +60,18 @@ function Navigation() {
       if (settingsRef.current && !settingsRef.current.contains(event.target)) {
         setSettingsOpen(false)
       }
+      if (wireHarnessRef.current && !wireHarnessRef.current.contains(event.target)) {
+        setWireHarnessOpen(false)
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  useEffect(() => {
+    setSettingsOpen(false)
+    setWireHarnessOpen(false)
+  }, [location.pathname])
   
   if (!user) return null
   
@@ -107,14 +120,49 @@ function Navigation() {
             <BarChart3 size={18} />
             Progress
           </Link>
-          <Link to="/wire-harness" className={isActive('/wire-harness') ? 'active' : ''}>
-            <Timer size={18} />
-            Wire Harness
-          </Link>
-          <Link to="/wire-harness-timeline" className={isActive('/wire-harness-timeline') ? 'active' : ''}>
-            <Calendar size={18} />
-            WH Timeline
-          </Link>
+
+          <div className="nav-dropdown" ref={wireHarnessRef}>
+            <button
+              className={`nav-dropdown-trigger ${isWireHarnessActive ? 'active' : ''}`}
+              onClick={() => setWireHarnessOpen(!wireHarnessOpen)}
+            >
+              <Timer size={18} />
+              Wire Harness
+              <ChevronDown size={16} style={{
+                transform: wireHarnessOpen ? 'rotate(180deg)' : 'rotate(0)',
+                transition: 'transform 0.2s'
+              }} />
+            </button>
+
+            {wireHarnessOpen && (
+              <div className="nav-dropdown-menu">
+                <Link
+                  to="/wire-harness-dashboard"
+                  className={isActive('/wire-harness-dashboard') ? 'active' : ''}
+                  onClick={() => setWireHarnessOpen(false)}
+                >
+                  <BarChart3 size={16} />
+                  Dashboard
+                </Link>
+                <Link
+                  to="/wire-harness"
+                  className={isActive('/wire-harness') ? 'active' : ''}
+                  onClick={() => setWireHarnessOpen(false)}
+                >
+                  <Timer size={16} />
+                  Schedule
+                </Link>
+                <Link
+                  to="/wire-harness-timeline"
+                  className={isActive('/wire-harness-timeline') ? 'active' : ''}
+                  onClick={() => setWireHarnessOpen(false)}
+                >
+                  <Calendar size={16} />
+                  Timeline
+                </Link>
+              </div>
+            )}
+          </div>
           
           {/* Settings Dropdown */}
           <div className="nav-dropdown" ref={settingsRef}>
@@ -281,8 +329,11 @@ function AppContent() {
           <Route path="/completed" element={<ProtectedRoute><Completed /></ProtectedRoute>} />
           <Route path="/issues" element={<ProtectedRoute><Issues /></ProtectedRoute>} />
           <Route path="/progress" element={<ProtectedRoute><ProgressDashboard /></ProtectedRoute>} />
+          <Route path="/wire-harness-dashboard" element={<ProtectedRoute><WireHarnessDashboard /></ProtectedRoute>} />
           <Route path="/wire-harness" element={<ProtectedRoute><WireHarnessSchedule /></ProtectedRoute>} />
+          <Route path="/wire-harness/schedule" element={<ProtectedRoute><WireHarnessSchedule /></ProtectedRoute>} />
           <Route path="/wire-harness-timeline" element={<ProtectedRoute><WireHarnessTimeline /></ProtectedRoute>} />
+          <Route path="/wire-harness/timeline" element={<ProtectedRoute><WireHarnessTimeline /></ProtectedRoute>} />
           <Route path="/capacity" element={<ProtectedRoute><CapacityCalendar /></ProtectedRoute>} />
           <Route path="/shifts" element={<ProtectedRoute><ShiftConfiguration /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />

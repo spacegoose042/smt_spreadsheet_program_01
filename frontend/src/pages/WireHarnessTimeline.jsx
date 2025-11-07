@@ -30,7 +30,7 @@ import {
 export default function WireHarnessTimeline() {
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [lastRefresh, setLastRefresh] = useState(new Date())
-  const [selectedWorkcenters, setSelectedWorkcenters] = useState(PREFERRED_WIRE_HARNESS_WORKCENTERS)
+  const [selectedWorkcenters, setSelectedWorkcenters] = useState([...PREFERRED_WIRE_HARNESS_WORKCENTERS])
   const [selectedProdStatuses, setSelectedProdStatuses] = useState([])
   const [dateFilterStart, setDateFilterStart] = useState('')
   const [dateFilterEnd, setDateFilterEnd] = useState('')

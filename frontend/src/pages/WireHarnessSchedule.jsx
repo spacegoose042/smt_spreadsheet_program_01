@@ -22,7 +22,7 @@ const WORKCENTER_ORDER_MAP = PREFERRED_WIRE_HARNESS_WORKCENTERS.reduce((acc, nam
 export default function WireHarnessSchedule() {
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [lastRefresh, setLastRefresh] = useState(new Date())
-  const [selectedWorkcenters, setSelectedWorkcenters] = useState(PREFERRED_WIRE_HARNESS_WORKCENTERS) // default visible
+  const [selectedWorkcenters, setSelectedWorkcenters] = useState([...PREFERRED_WIRE_HARNESS_WORKCENTERS]) // default visible
   const [selectedProdStatuses, setSelectedProdStatuses] = useState([]) // Empty = all
   const [dateFilterStart, setDateFilterStart] = useState('')
   const [dateFilterEnd, setDateFilterEnd] = useState('')
