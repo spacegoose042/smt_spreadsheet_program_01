@@ -2555,7 +2555,9 @@ def execute_dashboard_with_params(
                 
                 print(f"      Response status: {card_response.status_code}")
                 
-                if card_response.status_code != 200:
+                # Metabase can return 200 (OK) or 202 (Accepted) with valid data
+                # 202 means the request was accepted and is being processed, but may return data immediately
+                if card_response.status_code not in [200, 202]:
                     error_text = card_response.text[:1000] if card_response.text else "No error message"
                     print(f"      ❌ Error (status {card_response.status_code}): {error_text}")
                     try:
@@ -2574,7 +2576,29 @@ def execute_dashboard_with_params(
                     })
                     continue
                 
-                card_result = card_response.json()
+                # For 202, check if response contains data (some Metabase queries return 202 with data)
+                try:
+                    card_result = card_response.json()
+                    # If status is 202, check if we have actual data or just an acceptance message
+                    if card_response.status_code == 202:
+                        # Check if this looks like a valid query result (has 'data' key with 'rows')
+                        if 'data' in card_result and 'rows' in card_result.get('data', {}):
+                            print(f"      ⚠️  Status 202 but contains data - treating as success")
+                        else:
+                            # 202 without data might mean async processing - but we'll still try to parse it
+                            print(f"      ⚠️  Status 202 - response: {str(card_result)[:200]}")
+                except ValueError as e:
+                    # If we can't parse JSON, it's definitely an error
+                    error_text = card_response.text[:1000] if card_response.text else "No error message"
+                    print(f"      ❌ JSON parse error: {str(e)}")
+                    results.append({
+                        "card_id": card_id,
+                        "card_name": card_name,
+                        "success": False,
+                        "error": f"Failed to parse response as JSON: {str(e)}",
+                        "error_details": error_text[:500] if len(error_text) > 500 else error_text
+                    })
+                    continue
                 
                 # Extract data rows if available
                 data_rows = []
