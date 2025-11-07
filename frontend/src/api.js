@@ -22,13 +22,25 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Check if this is a Metabase API endpoint
+    const url = error.config?.url || ''
+    const isMetabaseEndpoint = url.includes('/api/metabase/')
+    
+    if (isMetabaseEndpoint) {
+      // For Metabase endpoints, never redirect - always let the component handle errors
+      const status = error.response?.status
+      console.error(`❌ Metabase API error (${status || 'unknown'}). Error will be displayed on page.`, error)
+      return Promise.reject(error)
+    }
+    
+    // For other endpoints, handle 401 by redirecting to login
     if (error.response?.status === 401) {
-      // Token expired or invalid
       console.error('❌ Authentication failed (401). Redirecting to login...')
       localStorage.removeItem('token')
       localStorage.removeItem('user')
       window.location.href = '/login'
     }
+    
     return Promise.reject(error)
   }
 )
