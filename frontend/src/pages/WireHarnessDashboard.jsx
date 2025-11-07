@@ -19,7 +19,9 @@ import {
   format,
   parseISO,
   startOfDay,
-  addDays
+  addDays,
+  startOfWeek,
+  addWeeks
 } from 'date-fns'
 
 const PREFERRED_WIRE_HARNESS_WORKCENTERS = [
@@ -45,6 +47,63 @@ const workcenterColorMap = {
   'WH ULTRA SONIC SPLICING': '#bfdbfe',
   'WH OVERMOLDING': '#fca5a5',
   'WH QUALITY CONTROL': '#e9d5ff'
+}
+
+const WEEK_OPTIONS = { weekStartsOn: 1 }
+const HOURS_PER_WEEK_MS = 7 * 24 * 60 * 60 * 1000
+
+const computeWeeklyHours = (workcenters, weeks = 5) => {
+  const now = new Date()
+  const firstWeekStart = startOfWeek(now, WEEK_OPTIONS)
+  const buckets = []
+
+  for (let i = 0; i < weeks; i++) {
+    const weekStart = addWeeks(firstWeekStart, i)
+    buckets.push({
+      weekStart,
+      label: `${format(weekStart, 'MMM d')} – ${format(addDays(weekStart, 6), 'MMM d')}` ,
+      totals: {
+        overall: 0,
+        perWorkcenter: {}
+      }
+    })
+  }
+
+  workcenters.forEach((wc) => {
+    wc.jobs.forEach((job) => {
+      const jobDate = job.startDateTime || job.startDate || job.endDateTime || job.endDate
+      if (!jobDate) return
+
+      const jobWeekStart = startOfWeek(jobDate, WEEK_OPTIONS)
+      const diffWeeks = Math.floor((jobWeekStart.getTime() - firstWeekStart.getTime()) / HOURS_PER_WEEK_MS)
+      if (diffWeeks < 0 || diffWeeks >= weeks) return
+
+      const bucket = buckets[diffWeeks]
+      if (!bucket) return
+
+      const hours = job.hours || 0
+      bucket.totals.overall += hours
+      const key = wc.name
+      bucket.totals.perWorkcenter[key] = (bucket.totals.perWorkcenter[key] || 0) + hours
+    })
+  })
+
+  return buckets
+}
+
+const summarizeWorkcenters = (workcenters, referenceDate) => {
+  return workcenters.map((wc) => {
+    const totalHours = wc.jobs.reduce((sum, job) => sum + (job.hours || 0), 0)
+    const upcoming = wc.jobs.filter((job) => job.startDateTime && job.startDateTime >= referenceDate).length
+    const pastDue = wc.jobs.filter((job) => job.endDateTime && job.endDateTime < referenceDate).length
+    return {
+      name: wc.name,
+      totalJobs: wc.jobs.length,
+      totalHours,
+      upcoming,
+      pastDue
+    }
+  })
 }
 
 const getStatusBadgeColor = (status) => {
@@ -300,12 +359,20 @@ export default function WireHarnessDashboard() {
 
   const { workcenters, jobs } = useMemo(() => parseScheduleData(scheduleDetailData, scheduleData), [scheduleDetailData, scheduleData])
 
+  const preferredWorkcenters = useMemo(() => workcenters.filter((wc) => PREFERRED_WIRE_HARNESS_WORKCENTERS.includes(wc.name)), [workcenters])
+  const additionalWorkcenters = useMemo(() => workcenters.filter((wc) => !PREFERRED_WIRE_HARNESS_WORKCENTERS.includes(wc.name)), [workcenters])
+  const weeklyHours = useMemo(() => computeWeeklyHours(preferredWorkcenters, 6), [preferredWorkcenters])
+  const thisWeekHours = weeklyHours[0]?.totals?.overall ?? 0
+  const nextWeekHours = weeklyHours[1]?.totals?.overall ?? 0
+
   const now = new Date()
   const todayStart = startOfDay(now)
   const tomorrowStart = addDays(todayStart, 1)
 
+  const preferredSummary = summarizeWorkcenters(preferredWorkcenters, now)
+  const otherSummary = summarizeWorkcenters(additionalWorkcenters, now)
+
   const totalJobs = jobs.length
-  const totalHours = jobs.reduce((sum, job) => sum + (job.hours || 0), 0)
   const jobsStartingToday = jobs.filter(job => job.startDateTime && job.startDateTime >= todayStart && job.startDateTime < tomorrowStart)
   const pastDueJobs = jobs.filter(job => job.endDateTime && job.endDateTime < now)
   const flaggedJobs = jobs
@@ -340,20 +407,6 @@ export default function WireHarnessDashboard() {
       .sort((a, b) => b.count - a.count)
   }, [jobs])
 
-  const workcenterSummary = useMemo(() => {
-    return workcenters.map(wc => {
-      const totalHours = wc.jobs.reduce((sum, job) => sum + (job.hours || 0), 0)
-      const upcoming = wc.jobs.filter(job => job.startDateTime && job.startDateTime >= now).length
-      const pastDue = wc.jobs.filter(job => job.endDateTime && job.endDateTime < now).length
-      return {
-        name: wc.name,
-        totalJobs: wc.jobs.length,
-        totalHours,
-        upcoming,
-        pastDue
-      }
-    })
-  }, [workcenters, now])
 
   const handleManualRefresh = () => {
     refetchDetail()
@@ -454,12 +507,16 @@ export default function WireHarnessDashboard() {
           <div className="card-body">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
-                <p style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6c757d' }}>Scheduled Hours</p>
-                <h2 style={{ fontSize: '1.8rem', marginTop: '0.25rem' }}>{totalHours.toFixed(1)} hrs</h2>
+                <p style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6c757d' }}>Scheduled Hours (Preferred)</p>
+                <h2 style={{ fontSize: '1.8rem', marginTop: '0.25rem' }}>{thisWeekHours.toFixed(1)} hrs</h2>
               </div>
               <Clock size={32} color="#22c55e" />
             </div>
-            <p style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#6c757d' }}>Including overlapping tasks and rework</p>
+            <div style={{ marginTop: '0.75rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#4b5563', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <span>Next week: <strong>{nextWeekHours.toFixed(1)} hrs</strong></span>
+              <span>Tracked weeks: {weeklyHours.length}</span>
+            </div>
+            <p style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#6c757d' }}>Breakdown by default workcenters shown below.</p>
           </div>
         </div>
         <div className="card" style={{ borderTop: '4px solid #f97316' }}>
@@ -493,9 +550,9 @@ export default function WireHarnessDashboard() {
           <div className="card-header" style={{ background: 'linear-gradient(90deg, #1d4ed8, #3b82f6)', color: 'white', padding: '1rem', borderTopLeftRadius: '0.5rem', borderTopRightRadius: '0.5rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Timer size={18} />
-              <strong>Workcenter Load</strong>
+              <strong>Preferred Workcenters</strong>
             </div>
-            <p style={{ marginTop: '0.25rem', fontSize: '0.8rem', opacity: 0.9 }}>Hours, upcoming, and past due counts by workcenter</p>
+            <p style={{ marginTop: '0.25rem', fontSize: '0.8rem', opacity: 0.9 }}>Core Wire Harness areas prioritized for daily coordination</p>
           </div>
           <div className="card-body" style={{ paddingTop: '0.5rem' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: '0.5rem', fontSize: '0.75rem', color: '#6c757d', marginBottom: '0.75rem', padding: '0 0.25rem' }}>
@@ -504,7 +561,7 @@ export default function WireHarnessDashboard() {
               <span style={{ textAlign: 'right' }}>Hours</span>
               <span style={{ textAlign: 'right' }}>Past Due</span>
             </div>
-            {workcenterSummary.map(summary => (
+            {preferredSummary.map(summary => (
               <div
                 key={summary.name}
                 style={{
@@ -532,6 +589,92 @@ export default function WireHarnessDashboard() {
             ))}
           </div>
         </div>
+
+        <div className="card">
+          <div className="card-header" style={{ background: 'linear-gradient(90deg, #4c1d95, #7c3aed)', color: 'white', padding: '1rem', borderTopLeftRadius: '0.5rem', borderTopRightRadius: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Calendar size={18} />
+              <strong>Weekly Hours (Preferred)</strong>
+            </div>
+            <p style={{ marginTop: '0.25rem', fontSize: '0.8rem', opacity: 0.9 }}>Scheduled hours grouped by week and core workcenter</p>
+          </div>
+          <div className="card-body" style={{ paddingTop: '0.75rem', overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '520px' }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', padding: '0.5rem 0.75rem', fontSize: '0.75rem', color: '#475569' }}>Week</th>
+                  <th style={{ textAlign: 'right', padding: '0.5rem 0.75rem', fontSize: '0.75rem', color: '#475569' }}>Total</th>
+                  {PREFERRED_WIRE_HARNESS_WORKCENTERS.map((name) => (
+                    <th key={name} style={{ textAlign: 'right', padding: '0.5rem 0.75rem', fontSize: '0.75rem', color: '#475569' }}>{name}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {weeklyHours.map((bucket, index) => {
+                  const isCurrentWeek = index === 0
+                  const background = isCurrentWeek ? 'rgba(99, 102, 241, 0.12)' : index % 2 === 1 ? 'rgba(148, 163, 184, 0.08)' : 'transparent'
+                  return (
+                    <tr key={bucket.weekStart.toISOString()} style={{ backgroundColor: background }}>
+                      <td style={{ padding: '0.5rem 0.75rem', fontWeight: isCurrentWeek ? 600 : 500 }}>{bucket.label}</td>
+                      <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right', fontWeight: 600 }}>{bucket.totals.overall.toFixed(1)}</td>
+                      {PREFERRED_WIRE_HARNESS_WORKCENTERS.map((name) => (
+                        <td key={name} style={{ padding: '0.5rem 0.75rem', textAlign: 'right', color: '#1f2937' }}>
+                          {(bucket.totals.perWorkcenter[name] || 0).toFixed(1)}
+                        </td>
+                      ))}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {otherSummary.length > 0 && (
+          <div className="card">
+            <div className="card-header" style={{ background: 'linear-gradient(90deg, #475569, #94a3b8)', color: 'white', padding: '1rem', borderTopLeftRadius: '0.5rem', borderTopRightRadius: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Activity size={18} />
+                <strong>Additional Workcenters</strong>
+              </div>
+              <p style={{ marginTop: '0.25rem', fontSize: '0.8rem', opacity: 0.9 }}>Other active locations to monitor alongside the core team</p>
+            </div>
+            <div className="card-body" style={{ paddingTop: '0.5rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: '0.5rem', fontSize: '0.75rem', color: '#6c757d', marginBottom: '0.75rem', padding: '0 0.25rem' }}>
+                <span>Workcenter</span>
+                <span style={{ textAlign: 'right' }}>Ops</span>
+                <span style={{ textAlign: 'right' }}>Hours</span>
+                <span style={{ textAlign: 'right' }}>Past Due</span>
+              </div>
+              {otherSummary.map((summary) => (
+                <div
+                  key={summary.name}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr auto auto auto',
+                    gap: '0.5rem',
+                    alignItems: 'center',
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: '0.5rem',
+                    marginBottom: '0.5rem',
+                    backgroundColor: 'rgba(148, 163, 184, 0.15)',
+                    border: '1px solid rgba(148, 163, 184, 0.35)'
+                  }}
+                >
+                  <div>
+                    <strong style={{ fontSize: '0.9rem' }}>{summary.name}</strong>
+                    <div style={{ fontSize: '0.7rem', color: '#4b5563', marginTop: '0.15rem' }}>
+                      Upcoming: {summary.upcoming}
+                    </div>
+                  </div>
+                  <span style={{ textAlign: 'right', fontWeight: 600 }}>{summary.totalJobs}</span>
+                  <span style={{ textAlign: 'right', fontWeight: 600 }}>{summary.totalHours.toFixed(1)}</span>
+                  <span style={{ textAlign: 'right', fontWeight: 600, color: summary.pastDue > 0 ? '#ef4444' : '#1f2937' }}>{summary.pastDue}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="card">
           <div className="card-header" style={{ background: 'linear-gradient(90deg, #0f766e, #14b8a6)', color: 'white', padding: '1rem', borderTopLeftRadius: '0.5rem', borderTopRightRadius: '0.5rem' }}>
