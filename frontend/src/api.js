@@ -160,8 +160,12 @@ export const executeMetabaseQuery = (databaseId, query) =>
   api.post(`/api/metabase/database/${databaseId}/query`, query)
 export const getMetabaseCards = () =>
   api.get('/api/metabase/cards')
-export const executeMetabaseCard = (cardId) =>
-  api.get(`/api/metabase/card/${cardId}/query`)
+export const executeMetabaseCard = (cardId, parameters = {}) =>
+  api.post(`/api/metabase/card/${cardId}/query`, parameters)
+export const getMetabaseDashboard = (dashboardId) =>
+  api.get(`/api/metabase/dashboard/${dashboardId}`)
+export const executeDashboardWithParams = (dashboardId, params = {}) =>
+  api.get(`/api/metabase/dashboard/${dashboardId}/query`, { params })
 export const exploreProdlineInMetabase = (prodline) =>
   api.get(`/api/metabase/explore/prodline/${prodline}`)
 

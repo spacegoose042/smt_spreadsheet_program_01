@@ -4,7 +4,7 @@ Main FastAPI application - CRITICAL FIX FOR PRODUCTION
 - Import ALL work orders regardless of location
 - Railway deployment issue - forcing new deployment
 """
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -1888,21 +1888,27 @@ def get_metabase_cards(
             detail=f"Failed to fetch cards from Metabase: {str(e)}"
         )
 
-@app.get("/api/metabase/card/{card_id}/query")
+@app.post("/api/metabase/card/{card_id}/query")
 def execute_metabase_card(
     card_id: int,
+    parameters: Optional[dict] = Body(None),
     current_user: User = Depends(auth.get_current_user)
 ):
     """
     Execute a saved Metabase card/question
+    Can pass parameters to filter the query (e.g., {"prodline": "300"})
     """
     try:
         url = f"{METABASE_CONFIG['base_url']}/api/card/{card_id}/query"
         headers = get_metabase_headers()
         
-        print(f"🔍 Executing card {card_id}: {url}")
+        # Build parameters for the query
+        query_params = parameters if parameters else {}
         
-        response = requests.post(url, headers=headers, json={}, timeout=60)
+        print(f"🔍 Executing card {card_id}: {url}")
+        print(f"   Parameters: {query_params}")
+        
+        response = requests.post(url, headers=headers, json=query_params, timeout=60)
         response.raise_for_status()
         
         result = response.json()
@@ -1912,6 +1918,7 @@ def execute_metabase_card(
         return {
             "success": True,
             "card_id": card_id,
+            "parameters": query_params,
             "result": result
         }
         
@@ -1920,6 +1927,151 @@ def execute_metabase_card(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to execute card: {str(e)}"
+        )
+
+@app.get("/api/metabase/dashboard/{dashboard_id}")
+def get_metabase_dashboard(
+    dashboard_id: int,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Get dashboard details including all cards/questions on it
+    """
+    try:
+        url = f"{METABASE_CONFIG['base_url']}/api/dashboard/{dashboard_id}"
+        headers = get_metabase_headers()
+        
+        print(f"🔍 Fetching dashboard {dashboard_id}: {url}")
+        
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+        
+        dashboard = response.json()
+        
+        # Extract card IDs from dashboard
+        card_ids = []
+        if 'ordered_cards' in dashboard:
+            for card in dashboard['ordered_cards']:
+                if 'card' in card and 'id' in card['card']:
+                    card_ids.append(card['card']['id'])
+        
+        print(f"   ✅ Found dashboard with {len(card_ids)} cards")
+        
+        return {
+            "success": True,
+            "dashboard_id": dashboard_id,
+            "dashboard": dashboard,
+            "card_ids": card_ids
+        }
+        
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Metabase API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch dashboard: {str(e)}"
+        )
+
+@app.get("/api/metabase/dashboard/{dashboard_id}/query")
+def execute_dashboard_with_params(
+    dashboard_id: int,
+    prodline: Optional[str] = None,
+    build_operation: Optional[str] = None,
+    order_number: Optional[str] = None,
+    ordline_status: Optional[str] = None,
+    prc_part_partial: Optional[str] = None,
+    prod_status: Optional[str] = None,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Execute all cards on a dashboard with filter parameters
+    This mimics what happens when you view a dashboard with URL parameters
+    """
+    try:
+        # First get the dashboard to find its cards
+        dashboard_url = f"{METABASE_CONFIG['base_url']}/api/dashboard/{dashboard_id}"
+        headers = get_metabase_headers()
+        
+        print(f"🔍 Fetching dashboard {dashboard_id} for execution")
+        
+        dashboard_response = requests.get(dashboard_url, headers=headers, timeout=30)
+        dashboard_response.raise_for_status()
+        dashboard = dashboard_response.json()
+        
+        # Build parameters dict from query params
+        parameters = {}
+        if prodline:
+            parameters['prodline'] = prodline
+        if build_operation:
+            parameters['build_operation'] = build_operation
+        if order_number:
+            parameters['order_number'] = order_number
+        if ordline_status:
+            parameters['ordline_status'] = ordline_status
+        if prc_part_partial:
+            parameters['prc_part_partial'] = prc_part_partial
+        if prod_status:
+            parameters['prod_status'] = prod_status
+        
+        # Extract and execute each card
+        results = []
+        if 'ordered_cards' in dashboard:
+            for card_item in dashboard['ordered_cards']:
+                if 'card' in card_item and 'id' in card_item['card']:
+                    card_id = card_item['card']['id']
+                    card_name = card_item['card'].get('name', f'Card {card_id}')
+                    
+                    print(f"   📊 Executing card {card_id}: {card_name}")
+                    
+                    try:
+                        # Execute the card with parameters
+                        card_query_url = f"{METABASE_CONFIG['base_url']}/api/card/{card_id}/query"
+                        card_response = requests.post(
+                            card_query_url, 
+                            headers=headers, 
+                            json=parameters if parameters else {},
+                            timeout=60
+                        )
+                        card_response.raise_for_status()
+                        card_result = card_response.json()
+                        
+                        # Extract data rows if available
+                        data_rows = []
+                        if 'data' in card_result and 'rows' in card_result['data']:
+                            data_rows = card_result['data']['rows']
+                        
+                        results.append({
+                            "card_id": card_id,
+                            "card_name": card_name,
+                            "success": True,
+                            "row_count": len(data_rows),
+                            "data": card_result
+                        })
+                        
+                        print(f"      ✅ Card {card_id} returned {len(data_rows)} rows")
+                        
+                    except Exception as e:
+                        print(f"      ❌ Error executing card {card_id}: {str(e)}")
+                        results.append({
+                            "card_id": card_id,
+                            "card_name": card_name,
+                            "success": False,
+                            "error": str(e)
+                        })
+        
+        return {
+            "success": True,
+            "dashboard_id": dashboard_id,
+            "dashboard_name": dashboard.get('name', 'Unknown'),
+            "parameters": parameters,
+            "cards_executed": len(results),
+            "results": results
+        }
+        
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Metabase API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to execute dashboard: {str(e)}"
         )
 
 @app.get("/api/metabase/explore/prodline/{prodline}")
