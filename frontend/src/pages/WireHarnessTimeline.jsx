@@ -1103,7 +1103,7 @@ export default function WireHarnessTimeline() {
                             <div style={{ 
                               position: 'relative', 
                               marginTop: zoomLevel === 'day' ? '20px' : '0',
-                              minHeight: '100px'
+                              minHeight: `${Math.max(100, sortedDayJobs.length * 28 + 20)}px` // Dynamic height based on number of jobs
                             }}>
                               {sortedDayJobs.map((job, jobIdx) => {
                                 const jobKey = `${job.orderNumber}-${job.operation}-${dayIdx}`
