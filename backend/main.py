@@ -1685,31 +1685,57 @@ def test_metabase_connection(
         headers = get_metabase_headers()
         
         print(f"🔍 Testing Metabase connection: {url}")
+        print(f"   Headers: {headers}")
+        print(f"   API Key: {METABASE_CONFIG['api_key'][:10]}...")
         
         response = requests.get(url, headers=headers, timeout=30)
         
-        print(f"   ✅ Response: Status {response.status_code}")
+        print(f"   Response status: {response.status_code}")
+        print(f"   Response headers: {dict(response.headers)}")
         
         if response.status_code == 200:
-            return {
-                "success": True,
-                "status_code": response.status_code,
-                "message": "Successfully connected to Metabase",
-                "data": response.json()
-            }
+            try:
+                data = response.json()
+                return {
+                    "success": True,
+                    "status_code": response.status_code,
+                    "message": "Successfully connected to Metabase",
+                    "data": data
+                }
+            except ValueError as e:
+                return {
+                    "success": False,
+                    "status_code": response.status_code,
+                    "message": f"Got 200 but failed to parse JSON: {str(e)}",
+                    "response_text": response.text[:500]
+                }
         else:
+            error_text = response.text[:500] if response.text else "No error message"
+            print(f"   ❌ Error response: {error_text}")
             return {
                 "success": False,
                 "status_code": response.status_code,
                 "message": f"Unexpected status code: {response.status_code}",
-                "response_text": response.text[:500]
+                "response_text": error_text
             }
             
     except requests.exceptions.RequestException as e:
+        import traceback
+        error_trace = traceback.format_exc()
         print(f"❌ Metabase connection error: {str(e)}")
+        print(f"   Traceback: {error_trace}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to connect to Metabase: {str(e)}"
+        )
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ Unexpected error: {str(e)}")
+        print(f"   Traceback: {error_trace}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error: {str(e)}"
         )
 
 @app.get("/api/metabase/databases")
@@ -1942,11 +1968,30 @@ def get_metabase_dashboard(
         headers = get_metabase_headers()
         
         print(f"🔍 Fetching dashboard {dashboard_id}: {url}")
+        print(f"   Headers: {headers}")
         
         response = requests.get(url, headers=headers, timeout=30)
-        response.raise_for_status()
         
-        dashboard = response.json()
+        print(f"   Response status: {response.status_code}")
+        print(f"   Response headers: {dict(response.headers)}")
+        
+        if response.status_code != 200:
+            error_text = response.text[:500] if response.text else "No error message"
+            print(f"   ❌ Error response: {error_text}")
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"Metabase API returned {response.status_code}: {error_text}"
+            )
+        
+        try:
+            dashboard = response.json()
+        except ValueError as e:
+            print(f"   ❌ JSON parse error: {str(e)}")
+            print(f"   Response text: {response.text[:500]}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to parse Metabase response as JSON: {str(e)}"
+            )
         
         # Extract card IDs from dashboard
         card_ids = []
@@ -1964,11 +2009,25 @@ def get_metabase_dashboard(
             "card_ids": card_ids
         }
         
+    except HTTPException:
+        raise
     except requests.exceptions.RequestException as e:
-        print(f"❌ Metabase API error: {str(e)}")
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ Metabase API request error: {str(e)}")
+        print(f"   Traceback: {error_trace}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to fetch dashboard: {str(e)}"
+        )
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ Unexpected error: {str(e)}")
+        print(f"   Traceback: {error_trace}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error: {str(e)}"
         )
 
 @app.get("/api/metabase/dashboard/{dashboard_id}/query")
@@ -1992,10 +2051,30 @@ def execute_dashboard_with_params(
         headers = get_metabase_headers()
         
         print(f"🔍 Fetching dashboard {dashboard_id} for execution")
+        print(f"   URL: {dashboard_url}")
+        print(f"   Headers: {headers}")
         
         dashboard_response = requests.get(dashboard_url, headers=headers, timeout=30)
-        dashboard_response.raise_for_status()
-        dashboard = dashboard_response.json()
+        
+        print(f"   Dashboard response status: {dashboard_response.status_code}")
+        
+        if dashboard_response.status_code != 200:
+            error_text = dashboard_response.text[:500] if dashboard_response.text else "No error message"
+            print(f"   ❌ Error response: {error_text}")
+            raise HTTPException(
+                status_code=dashboard_response.status_code,
+                detail=f"Metabase API returned {dashboard_response.status_code}: {error_text}"
+            )
+        
+        try:
+            dashboard = dashboard_response.json()
+        except ValueError as e:
+            print(f"   ❌ JSON parse error: {str(e)}")
+            print(f"   Response text: {dashboard_response.text[:500]}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to parse Metabase response as JSON: {str(e)}"
+            )
         
         # Build parameters dict from query params
         parameters = {}
@@ -2067,11 +2146,25 @@ def execute_dashboard_with_params(
             "results": results
         }
         
+    except HTTPException:
+        raise
     except requests.exceptions.RequestException as e:
-        print(f"❌ Metabase API error: {str(e)}")
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ Metabase API request error: {str(e)}")
+        print(f"   Traceback: {error_trace}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to execute dashboard: {str(e)}"
+        )
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ Unexpected error: {str(e)}")
+        print(f"   Traceback: {error_trace}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error: {str(e)}"
         )
 
 @app.get("/api/metabase/explore/prodline/{prodline}")
