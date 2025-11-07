@@ -23,6 +23,7 @@ import ProgressDashboard from './pages/ProgressDashboard'
 import ProdlineScheduleExplorer from './pages/ProdlineScheduleExplorer'
 import MetabaseDashboardExplorer from './pages/MetabaseDashboardExplorer'
 import WireHarnessSchedule from './pages/WireHarnessSchedule'
+import WireHarnessTimeline from './pages/WireHarnessTimeline'
 import './App.css'
 
 function ProtectedRoute({ children, requireAuth = true }) {
@@ -109,6 +110,10 @@ function Navigation() {
           <Link to="/wire-harness" className={isActive('/wire-harness') ? 'active' : ''}>
             <Timer size={18} />
             Wire Harness
+          </Link>
+          <Link to="/wire-harness-timeline" className={isActive('/wire-harness-timeline') ? 'active' : ''}>
+            <Calendar size={18} />
+            WH Timeline
           </Link>
           
           {/* Settings Dropdown */}
@@ -277,6 +282,7 @@ function AppContent() {
           <Route path="/issues" element={<ProtectedRoute><Issues /></ProtectedRoute>} />
           <Route path="/progress" element={<ProtectedRoute><ProgressDashboard /></ProtectedRoute>} />
           <Route path="/wire-harness" element={<ProtectedRoute><WireHarnessSchedule /></ProtectedRoute>} />
+          <Route path="/wire-harness-timeline" element={<ProtectedRoute><WireHarnessTimeline /></ProtectedRoute>} />
           <Route path="/capacity" element={<ProtectedRoute><CapacityCalendar /></ProtectedRoute>} />
           <Route path="/shifts" element={<ProtectedRoute><ShiftConfiguration /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />

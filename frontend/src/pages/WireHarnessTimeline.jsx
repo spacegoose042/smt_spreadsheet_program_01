@@ -1,0 +1,946 @@
+import { useState, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { getWireHarnessSchedule } from '../api'
+import { 
+  Calendar, Clock, Package, AlertCircle, RefreshCw, Loader2, 
+  MapPin, Wrench, FileText, Filter, X, ChevronLeft, ChevronRight,
+  ZoomIn, ZoomOut
+} from 'lucide-react'
+import { 
+  format, parseISO, addDays, differenceInDays, differenceInMinutes, 
+  startOfWeek, startOfDay, endOfDay, isWithinInterval 
+} from 'date-fns'
+
+export default function WireHarnessTimeline() {
+  const [autoRefresh, setAutoRefresh] = useState(true)
+  const [lastRefresh, setLastRefresh] = useState(new Date())
+  const [selectedWorkcenters, setSelectedWorkcenters] = useState([])
+  const [selectedProdStatuses, setSelectedProdStatuses] = useState([])
+  const [dateFilterStart, setDateFilterStart] = useState('')
+  const [dateFilterEnd, setDateFilterEnd] = useState('')
+  const [workOrderFilter, setWorkOrderFilter] = useState('')
+  const [showFilters, setShowFilters] = useState(false)
+  const [zoomLevel, setZoomLevel] = useState('week') // 'day', 'week', 'month'
+  const [weekOffset, setWeekOffset] = useState(0)
+  const [dayOffset, setDayOffset] = useState(0)
+
+  // Fetch schedule data
+  const { data: scheduleData, isLoading, error, refetch } = useQuery({
+    queryKey: ['wireHarnessSchedule'],
+    queryFn: async () => {
+      const response = await getWireHarnessSchedule('300')
+      setLastRefresh(new Date())
+      return response.data || response
+    },
+    refetchInterval: autoRefresh ? 5 * 60 * 1000 : false,
+    refetchOnWindowFocus: true,
+    retry: 2,
+  })
+
+  // Process and group data by workcenter
+  const workcenters = useMemo(() => {
+    if (!scheduleData?.results?.[0]?.data?.data?.rows) return []
+
+    const rows = scheduleData.results[0].data.data.rows
+    const cols = scheduleData.results[0].data.data.cols || []
+
+    // Map column indices to names
+    const colMap = {}
+    cols.forEach((col, idx) => {
+      const displayName = (col.display_name || '').toLowerCase()
+      const name = (col.name || '').toLowerCase()
+      const combined = `${displayName} ${name}`
+      
+      if ((displayName.includes('scheduled location') || displayName.includes('ordline status') || 
+           name.includes('description')) && colMap.workcenter === undefined) {
+        colMap.workcenter = idx
+      }
+      else if (combined.includes('build operation') || combined.includes('operation') || name === 'name') {
+        if (colMap.operation === undefined) colMap.operation = idx
+      }
+      else if (combined.includes('order') && (combined.includes('ordernum') || combined.includes('order num'))) {
+        colMap.order = idx
+      }
+      else if (combined.includes('line') && (combined.includes('lineitem') || combined.includes('line item'))) {
+        colMap.line = idx
+      }
+      else if (combined.includes('prcpart') || combined.includes('prc part') || combined.includes('part')) {
+        if (colMap.part === undefined) colMap.part = idx
+      }
+      else if ((displayName.includes('min') || displayName.includes('start')) && 
+               (combined.includes('work date') || combined.includes('date'))) {
+        colMap.startDate = idx
+      }
+      else if ((displayName.includes('max') || displayName.includes('end')) && 
+               (combined.includes('work end') || combined.includes('end'))) {
+        colMap.endDate = idx
+      }
+      else if (combined.includes('hours') || combined.includes('sum')) {
+        if (colMap.hours === undefined) colMap.hours = idx
+      }
+      else if (displayName.includes('current location') || 
+               (name.includes('description') && colMap.workcenter !== undefined && colMap.currentLocation === undefined)) {
+        colMap.currentLocation = idx
+      }
+      else if (combined.includes('production status') || combined.includes('prod status') || 
+               (name === 'name_2' || name === 'name')) {
+        if (colMap.prodStatus === undefined) colMap.prodStatus = idx
+      }
+      else if (combined.includes('prod notes') || combined.includes('notes')) {
+        colMap.notes = idx
+      }
+      else if (combined.includes('build order')) {
+        colMap.buildOrder = idx
+      }
+      else if (combined.includes('priority rank') || combined.includes('priority')) {
+        colMap.priority = idx
+      }
+    })
+
+    // Group by workcenter
+    const grouped = {}
+    rows.forEach(row => {
+      const workcenter = row[colMap.workcenter] || 'Unknown'
+      const startDate = row[colMap.startDate] ? parseISO(row[colMap.startDate]) : null
+      const endDate = row[colMap.endDate] ? parseISO(row[colMap.endDate]) : null
+
+      if (!grouped[workcenter]) {
+        grouped[workcenter] = {
+          name: workcenter,
+          jobs: []
+        }
+      }
+
+      grouped[workcenter].jobs.push({
+        order: row[colMap.order] || '',
+        line: row[colMap.line] || '',
+        part: row[colMap.part] || '',
+        operation: row[colMap.operation] || '',
+        startDate,
+        endDate,
+        hours: row[colMap.hours] || 0,
+        currentLocation: row[colMap.currentLocation] || '',
+        prodStatus: row[colMap.prodStatus] || '',
+        notes: row[colMap.notes] || '',
+        buildOrder: row[colMap.buildOrder] || null,
+        priority: row[colMap.priority] || 0,
+        orderNumber: `${row[colMap.order] || ''}.${row[colMap.line] || ''}`,
+        rawRow: row,
+        colMap
+      })
+    })
+
+    return Object.values(grouped)
+      .map(wc => ({
+        ...wc,
+        jobs: wc.jobs.sort((a, b) => {
+          if (a.startDate && b.startDate) {
+            const dateDiff = a.startDate.getTime() - b.startDate.getTime()
+            if (dateDiff !== 0) return dateDiff
+          }
+          if (a.buildOrder !== null && b.buildOrder !== null) {
+            return a.buildOrder - b.buildOrder
+          }
+          return (b.priority || 0) - (a.priority || 0)
+        })
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [scheduleData])
+
+  // Extract unique values for filters
+  const { uniqueWorkcenters, uniqueProdStatuses } = useMemo(() => {
+    const workcentersSet = new Set()
+    const statusesSet = new Set()
+    
+    workcenters.forEach(wc => {
+      workcentersSet.add(wc.name)
+      wc.jobs.forEach(job => {
+        if (job.prodStatus) {
+          statusesSet.add(job.prodStatus)
+        }
+      })
+    })
+    
+    return {
+      uniqueWorkcenters: Array.from(workcentersSet).sort(),
+      uniqueProdStatuses: Array.from(statusesSet).sort()
+    }
+  }, [workcenters])
+
+  // Apply filters
+  const filteredWorkcenters = useMemo(() => {
+    let filtered = workcenters
+
+    if (selectedWorkcenters.length > 0) {
+      filtered = filtered.filter(wc => selectedWorkcenters.includes(wc.name))
+    }
+
+    filtered = filtered.map(wc => ({
+      ...wc,
+      jobs: wc.jobs.filter(job => {
+        // Work order filter
+        if (workOrderFilter.trim()) {
+          const searchTerm = workOrderFilter.trim().toLowerCase()
+          const orderMatch = job.orderNumber?.toLowerCase().includes(searchTerm) ||
+                           job.order?.toLowerCase().includes(searchTerm) ||
+                           job.part?.toLowerCase().includes(searchTerm)
+          if (!orderMatch) return false
+        }
+
+        // Production status filter
+        if (selectedProdStatuses.length > 0) {
+          if (!job.prodStatus || !selectedProdStatuses.includes(job.prodStatus)) {
+            return false
+          }
+        }
+
+        // Date filter
+        if (dateFilterStart || dateFilterEnd) {
+          const jobStart = job.startDate ? startOfDay(job.startDate) : null
+          const jobEnd = job.endDate ? endOfDay(job.endDate) : null
+          const filterStart = dateFilterStart ? startOfDay(parseISO(dateFilterStart)) : null
+          const filterEnd = dateFilterEnd ? endOfDay(parseISO(dateFilterEnd)) : null
+
+          if (jobStart && jobEnd) {
+            if (filterStart && filterEnd) {
+              return !(jobEnd < filterStart || jobStart > filterEnd)
+            } else if (filterStart) {
+              return jobStart >= filterStart
+            } else if (filterEnd) {
+              return jobEnd <= filterEnd
+            }
+          } else if (filterStart || filterEnd) {
+            return false
+          }
+        }
+
+        return true
+      })
+    })).filter(wc => wc.jobs.length > 0)
+
+    return filtered
+  }, [workcenters, selectedWorkcenters, selectedProdStatuses, dateFilterStart, dateFilterEnd, workOrderFilter])
+
+  // Calculate timeline dates based on zoom level
+  const { timelineStart, timelineDays, days } = useMemo(() => {
+    const today = new Date()
+    let start, daysArray, totalDays
+
+    switch (zoomLevel) {
+      case 'day':
+        start = addDays(today, dayOffset)
+        start.setHours(0, 0, 0, 0)
+        daysArray = [start]
+        totalDays = 1
+        break
+      case 'week':
+        start = addDays(startOfWeek(today), weekOffset * 7)
+        start.setHours(0, 0, 0, 0)
+        daysArray = Array.from({ length: 7 }, (_, i) => addDays(start, i))
+        totalDays = 7
+        break
+      case 'month':
+      default:
+        start = addDays(startOfWeek(today), weekOffset * 7)
+        start.setHours(0, 0, 0, 0)
+        daysArray = Array.from({ length: 28 }, (_, i) => addDays(start, i))
+        totalDays = 28
+        break
+    }
+
+    return {
+      timelineStart: start,
+      timelineDays: totalDays,
+      days: daysArray
+    }
+  }, [zoomLevel, weekOffset, dayOffset])
+
+  // Calculate job position on timeline
+  const getJobPosition = (job) => {
+    if (!job.startDate || !job.endDate) return null
+
+    const start = startOfDay(job.startDate)
+    const end = endOfDay(job.endDate)
+    const timelineStartDay = startOfDay(timelineStart)
+
+    const startDiff = differenceInDays(start, timelineStartDay)
+    const duration = differenceInDays(end, start) + 1
+
+    // Check if job overlaps with visible timeline
+    if (startDiff + duration < 0 || startDiff > timelineDays) return null
+
+    return {
+      left: `${Math.max(0, (startDiff / timelineDays) * 100)}%`,
+      width: `${Math.min(100, (duration / timelineDays) * 100)}%`,
+      startDiff,
+      duration
+    }
+  }
+
+  const hasActiveFilters = selectedWorkcenters.length > 0 || 
+                          selectedProdStatuses.length > 0 || 
+                          dateFilterStart || 
+                          dateFilterEnd ||
+                          workOrderFilter.trim()
+
+  const clearFilters = () => {
+    setSelectedWorkcenters([])
+    setSelectedProdStatuses([])
+    setDateFilterStart('')
+    setDateFilterEnd('')
+    setWorkOrderFilter('')
+  }
+
+  const toggleWorkcenter = (workcenter) => {
+    setSelectedWorkcenters(prev => 
+      prev.includes(workcenter)
+        ? prev.filter(w => w !== workcenter)
+        : [...prev, workcenter]
+    )
+  }
+
+  const toggleProdStatus = (status) => {
+    setSelectedProdStatuses(prev => 
+      prev.includes(status)
+        ? prev.filter(s => s !== status)
+        : [...prev, status]
+    )
+  }
+
+  const handleManualRefresh = () => {
+    refetch()
+  }
+
+  const getStatusColor = (status) => {
+    if (!status) return '#6c757d'
+    const statusLower = status.toLowerCase()
+    if (statusLower.includes('missing')) return '#f59e0b'
+    if (statusLower.includes('in-process')) return '#10b981'
+    if (statusLower.includes('waiting')) return '#f59e0b'
+    if (statusLower.includes('ready')) return '#3b82f6'
+    return '#6c757d'
+  }
+
+  const getPriorityColor = (priority) => {
+    if (priority === 3) return '#ef4444'
+    if (priority === 2) return '#f59e0b'
+    if (priority === 1) return '#3b82f6'
+    return '#6c757d'
+  }
+
+  const navigateTimeline = (direction) => {
+    if (zoomLevel === 'day') {
+      setDayOffset(prev => prev + direction)
+    } else {
+      setWeekOffset(prev => prev + direction)
+    }
+  }
+
+  if (isLoading && !scheduleData) {
+    return (
+      <div className="container">
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Wire Harness Timeline</h1>
+            <p className="page-description">Visual timeline schedule for Wire Harness Department (Prodline 300)</p>
+          </div>
+        </div>
+        <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+          <Loader2 size={48} style={{ animation: 'spin 1s linear infinite', marginBottom: '1rem', color: '#3b82f6' }} />
+          <p>Loading schedule data...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="container">
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Wire Harness Timeline</h1>
+            <p className="page-description">Visual timeline schedule for Wire Harness Department (Prodline 300)</p>
+          </div>
+        </div>
+        <div className="card" style={{ backgroundColor: '#fee2e2', borderColor: '#fca5a5' }}>
+          <div className="card-body">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#dc2626' }}>
+              <AlertCircle size={24} />
+              <strong>Error loading schedule</strong>
+            </div>
+            <p style={{ marginTop: '0.5rem', color: '#991b1b' }}>
+              {error.response?.data?.detail || error.message || 'Failed to load schedule data'}
+            </p>
+            <button onClick={handleManualRefresh} className="btn btn-primary" style={{ marginTop: '1rem' }}>
+              <RefreshCw size={18} style={{ marginRight: '0.5rem' }} />
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="container">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Wire Harness Timeline</h1>
+          <p className="page-description">Visual timeline schedule for Wire Harness Department (Prodline 300)</p>
+        </div>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`btn ${showFilters ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+          >
+            <Filter size={18} />
+            Filters
+            {hasActiveFilters && (
+              <span style={{
+                marginLeft: '0.25rem',
+                backgroundColor: '#ef4444',
+                color: 'white',
+                borderRadius: '50%',
+                width: '20px',
+                height: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '0.75rem',
+                fontWeight: 600
+              }}>
+                {[selectedWorkcenters.length, selectedProdStatuses.length, dateFilterStart ? 1 : 0, dateFilterEnd ? 1 : 0, workOrderFilter.trim() ? 1 : 0].reduce((a, b) => a + b, 0)}
+              </span>
+            )}
+          </button>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+            />
+            <span style={{ fontSize: '0.9rem' }}>Auto-refresh (5 min)</span>
+          </label>
+          <button
+            onClick={handleManualRefresh}
+            disabled={isLoading}
+            className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+          >
+            {isLoading ? (
+              <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
+            ) : (
+              <RefreshCw size={18} />
+            )}
+            Refresh
+          </button>
+          {lastRefresh && (
+            <span style={{ fontSize: '0.85rem', color: '#6c757d' }}>
+              Last updated: {format(lastRefresh, 'h:mm:ss a')}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Filter Panel */}
+      {showFilters && (
+        <div className="card" style={{ marginBottom: '2rem', backgroundColor: '#f9fafb' }}>
+          <div className="card-body">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>Filters</h3>
+              {hasActiveFilters && (
+                <button
+                  onClick={clearFilters}
+                  className="btn btn-secondary"
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', padding: '0.5rem 1rem' }}
+                >
+                  <X size={16} />
+                  Clear All
+                </button>
+              )}
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' }}>
+              {/* Work Order Number Filter */}
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, fontSize: '0.9rem' }}>
+                  Work Order Number
+                </label>
+                <input
+                  type="text"
+                  value={workOrderFilter}
+                  onChange={(e) => setWorkOrderFilter(e.target.value)}
+                  placeholder="e.g., 14546.1 or 14546"
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '6px',
+                    fontSize: '0.9rem'
+                  }}
+                />
+                <div style={{ marginTop: '0.25rem', fontSize: '0.85rem', color: '#6c757d' }}>
+                  Search by order number, line item, or part number
+                </div>
+              </div>
+
+              {/* Workcenter Filter */}
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, fontSize: '0.9rem' }}>
+                  Workcenter (Ordline Status)
+                </label>
+                <div style={{ 
+                  maxHeight: '200px', 
+                  overflowY: 'auto', 
+                  border: '1px solid #e5e7eb', 
+                  borderRadius: '6px',
+                  padding: '0.5rem',
+                  backgroundColor: 'white'
+                }}>
+                  {uniqueWorkcenters.length === 0 ? (
+                    <div style={{ padding: '0.5rem', color: '#6c757d', fontSize: '0.85rem' }}>No workcenters available</div>
+                  ) : (
+                    uniqueWorkcenters.map(wc => (
+                      <label
+                        key={wc}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          padding: '0.5rem',
+                          cursor: 'pointer',
+                          borderRadius: '4px',
+                          transition: 'background-color 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedWorkcenters.includes(wc)}
+                          onChange={() => toggleWorkcenter(wc)}
+                          style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                        />
+                        <span style={{ fontSize: '0.9rem' }}>{wc}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+                {selectedWorkcenters.length > 0 && (
+                  <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#6c757d' }}>
+                    {selectedWorkcenters.length} of {uniqueWorkcenters.length} selected
+                  </div>
+                )}
+              </div>
+
+              {/* Production Status Filter */}
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, fontSize: '0.9rem' }}>
+                  Production Status
+                </label>
+                <div style={{ 
+                  maxHeight: '200px', 
+                  overflowY: 'auto', 
+                  border: '1px solid #e5e7eb', 
+                  borderRadius: '6px',
+                  padding: '0.5rem',
+                  backgroundColor: 'white'
+                }}>
+                  {uniqueProdStatuses.length === 0 ? (
+                    <div style={{ padding: '0.5rem', color: '#6c757d', fontSize: '0.85rem' }}>No statuses available</div>
+                  ) : (
+                    uniqueProdStatuses.map(status => (
+                      <label
+                        key={status}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          padding: '0.5rem',
+                          cursor: 'pointer',
+                          borderRadius: '4px',
+                          transition: 'background-color 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedProdStatuses.includes(status)}
+                          onChange={() => toggleProdStatus(status)}
+                          style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                        />
+                        <span style={{ 
+                          fontSize: '0.9rem',
+                          padding: '0.125rem 0.5rem',
+                          borderRadius: '4px',
+                          backgroundColor: getStatusColor(status) + '20',
+                          color: getStatusColor(status),
+                          border: `1px solid ${getStatusColor(status)}`,
+                          fontWeight: 500
+                        }}>
+                          {status}
+                        </span>
+                      </label>
+                    ))
+                  )}
+                </div>
+                {selectedProdStatuses.length > 0 && (
+                  <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#6c757d' }}>
+                    {selectedProdStatuses.length} of {uniqueProdStatuses.length} selected
+                  </div>
+                )}
+              </div>
+
+              {/* Date Range Filter */}
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, fontSize: '0.9rem' }}>
+                  Date Range
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', color: '#6c757d' }}>
+                      Start Date
+                    </label>
+                    <input
+                      type="date"
+                      value={dateFilterStart}
+                      onChange={(e) => setDateFilterStart(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '0.5rem',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '6px',
+                        fontSize: '0.9rem'
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', color: '#6c757d' }}>
+                      End Date
+                    </label>
+                    <input
+                      type="date"
+                      value={dateFilterEnd}
+                      onChange={(e) => setDateFilterEnd(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '0.5rem',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '6px',
+                        fontSize: '0.9rem'
+                      }}
+                    />
+                  </div>
+                  {(dateFilterStart || dateFilterEnd) && (
+                    <button
+                      onClick={() => {
+                        setDateFilterStart('')
+                        setDateFilterEnd('')
+                      }}
+                      className="btn btn-secondary"
+                      style={{ fontSize: '0.85rem', padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}
+                    >
+                      <X size={14} />
+                      Clear Dates
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {hasActiveFilters && (
+              <div style={{ 
+                marginTop: '1rem', 
+                padding: '0.75rem', 
+                backgroundColor: '#eff6ff', 
+                borderRadius: '6px',
+                fontSize: '0.85rem',
+                color: '#1e40af'
+              }}>
+                <strong>Active Filters:</strong> Showing {filteredWorkcenters.length} workcenter{filteredWorkcenters.length !== 1 ? 's' : ''} with{' '}
+                {filteredWorkcenters.reduce((sum, wc) => sum + wc.jobs.length, 0)} job{filteredWorkcenters.reduce((sum, wc) => sum + wc.jobs.length, 0) !== 1 ? 's' : ''}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Timeline Controls */}
+      <div className="card" style={{ marginBottom: '1rem' }}>
+        <div className="card-body">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <button
+                onClick={() => navigateTimeline(-1)}
+                className="btn btn-secondary"
+                style={{ padding: '0.5rem' }}
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <button
+                onClick={() => navigateTimeline(1)}
+                className="btn btn-secondary"
+                style={{ padding: '0.5rem' }}
+              >
+                <ChevronRight size={18} />
+              </button>
+              <div style={{ marginLeft: '1rem', fontSize: '0.9rem', fontWeight: 500 }}>
+                {zoomLevel === 'day' 
+                  ? format(timelineStart, 'EEEE, MMMM d, yyyy')
+                  : zoomLevel === 'week'
+                  ? `${format(days[0], 'MMM d')} - ${format(days[days.length - 1], 'MMM d, yyyy')}`
+                  : `${format(days[0], 'MMM d')} - ${format(days[days.length - 1], 'MMM d, yyyy')}`
+                }
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <button
+                onClick={() => setZoomLevel('day')}
+                className={`btn ${zoomLevel === 'day' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
+              >
+                Day
+              </button>
+              <button
+                onClick={() => setZoomLevel('week')}
+                className={`btn ${zoomLevel === 'week' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
+              >
+                Week
+              </button>
+              <button
+                onClick={() => setZoomLevel('month')}
+                className={`btn ${zoomLevel === 'month' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
+              >
+                Month
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Timeline View */}
+      {filteredWorkcenters.length === 0 ? (
+        <div className="card">
+          <div className="card-body" style={{ textAlign: 'center', padding: '2rem' }}>
+            <Package size={48} style={{ color: '#9ca3af', marginBottom: '1rem' }} />
+            <p style={{ color: '#6c757d' }}>
+              {hasActiveFilters 
+                ? 'No jobs match the selected filters. Try adjusting your filters.' 
+                : 'No schedule data available'}
+            </p>
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="btn btn-primary"
+                style={{ marginTop: '1rem' }}
+              >
+                Clear Filters
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="card">
+          <div className="card-body" style={{ padding: 0 }}>
+            {/* Timeline Header */}
+            <div style={{ 
+              display: 'grid',
+              gridTemplateColumns: '200px 1fr',
+              borderBottom: '2px solid #e5e7eb',
+              position: 'sticky',
+              top: 0,
+              backgroundColor: 'white',
+              zIndex: 10
+            }}>
+              <div style={{ 
+                padding: '1rem',
+                borderRight: '2px solid #e5e7eb',
+                fontWeight: 600,
+                backgroundColor: '#f9fafb'
+              }}>
+                Workcenter
+              </div>
+              <div style={{ 
+                display: 'grid',
+                gridTemplateColumns: `repeat(${timelineDays}, 1fr)`,
+                borderBottom: '1px solid #e5e7eb'
+              }}>
+                {days.map((day, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      padding: '0.75rem 0.5rem',
+                      textAlign: 'center',
+                      borderRight: idx < days.length - 1 ? '1px solid #e5e7eb' : 'none',
+                      backgroundColor: idx === 0 && zoomLevel === 'day' ? '#eff6ff' : 'white',
+                      fontWeight: idx === 0 ? 600 : 400
+                    }}
+                  >
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                      {format(day, 'EEE')}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#6c757d', marginTop: '0.25rem' }}>
+                      {format(day, 'MMM d')}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Timeline Rows */}
+            <div style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+              {filteredWorkcenters.map((workcenter, wcIdx) => (
+                <div
+                  key={wcIdx}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '200px 1fr',
+                    borderBottom: '1px solid #e5e7eb',
+                    minHeight: '80px',
+                    position: 'relative'
+                  }}
+                >
+                  {/* Workcenter Name */}
+                  <div style={{
+                    padding: '1rem',
+                    borderRight: '2px solid #e5e7eb',
+                    backgroundColor: '#f9fafb',
+                    display: 'flex',
+                    alignItems: 'center',
+                    position: 'sticky',
+                    left: 0,
+                    zIndex: 5
+                  }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '0.95rem', marginBottom: '0.25rem' }}>
+                        {workcenter.name}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#6c757d' }}>
+                        {workcenter.jobs.length} job{workcenter.jobs.length !== 1 ? 's' : ''}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Timeline Track */}
+                  <div style={{
+                    position: 'relative',
+                    minHeight: '80px',
+                    backgroundColor: '#fafafa'
+                  }}>
+                    {/* Day Dividers */}
+                    {days.map((day, dayIdx) => (
+                      <div
+                        key={dayIdx}
+                        style={{
+                          position: 'absolute',
+                          left: `${(dayIdx / timelineDays) * 100}%`,
+                          top: 0,
+                          bottom: 0,
+                          width: '1px',
+                          backgroundColor: dayIdx === 0 ? '#3b82f6' : '#e5e7eb',
+                          zIndex: 1
+                        }}
+                      />
+                    ))}
+
+                    {/* Job Blocks */}
+                    {workcenter.jobs.map((job, jobIdx) => {
+                      const position = getJobPosition(job)
+                      if (!position) return null
+
+                      return (
+                        <div
+                          key={jobIdx}
+                          style={{
+                            position: 'absolute',
+                            left: position.left,
+                            width: position.width,
+                            top: `${jobIdx * 25}px`,
+                            height: '22px',
+                            zIndex: 2,
+                            minWidth: '60px'
+                          }}
+                          title={`${job.orderNumber} - ${job.part}
+Operation: ${job.operation}
+Status: ${job.prodStatus || 'N/A'}
+Hours: ${parseFloat(job.hours || 0).toFixed(2)}h
+${job.startDate ? `Start: ${format(job.startDate, 'MMM d, yyyy')}` : ''}
+${job.endDate ? `End: ${format(job.endDate, 'MMM d, yyyy')}` : ''}
+${job.notes ? `Notes: ${job.notes}` : ''}`}
+                        >
+                          <div
+                            style={{
+                              height: '100%',
+                              backgroundColor: getStatusColor(job.prodStatus),
+                              color: 'white',
+                              borderRadius: '4px',
+                              padding: '0.25rem 0.5rem',
+                              fontSize: '0.7rem',
+                              fontWeight: 600,
+                              display: 'flex',
+                              alignItems: 'center',
+                              border: '1px solid rgba(0,0,0,0.1)',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                              cursor: 'pointer',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.transform = 'scale(1.05)'
+                              e.currentTarget.style.zIndex = '10'
+                              e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)'
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = 'scale(1)'
+                              e.currentTarget.style.zIndex = '2'
+                              e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)'
+                            }}
+                          >
+                            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {job.orderNumber} {job.operation ? `• ${job.operation}` : ''}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Legend */}
+      <div className="card" style={{ marginTop: '1rem' }}>
+        <div className="card-body">
+          <h3 style={{ marginBottom: '1rem', fontSize: '1rem', fontWeight: 600 }}>Status Colors</h3>
+          <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+            {uniqueProdStatuses.map(status => (
+              <div key={status} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div
+                  style={{
+                    width: '20px',
+                    height: '20px',
+                    borderRadius: '4px',
+                    backgroundColor: getStatusColor(status),
+                    border: '1px solid rgba(0,0,0,0.1)'
+                  }}
+                />
+                <span style={{ fontSize: '0.85rem' }}>{status}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
