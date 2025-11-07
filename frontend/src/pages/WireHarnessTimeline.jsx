@@ -201,7 +201,7 @@ export default function WireHarnessTimeline() {
       uniqueWorkcenters: Array.from(workcentersSet).sort(),
       uniqueProdStatuses: Array.from(statusesSet).sort()
     }
-  }, [workcenters])
+  }, [workcenters, scheduleDetailData, scheduleData])
 
   // Apply filters
   const filteredWorkcenters = useMemo(() => {
