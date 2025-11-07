@@ -552,8 +552,26 @@ export default function MetabaseDashboardExplorer() {
                             </details>
                           </div>
                         ) : (
-                          <div style={{ color: '#dc3545' }}>
-                            <strong>Error:</strong> {result.error || 'Unknown error'}
+                          <div style={{ padding: '1rem', backgroundColor: '#f8d7da', borderRadius: '6px', color: '#721c24' }}>
+                            <div style={{ marginBottom: '0.5rem' }}>
+                              <strong>❌ Error:</strong> {result.error || 'Unknown error'}
+                            </div>
+                            {result.error_details && (
+                              <details style={{ marginTop: '0.5rem' }}>
+                                <summary style={{ cursor: 'pointer', fontWeight: 500, fontSize: '0.9rem' }}>Error Details</summary>
+                                <pre style={{ 
+                                  marginTop: '0.5rem', 
+                                  padding: '0.5rem', 
+                                  backgroundColor: '#fff', 
+                                  borderRadius: '4px',
+                                  fontSize: '0.85rem',
+                                  overflow: 'auto',
+                                  maxHeight: '200px'
+                                }}>
+                                  {result.error_details}
+                                </pre>
+                              </details>
+                            )}
                           </div>
                         )}
                       </div>

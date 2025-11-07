@@ -2556,13 +2556,21 @@ def execute_dashboard_with_params(
                 print(f"      Response status: {card_response.status_code}")
                 
                 if card_response.status_code != 200:
-                    error_text = card_response.text[:200] if card_response.text else "No error message"
-                    print(f"      ❌ Error: {error_text}")
+                    error_text = card_response.text[:1000] if card_response.text else "No error message"
+                    print(f"      ❌ Error (status {card_response.status_code}): {error_text}")
+                    try:
+                        error_json = card_response.json()
+                        error_message = error_json.get('message', error_json.get('error', str(error_json)))
+                        print(f"      Parsed error: {error_message}")
+                    except:
+                        error_message = error_text
+                    
                     results.append({
                         "card_id": card_id,
                         "card_name": card_name,
                         "success": False,
-                        "error": f"Status {card_response.status_code}: {error_text}"
+                        "error": f"Status {card_response.status_code}: {error_message}",
+                        "error_details": error_text[:500] if len(error_text) > 500 else error_text
                     })
                     continue
                 
@@ -2595,12 +2603,19 @@ def execute_dashboard_with_params(
                     "error": str(e)
                 })
         
+        # Check if any card succeeded
+        successful_cards = [r for r in results if r.get('success', False)]
+        all_failed = len(results) > 0 and len(successful_cards) == 0
+        
         return {
-            "success": True,
+            "success": not all_failed,  # False if all cards failed
             "dashboard_id": dashboard_id,
             "dashboard_name": dashboard.get('name', 'Unknown'),
             "parameters": parameters,
+            "metabase_parameters": metabase_params,  # Include the mapped parameters for debugging
             "cards_executed": len(results),
+            "cards_succeeded": len(successful_cards),
+            "cards_failed": len(results) - len(successful_cards),
             "results": results
         }
         
