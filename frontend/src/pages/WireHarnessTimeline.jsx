@@ -158,45 +158,83 @@ export default function WireHarnessTimeline() {
       if (!grouped[workcenter]) {
         grouped[workcenter] = {
           name: workcenter,
-          jobs: []
+          jobs: [],
+          jobMap: new Map()
         }
       }
 
-      grouped[workcenter].jobs.push({
-        order: row[colMap.order] || '',
-        line: row[colMap.line] || '',
-        part: row[colMap.part] || '',
-        operation: row[colMap.operation] || '',
-        startDate, // Date only (for day filtering)
-        endDate,   // Date only (for day filtering)
-        startDateTime: startTime, // Full datetime with time
-        endDateTime: endTime,     // Full datetime with time
-        hours: row[colMap.hours] || 0,
-        currentLocation: row[colMap.currentLocation] || '',
-        prodStatus: row[colMap.prodStatus] || '',
-        notes: row[colMap.notes] || '',
-        buildOrder: row[colMap.buildOrder] || null,
-        priority: row[colMap.priority] || 0,
-        orderNumber: `${row[colMap.order] || ''}.${row[colMap.line] || ''}`,
-        rawRow: row,
-        colMap
-      })
+      const jobKey = [row[colMap.order] || '', row[colMap.line] || '', row[colMap.part] || '', row[colMap.operation] || ''].join('|')
+      const workcenterGroup = grouped[workcenter]
+      const jobMap = workcenterGroup.jobMap
+      const existing = jobMap.get(jobKey)
+
+      const hoursValue = parseFloat(row[colMap.hours]) || 0
+      const prodStatus = row[colMap.prodStatus] || ''
+
+      if (existing) {
+        if (startTime && (!existing.startDateTime || startTime < existing.startDateTime)) {
+          existing.startDateTime = startTime
+          existing.startDate = startDate || existing.startDate
+        }
+        if (endTime && (!existing.endDateTime || endTime > existing.endDateTime)) {
+          existing.endDateTime = endTime
+          existing.endDate = endDate || existing.endDate
+        }
+        if (!existing.startDate && startDate) existing.startDate = startDate
+        if (!existing.endDate && endDate) existing.endDate = endDate
+        existing.hours = (existing.hours || 0) + hoursValue
+        if (!existing.prodStatus && prodStatus) {
+          existing.prodStatus = prodStatus
+        }
+        if (row[colMap.notes]) {
+          existing.notes = existing.notes ? `${existing.notes}\n${row[colMap.notes]}` : row[colMap.notes]
+        }
+        if (existing.buildOrder === null && row[colMap.buildOrder] !== undefined) {
+          existing.buildOrder = row[colMap.buildOrder]
+        }
+      } else {
+        const jobEntry = {
+          order: row[colMap.order] || '',
+          line: row[colMap.line] || '',
+          part: row[colMap.part] || '',
+          operation: row[colMap.operation] || '',
+          startDate, // Date only (for day filtering)
+          endDate,   // Date only (for day filtering)
+          startDateTime: startTime, // Full datetime with time
+          endDateTime: endTime,     // Full datetime with time
+          hours: hoursValue,
+          currentLocation: row[colMap.currentLocation] || '',
+          prodStatus,
+          notes: row[colMap.notes] || '',
+          buildOrder: row[colMap.buildOrder] || null,
+          priority: row[colMap.priority] || 0,
+          orderNumber: `${row[colMap.order] || ''}.${row[colMap.line] || ''}`,
+          rawRow: row,
+          colMap
+        }
+
+        workcenterGroup.jobs.push(jobEntry)
+        jobMap.set(jobKey, jobEntry)
+      }
     })
 
     return Object.values(grouped)
-      .map(wc => ({
-        ...wc,
-        jobs: wc.jobs.sort((a, b) => {
-          if (a.startDate && b.startDate) {
-            const dateDiff = a.startDate.getTime() - b.startDate.getTime()
-            if (dateDiff !== 0) return dateDiff
-          }
-          if (a.buildOrder !== null && b.buildOrder !== null) {
-            return a.buildOrder - b.buildOrder
-          }
-          return (b.priority || 0) - (a.priority || 0)
-        })
-      }))
+      .map(wc => {
+        const { jobMap, ...rest } = wc
+        return {
+          ...rest,
+          jobs: rest.jobs.sort((a, b) => {
+            if (a.startDate && b.startDate) {
+              const dateDiff = a.startDate.getTime() - b.startDate.getTime()
+              if (dateDiff !== 0) return dateDiff
+            }
+            if (a.buildOrder !== null && b.buildOrder !== null) {
+              return a.buildOrder - b.buildOrder
+            }
+            return (b.priority || 0) - (a.priority || 0)
+          })
+        }
+      })
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [scheduleData])
 
