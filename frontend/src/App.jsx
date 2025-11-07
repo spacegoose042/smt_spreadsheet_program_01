@@ -21,6 +21,7 @@ import CetecImport from './pages/CetecImport'
 import CetecSyncReport from './pages/CetecSyncReport'
 import ProgressDashboard from './pages/ProgressDashboard'
 import ProdlineScheduleExplorer from './pages/ProdlineScheduleExplorer'
+import MetabaseDashboardExplorer from './pages/MetabaseDashboardExplorer'
 import './App.css'
 
 function ProtectedRoute({ children, requireAuth = true }) {
@@ -44,7 +45,7 @@ function Navigation() {
   const settingsRef = useRef(null)
   
   const isActive = (path) => location.pathname === path
-  const isSettingsActive = ['/capacity', '/shifts', '/users', '/statuses', '/issue-types', '/resolution-types', '/cetec-import', '/cetec-sync-report', '/prodline-explorer', '/settings', '/change-password'].includes(location.pathname)
+  const isSettingsActive = ['/capacity', '/shifts', '/users', '/statuses', '/issue-types', '/resolution-types', '/cetec-import', '/cetec-sync-report', '/prodline-explorer', '/metabase-explorer', '/settings', '/change-password'].includes(location.pathname)
   
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -161,6 +162,14 @@ function Navigation() {
                   <Database size={16} />
                   Prod Line Schedule Explorer
                 </Link>
+                <Link
+                  to="/metabase-explorer"
+                  className={isSettingsActive && location.pathname === '/metabase-explorer' ? 'active' : ''}
+                  onClick={() => setSettingsOpen(false)}
+                >
+                  <Database size={16} />
+                  Metabase Dashboard Explorer
+                </Link>
                 {isAdmin && (
                   <>
                     <div className="nav-dropdown-divider" />
@@ -271,6 +280,7 @@ function AppContent() {
           <Route path="/cetec-import" element={<ProtectedRoute><CetecImport /></ProtectedRoute>} />
           <Route path="/cetec-sync-report" element={<ProtectedRoute><CetecSyncReport /></ProtectedRoute>} />
           <Route path="/prodline-explorer" element={<ProtectedRoute><ProdlineScheduleExplorer /></ProtectedRoute>} />
+          <Route path="/metabase-explorer" element={<ProtectedRoute><MetabaseDashboardExplorer /></ProtectedRoute>} />
           <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
         </Routes>
