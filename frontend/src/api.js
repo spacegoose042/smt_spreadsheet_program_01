@@ -189,5 +189,11 @@ export const getWireHarnessSchedule = (prodline = '300') =>
     params: { prodline } 
   })
 
+// Wire Harness Schedule Detail - fetch detailed schedule from question 984
+export const getWireHarnessScheduleDetail = (prodline = '300') =>
+  api.post(`/api/metabase/card/984/query`, {
+    prodline: prodline
+  })
+
 export default api
 
