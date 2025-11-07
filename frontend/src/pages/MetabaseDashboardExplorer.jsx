@@ -46,9 +46,14 @@ export default function MetabaseDashboardExplorer() {
     queryFn: async () => {
       try {
         const response = await getMetabaseDashboard(dashboardId)
-        return response.data || response
+        console.log('Dashboard response:', response)
+        // Handle both response.data and direct response
+        const data = response.data || response
+        console.log('Dashboard data:', data)
+        return data
       } catch (error) {
         console.error('Metabase dashboard error:', error)
+        console.error('Error response:', error.response)
         // Extract error message but don't let it redirect
         const errorMessage = error.response?.data?.detail || 
                             error.response?.data?.message || 
@@ -327,19 +332,25 @@ export default function MetabaseDashboardExplorer() {
               Dashboard Information
             </h2>
             
-            {dashboardInfo.data?.success ? (
+            {(dashboardInfo?.success || dashboardInfo?.data?.success) ? (
               <div>
                 <div style={{ marginBottom: '1rem', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '6px' }}>
-                  <strong>Dashboard Name:</strong> {dashboardInfo.data.dashboard?.name || 'Unknown'}<br />
-                  <strong>Dashboard ID:</strong> {dashboardInfo.data.dashboard_id}<br />
-                  <strong>Number of Cards:</strong> {dashboardInfo.data.card_ids?.length || 0}
+                  <strong>Dashboard Name:</strong> {dashboardInfo?.dashboard?.name || dashboardInfo?.data?.dashboard?.name || 'Unknown'}<br />
+                  <strong>Dashboard ID:</strong> {dashboardInfo?.dashboard_id || dashboardInfo?.data?.dashboard_id || dashboardId}<br />
+                  <strong>Number of Cards:</strong> {(dashboardInfo?.card_ids || dashboardInfo?.data?.card_ids || []).length}
+                  {dashboardInfo?.note && (
+                    <>
+                      <br />
+                      <em style={{ fontSize: '0.9rem', color: '#6c757d' }}>{dashboardInfo.note}</em>
+                    </>
+                  )}
                 </div>
 
-                {dashboardInfo.data.card_ids && dashboardInfo.data.card_ids.length > 0 && (
+                {(dashboardInfo?.card_ids || dashboardInfo?.data?.card_ids || []).length > 0 && (
                   <div>
                     <h3 style={{ marginBottom: '0.5rem' }}>Cards on Dashboard:</h3>
                     <ul style={{ listStyle: 'none', padding: 0 }}>
-                      {dashboardInfo.data.card_ids.map((cardId, idx) => (
+                      {(dashboardInfo?.card_ids || dashboardInfo?.data?.card_ids || []).map((cardId, idx) => (
                         <li key={cardId} style={{ 
                           padding: '0.5rem', 
                           marginBottom: '0.5rem', 
@@ -363,7 +374,7 @@ export default function MetabaseDashboardExplorer() {
                     overflow: 'auto',
                     maxHeight: '400px'
                   }}>
-                    {JSON.stringify(dashboardInfo.data.dashboard, null, 2)}
+                    {JSON.stringify(dashboardInfo?.dashboard || dashboardInfo?.data?.dashboard || dashboardInfo, null, 2)}
                   </pre>
                 </details>
               </div>
