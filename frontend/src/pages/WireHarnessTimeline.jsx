@@ -103,13 +103,21 @@ export default function WireHarnessTimeline() {
       else if (combined.includes('prcpart') || combined.includes('prc part') || combined.includes('part')) {
         if (colMap.part === undefined) colMap.part = idx
       }
+      // Work Date (start datetime) - prioritize direct "work date" field, then min of work date
+      else if (combined.includes('work date') && !combined.includes('min') && !combined.includes('max')) {
+        if (colMap.startDate === undefined) colMap.startDate = idx
+      }
       else if ((displayName.includes('min') || displayName.includes('start')) && 
                (combined.includes('work date') || combined.includes('date'))) {
-        colMap.startDate = idx
+        if (colMap.startDate === undefined) colMap.startDate = idx
+      }
+      // Work End (end datetime) - prioritize direct "work end" field, then max of work end
+      else if (combined.includes('work end') && !combined.includes('min') && !combined.includes('max')) {
+        if (colMap.endDate === undefined) colMap.endDate = idx
       }
       else if ((displayName.includes('max') || displayName.includes('end')) && 
                (combined.includes('work end') || combined.includes('end'))) {
-        colMap.endDate = idx
+        if (colMap.endDate === undefined) colMap.endDate = idx
       }
       else if (combined.includes('hours') || combined.includes('sum')) {
         if (colMap.hours === undefined) colMap.hours = idx
@@ -137,8 +145,15 @@ export default function WireHarnessTimeline() {
     const grouped = {}
     rows.forEach(row => {
       const workcenter = row[colMap.workcenter] || 'Unknown'
-      const startDate = row[colMap.startDate] ? parseISO(row[colMap.startDate]) : null
-      const endDate = row[colMap.endDate] ? parseISO(row[colMap.endDate]) : null
+      // Parse work date and work end as datetimes (they should include time)
+      const startDateTime = row[colMap.startDate] ? parseISO(row[colMap.startDate]) : null
+      const endDateTime = row[colMap.endDate] ? parseISO(row[colMap.endDate]) : null
+      
+      // Extract date and time components
+      const startDate = startDateTime ? startOfDay(startDateTime) : null
+      const endDate = endDateTime ? startOfDay(endDateTime) : null
+      const startTime = startDateTime ? startDateTime : null
+      const endTime = endDateTime ? endDateTime : null
 
       if (!grouped[workcenter]) {
         grouped[workcenter] = {
@@ -152,8 +167,10 @@ export default function WireHarnessTimeline() {
         line: row[colMap.line] || '',
         part: row[colMap.part] || '',
         operation: row[colMap.operation] || '',
-        startDate,
-        endDate,
+        startDate, // Date only (for day filtering)
+        endDate,   // Date only (for day filtering)
+        startDateTime: startTime, // Full datetime with time
+        endDateTime: endTime,     // Full datetime with time
         hours: row[colMap.hours] || 0,
         currentLocation: row[colMap.currentLocation] || '',
         prodStatus: row[colMap.prodStatus] || '',
@@ -306,24 +323,6 @@ export default function WireHarnessTimeline() {
   // Get jobs scheduled for a specific day and workcenter
   const getJobsForDay = (workcenter, day) => {
     return workcenter.jobs.filter(job => isJobScheduledForDay(job, day))
-  }
-
-  // Work hours: 7:30 AM - 4:30 PM (9 hours = 540 minutes)
-  const WORK_DAY_START_HOUR = 7
-  const WORK_DAY_START_MINUTE = 30
-  const WORK_DAY_END_HOUR = 16
-  const WORK_DAY_END_MINUTE = 30
-  const WORK_DAY_DURATION_MINUTES = 540 // 9 hours
-
-  // Calculate position for a job block within a day (for day view)
-  const getJobPositionInDay = (job, day) => {
-    // For day view, show job spanning the full work day
-    // For week/month view, show job as a full-day block
-    return {
-      left: '0%',
-      width: '100%',
-      top: 0 // Will be adjusted based on job index
-    }
   }
 
   const hasActiveFilters = selectedWorkcenters.length > 0 || 
@@ -933,10 +932,10 @@ export default function WireHarnessTimeline() {
 Operation: ${job.operation}
 Status: ${job.prodStatus || 'N/A'}
 Hours: ${parseFloat(job.hours || 0).toFixed(2)}h
-${job.startDate ? `Start: ${format(job.startDate, 'MMM d, yyyy')}` : ''}
-${job.endDate ? `End: ${format(job.endDate, 'MMM d, yyyy')}` : ''}
+${job.startDateTime ? `Start: ${format(job.startDateTime, 'MMM d, yyyy h:mm a')}` : (job.startDate ? `Start: ${format(job.startDate, 'MMM d, yyyy')}` : '')}
+${job.endDateTime ? `End: ${format(job.endDateTime, 'MMM d, yyyy h:mm a')}` : (job.endDate ? `End: ${format(job.endDate, 'MMM d, yyyy')}` : '')}
 ${job.notes ? `Notes: ${job.notes}` : ''}
-Work Hours: 7:30 AM - 4:30 PM`}
+${job.startDateTime && job.endDateTime ? `Scheduled: ${format(job.startDateTime, 'h:mm a')} - ${format(job.endDateTime, 'h:mm a')}` : 'Work Hours: 7:30 AM - 4:30 PM'}`}
                                     onMouseEnter={(e) => {
                                       e.currentTarget.style.transform = 'scale(1.02)'
                                       e.currentTarget.style.zIndex = '10'
@@ -963,16 +962,19 @@ Work Hours: 7:30 AM - 4:30 PM`}
                                         </div>
                                       )}
                                     </div>
-                                    {zoomLevel === 'day' && (
-                                      <div style={{ 
-                                        fontSize: '0.65rem', 
-                                        opacity: 0.9,
-                                        marginLeft: '0.5rem',
-                                        whiteSpace: 'nowrap'
-                                      }}>
-                                        7:30-4:30
-                                      </div>
-                                    )}
+                                    {zoomLevel === 'day' && (() => {
+                                      const timeRange = getJobTimeRangeForDay(job, day)
+                                      return (
+                                        <div style={{ 
+                                          fontSize: '0.65rem', 
+                                          opacity: 0.9,
+                                          marginLeft: '0.5rem',
+                                          whiteSpace: 'nowrap'
+                                        }}>
+                                          {timeRange.start}-{timeRange.end}
+                                        </div>
+                                      )
+                                    })()}
                                   </div>
                                 )
                               })}
