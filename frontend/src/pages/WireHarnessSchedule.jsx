@@ -284,6 +284,27 @@ export default function WireHarnessSchedule() {
                           dateFilterStart || 
                           dateFilterEnd
 
+  const isShowingAllWorkcenters = selectedWorkcenters.length === 0
+
+  const quickButtonStyle = (active) => ({
+    padding: '0.4rem 0.85rem',
+    borderRadius: '999px',
+    border: `1px solid ${active ? '#2563eb' : '#d1d5db'}`,
+    backgroundColor: active ? '#2563eb' : '#ffffff',
+    color: active ? '#ffffff' : '#1f2937',
+    fontSize: '0.8rem',
+    fontWeight: active ? 600 : 500,
+    cursor: 'pointer',
+    transition: 'background-color 0.2s, color 0.2s, border-color 0.2s',
+    boxShadow: active ? '0 0 0 1px rgba(37,99,235,0.25)' : 'none'
+  })
+
+  const handleSelectAllPreferred = () => setSelectedWorkcenters([...PREFERRED_WIRE_HARNESS_WORKCENTERS])
+
+  const handleShowAllWorkcenters = () => setSelectedWorkcenters([])
+
+  const handleQuickWorkcenter = (workcenter) => setSelectedWorkcenters([workcenter])
+
   const clearFilters = () => {
     setSelectedWorkcenters([])
     setSelectedProdStatuses([])
@@ -434,6 +455,37 @@ export default function WireHarnessSchedule() {
             </span>
           )}
         </div>
+      </div>
+
+      <div style={{ marginTop: '1rem', padding: '0.75rem', backgroundColor: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: '10px', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569' }}>Quick Workcenters:</span>
+        <button
+          type="button"
+          style={quickButtonStyle(isDefaultWorkcenterSelection)}
+          onClick={handleSelectAllPreferred}
+        >
+          All Preferred
+        </button>
+        <button
+          type="button"
+          style={quickButtonStyle(isShowingAllWorkcenters)}
+          onClick={handleShowAllWorkcenters}
+        >
+          Show All
+        </button>
+        {PREFERRED_WIRE_HARNESS_WORKCENTERS.map((workcenter) => {
+          const isActive = selectedWorkcenters.length === 1 && selectedWorkcenters[0] === workcenter
+          return (
+            <button
+              key={workcenter}
+              type="button"
+              style={quickButtonStyle(isActive)}
+              onClick={() => handleQuickWorkcenter(workcenter)}
+            >
+              {workcenter}
+            </button>
+          )
+        })}
       </div>
 
       {/* Filter Panel */}
