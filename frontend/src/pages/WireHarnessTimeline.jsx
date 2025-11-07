@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getWireHarnessSchedule, getWireHarnessScheduleDetail } from '../api'
 import { 
@@ -317,6 +317,16 @@ export default function WireHarnessTimeline() {
 
     return filtered
   }, [workcenters, selectedWorkcenters, selectedProdStatuses, dateFilterStart, dateFilterEnd, workOrderFilter])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.__whTimelineDebug = {}
+      filteredWorkcenters.forEach((wc) => {
+        window.__whTimelineDebug[wc.name] = wc.jobs
+      })
+    }
+  }, [filteredWorkcenters])
+
 
   // Calculate timeline dates based on zoom level
   const { timelineStart, timelineDays, days } = useMemo(() => {
