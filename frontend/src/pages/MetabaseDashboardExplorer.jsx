@@ -417,9 +417,25 @@ export default function MetabaseDashboardExplorer() {
             {dashboardResults.data?.success ? (
               <div>
                 <div style={{ marginBottom: '1rem', padding: '1rem', backgroundColor: '#d4edda', borderRadius: '6px' }}>
-                  <strong>Dashboard:</strong> {dashboardResults.data.dashboard_name || 'Unknown'}<br />
-                  <strong>Cards Executed:</strong> {dashboardResults.data.cards_executed || 0}<br />
-                  <strong>Parameters Applied:</strong> {JSON.stringify(dashboardResults.data.parameters, null, 2)}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    <div><strong>Dashboard:</strong> {dashboardResults.data.dashboard_name || 'Unknown'}</div>
+                    <div><strong>Cards Executed:</strong> {dashboardResults.data.cards_executed || 0}</div>
+                    <div><strong>Total Rows:</strong> {dashboardResults.data.results?.reduce((sum, r) => sum + (r.row_count || 0), 0) || 0}</div>
+                  </div>
+                  {dashboardResults.data.parameters && Object.keys(dashboardResults.data.parameters).length > 0 && (
+                    <details style={{ marginTop: '0.5rem' }}>
+                      <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Parameters Applied</summary>
+                      <pre style={{ 
+                        marginTop: '0.5rem', 
+                        padding: '0.5rem', 
+                        backgroundColor: '#f8f9fa', 
+                        borderRadius: '4px',
+                        fontSize: '0.85rem'
+                      }}>
+                        {JSON.stringify(dashboardResults.data.parameters, null, 2)}
+                      </pre>
+                    </details>
+                  )}
                 </div>
 
                 {dashboardResults.data.results && dashboardResults.data.results.length > 0 && (
@@ -444,45 +460,80 @@ export default function MetabaseDashboardExplorer() {
                         
                         {result.success ? (
                           <div>
-                            <div style={{ marginBottom: '0.5rem' }}>
+                            <div style={{ marginBottom: '1rem', padding: '0.75rem', backgroundColor: '#e7f3ff', borderRadius: '6px' }}>
                               <strong>Rows Returned:</strong> {result.row_count || 0}
+                              {result.data?.data?.rows && result.data.data.rows.length > 0 && (
+                                <span style={{ marginLeft: '1rem', color: '#0066cc' }}>
+                                  ✓ Data available - scroll down to view table
+                                </span>
+                              )}
                             </div>
                             
-                            {result.data?.data?.rows && result.data.data.rows.length > 0 && (
-                              <details>
-                                <summary style={{ cursor: 'pointer', fontWeight: 500, marginBottom: '0.5rem' }}>
-                                  View Data ({result.data.data.rows.length} rows)
-                                </summary>
-                                <div style={{ overflowX: 'auto' }}>
-                                  <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '0.5rem' }}>
-                                    <thead>
-                                      <tr style={{ backgroundColor: '#e9ecef' }}>
+                            {result.data?.data?.rows && result.data.data.rows.length > 0 ? (
+                              <div style={{ marginTop: '1rem' }}>
+                                <h4 style={{ marginBottom: '0.75rem', color: '#495057' }}>
+                                  Query Results ({result.data.data.rows.length} rows)
+                                </h4>
+                                <div style={{ 
+                                  overflowX: 'auto', 
+                                  overflowY: 'auto',
+                                  maxHeight: '600px',
+                                  border: '1px solid #dee2e6',
+                                  borderRadius: '6px',
+                                  backgroundColor: '#fff'
+                                }}>
+                                  <table style={{ 
+                                    width: '100%', 
+                                    borderCollapse: 'collapse',
+                                    fontSize: '0.9rem'
+                                  }}>
+                                    <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                                      <tr style={{ backgroundColor: '#495057', color: '#fff' }}>
                                         {result.data.data.cols?.map((col, colIdx) => (
-                                          <th key={colIdx} style={{ padding: '0.5rem', textAlign: 'left', border: '1px solid #dee2e6' }}>
+                                          <th key={colIdx} style={{ 
+                                            padding: '0.75rem', 
+                                            textAlign: 'left', 
+                                            border: '1px solid #6c757d',
+                                            fontWeight: 600,
+                                            whiteSpace: 'nowrap'
+                                          }}>
                                             {col.display_name || col.name || `Column ${colIdx + 1}`}
                                           </th>
                                         ))}
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {result.data.data.rows.slice(0, 100).map((row, rowIdx) => (
-                                        <tr key={rowIdx}>
+                                      {result.data.data.rows.map((row, rowIdx) => (
+                                        <tr 
+                                          key={rowIdx}
+                                          style={{ 
+                                            backgroundColor: rowIdx % 2 === 0 ? '#fff' : '#f8f9fa'
+                                          }}
+                                        >
                                           {row.map((cell, cellIdx) => (
-                                            <td key={cellIdx} style={{ padding: '0.5rem', border: '1px solid #dee2e6' }}>
-                                              {cell !== null && cell !== undefined ? String(cell) : ''}
+                                            <td key={cellIdx} style={{ 
+                                              padding: '0.5rem 0.75rem', 
+                                              border: '1px solid #dee2e6',
+                                              whiteSpace: 'nowrap'
+                                            }}>
+                                              {cell !== null && cell !== undefined ? String(cell) : <em style={{ color: '#6c757d' }}>null</em>}
                                             </td>
                                           ))}
                                         </tr>
                                       ))}
                                     </tbody>
                                   </table>
-                                  {result.data.data.rows.length > 100 && (
-                                    <p style={{ marginTop: '0.5rem', fontStyle: 'italic', color: '#6c757d' }}>
-                                      Showing first 100 of {result.data.data.rows.length} rows
-                                    </p>
-                                  )}
                                 </div>
-                              </details>
+                                {result.data.data.rows.length > 100 && (
+                                  <p style={{ marginTop: '0.5rem', fontStyle: 'italic', color: '#6c757d', fontSize: '0.9rem' }}>
+                                    Showing all {result.data.data.rows.length} rows (scrollable table above)
+                                  </p>
+                                )}
+                              </div>
+                            ) : (
+                              <div style={{ padding: '1rem', backgroundColor: '#fff3cd', borderRadius: '6px', color: '#856404' }}>
+                                ⚠️ No data rows returned from this query
+                              </div>
                             )}
                             
                             <details style={{ marginTop: '0.5rem' }}>

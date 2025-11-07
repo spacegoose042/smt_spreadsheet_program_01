@@ -2482,28 +2482,44 @@ def execute_dashboard_with_params(
         
         # Build parameter mappings from dashboard parameters
         # Metabase expects parameters in format: {"parameter_id": "value"}
+        # Dashboard parameters have slugs (like "prodline") and IDs (like "cf976df3")
         dashboard_params = dashboard.get('parameters', [])
-        param_id_map = {}
+        param_slug_to_id = {}
+        param_id_to_type = {}
         for param in dashboard_params:
             slug = param.get('slug')
             param_id = param.get('id')
+            param_type = param.get('type')
             if slug and param_id:
-                param_id_map[slug] = param_id
+                param_slug_to_id[slug] = param_id
+            if param_id:
+                param_id_to_type[param_id] = param_type
+        
+        print(f"   🔍 Dashboard parameters found: {len(dashboard_params)}")
+        for param in dashboard_params:
+            print(f"      - {param.get('slug')} (ID: {param.get('id')}, Type: {param.get('type')})")
         
         # Convert our query params to Metabase parameter format
+        # Metabase expects: {"parameter_id": "value"} or {"parameter_id": ["value"]} for multi-select
         metabase_params = {}
-        if prodline and 'prodline' in param_id_map:
-            metabase_params[param_id_map['prodline']] = prodline
-        if build_operation and 'build_operation' in param_id_map:
-            metabase_params[param_id_map['build_operation']] = build_operation
-        if order_number and 'order_number' in param_id_map:
-            metabase_params[param_id_map['order_number']] = order_number
-        if ordline_status and 'ordline_status' in param_id_map:
-            metabase_params[param_id_map['ordline_status']] = ordline_status
-        if prc_part_partial and 'prc_part_partial' in param_id_map:
-            metabase_params[param_id_map['prc_part_partial']] = prc_part_partial
-        if prod_status and 'prod_status' in param_id_map:
-            metabase_params[param_id_map['prod_status']] = prod_status
+        if prodline and 'prodline' in param_slug_to_id:
+            param_id = param_slug_to_id['prodline']
+            metabase_params[param_id] = prodline
+        if build_operation and 'build_operation' in param_slug_to_id:
+            param_id = param_slug_to_id['build_operation']
+            metabase_params[param_id] = build_operation
+        if order_number and 'order_number' in param_slug_to_id:
+            param_id = param_slug_to_id['order_number']
+            metabase_params[param_id] = order_number
+        if ordline_status and 'ordline_status' in param_slug_to_id:
+            param_id = param_slug_to_id['ordline_status']
+            metabase_params[param_id] = ordline_status
+        if prc_part_partial and 'prc_part_partial' in param_slug_to_id:
+            param_id = param_slug_to_id['prc_part_partial']
+            metabase_params[param_id] = prc_part_partial
+        if prod_status and 'prod_status' in param_slug_to_id:
+            param_id = param_slug_to_id['prod_status']
+            metabase_params[param_id] = prod_status
         
         print(f"   📊 Found {len(cards_to_execute)} cards to execute")
         print(f"   🔧 Parameter mapping: {metabase_params}")
