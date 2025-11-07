@@ -2153,16 +2153,34 @@ def get_metabase_dashboard(
                         print(f"   ✅ Found dashboard {dashboard_id} in list")
                         # Try to get cards from the dashboard object or fetch them separately
                         card_ids = []
-                        if 'ordered_cards' in dashboard:
+                        dashcards_info = []
+                        
+                        if 'dashcards' in dashboard:
+                            for dashcard in dashboard['dashcards']:
+                                if 'card' in dashcard and 'id' in dashcard['card']:
+                                    card_id = dashcard['card']['id']
+                                    card_ids.append(card_id)
+                                    dashcards_info.append({
+                                        "dashcard_id": dashcard.get('id'),
+                                        "card_id": card_id,
+                                        "card_name": dashcard['card'].get('name', 'Unknown')
+                                    })
+                        elif 'ordered_cards' in dashboard:
                             for card in dashboard['ordered_cards']:
                                 if 'card' in card and 'id' in card['card']:
-                                    card_ids.append(card['card']['id'])
+                                    card_id = card['card']['id']
+                                    card_ids.append(card_id)
+                                    dashcards_info.append({
+                                        "card_id": card_id,
+                                        "card_name": card['card'].get('name', 'Unknown')
+                                    })
                         
                         return {
                             "success": True,
                             "dashboard_id": dashboard_id,
                             "dashboard": dashboard,
                             "card_ids": card_ids,
+                            "dashcards": dashcards_info,
                             "note": "Retrieved via dashboard list (direct access not permitted)"
                         }
                 except Exception as e:
@@ -2194,19 +2212,45 @@ def get_metabase_dashboard(
             )
         
         # Extract card IDs from dashboard
+        # Metabase uses 'dashcards' (not 'ordered_cards') for the cards on a dashboard
         card_ids = []
-        if 'ordered_cards' in dashboard:
+        dashcards_info = []
+        
+        if 'dashcards' in dashboard:
+            for dashcard in dashboard['dashcards']:
+                if 'card' in dashcard and 'id' in dashcard['card']:
+                    card_id = dashcard['card']['id']
+                    card_ids.append(card_id)
+                    dashcards_info.append({
+                        "dashcard_id": dashcard.get('id'),
+                        "card_id": card_id,
+                        "card_name": dashcard['card'].get('name', 'Unknown'),
+                        "row": dashcard.get('row'),
+                        "col": dashcard.get('col'),
+                        "size_x": dashcard.get('size_x'),
+                        "size_y": dashcard.get('size_y')
+                    })
+        elif 'ordered_cards' in dashboard:
+            # Fallback for older Metabase versions
             for card in dashboard['ordered_cards']:
                 if 'card' in card and 'id' in card['card']:
-                    card_ids.append(card['card']['id'])
+                    card_id = card['card']['id']
+                    card_ids.append(card_id)
+                    dashcards_info.append({
+                        "card_id": card_id,
+                        "card_name": card['card'].get('name', 'Unknown')
+                    })
         
         print(f"   ✅ Found dashboard with {len(card_ids)} cards")
+        if card_ids:
+            print(f"   📊 Card IDs: {card_ids}")
         
         return {
             "success": True,
             "dashboard_id": dashboard_id,
             "dashboard": dashboard,
-            "card_ids": card_ids
+            "card_ids": card_ids,
+            "dashcards": dashcards_info
         }
         
     except HTTPException:
@@ -2292,50 +2336,113 @@ def execute_dashboard_with_params(
             parameters['prod_status'] = prod_status
         
         # Extract and execute each card
+        # Metabase uses 'dashcards' (not 'ordered_cards')
         results = []
-        if 'ordered_cards' in dashboard:
-            for card_item in dashboard['ordered_cards']:
-                if 'card' in card_item and 'id' in card_item['card']:
-                    card_id = card_item['card']['id']
-                    card_name = card_item['card'].get('name', f'Card {card_id}')
-                    
-                    print(f"   📊 Executing card {card_id}: {card_name}")
-                    
-                    try:
-                        # Execute the card with parameters
-                        card_query_url = f"{METABASE_CONFIG['base_url']}/api/card/{card_id}/query"
-                        card_response = requests.post(
-                            card_query_url, 
-                            headers=headers, 
-                            json=parameters if parameters else {},
-                            timeout=60
-                        )
-                        card_response.raise_for_status()
-                        card_result = card_response.json()
-                        
-                        # Extract data rows if available
-                        data_rows = []
-                        if 'data' in card_result and 'rows' in card_result['data']:
-                            data_rows = card_result['data']['rows']
-                        
-                        results.append({
-                            "card_id": card_id,
-                            "card_name": card_name,
-                            "success": True,
-                            "row_count": len(data_rows),
-                            "data": card_result
-                        })
-                        
-                        print(f"      ✅ Card {card_id} returned {len(data_rows)} rows")
-                        
-                    except Exception as e:
-                        print(f"      ❌ Error executing card {card_id}: {str(e)}")
-                        results.append({
-                            "card_id": card_id,
-                            "card_name": card_name,
-                            "success": False,
-                            "error": str(e)
-                        })
+        cards_to_execute = []
+        
+        if 'dashcards' in dashboard:
+            cards_to_execute = dashboard['dashcards']
+        elif 'ordered_cards' in dashboard:
+            cards_to_execute = dashboard['ordered_cards']
+        
+        # Build parameter mappings from dashboard parameters
+        # Metabase expects parameters in format: {"parameter_id": "value"}
+        dashboard_params = dashboard.get('parameters', [])
+        param_id_map = {}
+        for param in dashboard_params:
+            slug = param.get('slug')
+            param_id = param.get('id')
+            if slug and param_id:
+                param_id_map[slug] = param_id
+        
+        # Convert our query params to Metabase parameter format
+        metabase_params = {}
+        if prodline and 'prodline' in param_id_map:
+            metabase_params[param_id_map['prodline']] = prodline
+        if build_operation and 'build_operation' in param_id_map:
+            metabase_params[param_id_map['build_operation']] = build_operation
+        if order_number and 'order_number' in param_id_map:
+            metabase_params[param_id_map['order_number']] = order_number
+        if ordline_status and 'ordline_status' in param_id_map:
+            metabase_params[param_id_map['ordline_status']] = ordline_status
+        if prc_part_partial and 'prc_part_partial' in param_id_map:
+            metabase_params[param_id_map['prc_part_partial']] = prc_part_partial
+        if prod_status and 'prod_status' in param_id_map:
+            metabase_params[param_id_map['prod_status']] = prod_status
+        
+        print(f"   📊 Found {len(cards_to_execute)} cards to execute")
+        print(f"   🔧 Parameter mapping: {metabase_params}")
+        
+        for card_item in cards_to_execute:
+            # Handle both dashcards and ordered_cards formats
+            card_obj = card_item.get('card') if 'card' in card_item else card_item
+            if not card_obj:
+                continue
+                
+            card_id = card_obj.get('id')
+            if not card_id:
+                continue
+                
+            card_name = card_obj.get('name', f'Card {card_id}')
+            
+            print(f"   📊 Executing card {card_id}: {card_name}")
+            
+            try:
+                # Execute the card with parameters
+                # Metabase expects parameters in the request body
+                card_query_url = f"{METABASE_CONFIG['base_url']}/api/card/{card_id}/query"
+                request_body = metabase_params if metabase_params else {}
+                
+                print(f"      Request body: {request_body}")
+                
+                card_response = requests.post(
+                    card_query_url, 
+                    headers=headers, 
+                    json=request_body,
+                    timeout=60
+                )
+                
+                print(f"      Response status: {card_response.status_code}")
+                
+                if card_response.status_code != 200:
+                    error_text = card_response.text[:200] if card_response.text else "No error message"
+                    print(f"      ❌ Error: {error_text}")
+                    results.append({
+                        "card_id": card_id,
+                        "card_name": card_name,
+                        "success": False,
+                        "error": f"Status {card_response.status_code}: {error_text}"
+                    })
+                    continue
+                
+                card_result = card_response.json()
+                
+                # Extract data rows if available
+                data_rows = []
+                if 'data' in card_result and 'rows' in card_result['data']:
+                    data_rows = card_result['data']['rows']
+                
+                results.append({
+                    "card_id": card_id,
+                    "card_name": card_name,
+                    "success": True,
+                    "row_count": len(data_rows),
+                    "data": card_result
+                })
+                
+                print(f"      ✅ Card {card_id} returned {len(data_rows)} rows")
+                
+            except Exception as e:
+                import traceback
+                error_trace = traceback.format_exc()
+                print(f"      ❌ Error executing card {card_id}: {str(e)}")
+                print(f"      Traceback: {error_trace}")
+                results.append({
+                    "card_id": card_id,
+                    "card_name": card_name,
+                    "success": False,
+                    "error": str(e)
+                })
         
         return {
             "success": True,

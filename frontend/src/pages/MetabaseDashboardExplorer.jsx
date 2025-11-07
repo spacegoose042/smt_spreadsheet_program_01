@@ -350,7 +350,24 @@ export default function MetabaseDashboardExplorer() {
                   <div>
                     <h3 style={{ marginBottom: '0.5rem' }}>Cards on Dashboard:</h3>
                     <ul style={{ listStyle: 'none', padding: 0 }}>
-                      {(dashboardInfo?.card_ids || dashboardInfo?.data?.card_ids || []).map((cardId, idx) => (
+                      {(dashboardInfo?.dashcards || dashboardInfo?.data?.dashcards || []).map((dashcard, idx) => (
+                        <li key={dashcard.card_id || idx} style={{ 
+                          padding: '0.5rem', 
+                          marginBottom: '0.5rem', 
+                          backgroundColor: '#e9ecef',
+                          borderRadius: '4px'
+                        }}>
+                          <strong>Card {dashcard.card_id}</strong>: {dashcard.card_name || 'Unknown'}
+                          {dashcard.dashcard_id && (
+                            <span style={{ fontSize: '0.85rem', color: '#6c757d', marginLeft: '0.5rem' }}>
+                              (Dashcard {dashcard.dashcard_id})
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                      {/* Fallback if dashcards not available */}
+                      {(!dashboardInfo?.dashcards && !dashboardInfo?.data?.dashcards) && 
+                       (dashboardInfo?.card_ids || dashboardInfo?.data?.card_ids || []).map((cardId, idx) => (
                         <li key={cardId} style={{ 
                           padding: '0.5rem', 
                           marginBottom: '0.5rem', 
