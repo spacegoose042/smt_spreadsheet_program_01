@@ -527,6 +527,8 @@ export default function MetabaseDashboardExplorer() {
             <h3 style={{ marginBottom: '1rem' }}>Metabase Session Login</h3>
             <p style={{ marginBottom: '1rem', fontSize: '0.9rem', color: '#6c757d' }}>
               The API key has limited permissions. Use session login to access dashboards, cards, and databases.
+              <br />
+              <strong style={{ color: '#28a745' }}>✓ Your credentials will be saved automatically</strong> - you won't need to log in again after the first time.
             </p>
             <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1, minWidth: '200px' }}>

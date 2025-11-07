@@ -11,9 +11,11 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date, timedelta, datetime
 import requests
+import base64
+from cryptography.fernet import Fernet
 
 from database import engine, get_db, Base
-from models import WorkOrder, SMTLine, CompletedWorkOrder, WorkOrderStatus, Priority, User, UserRole, CapacityOverride, Shift, ShiftBreak, LineConfiguration, Status, IssueType, Issue, IssueSeverity, IssueStatus, ResolutionType, CetecSyncLog
+from models import WorkOrder, SMTLine, CompletedWorkOrder, WorkOrderStatus, Priority, User, UserRole, CapacityOverride, Shift, ShiftBreak, LineConfiguration, Status, IssueType, Issue, IssueSeverity, IssueStatus, ResolutionType, CetecSyncLog, Settings
 import schemas
 import scheduler as sched
 import time_scheduler as time_sched
@@ -37,6 +39,14 @@ def startup_event():
     try:
         from seed_data import main as seed_main
         seed_main()
+        
+        # Load Metabase credentials after database is ready
+        print("🔑 Loading Metabase credentials...")
+        try:
+            db = next(get_db())
+            load_metabase_credentials(db)
+        except Exception as e:
+            print(f"⚠️  Could not load Metabase credentials: {e}")
     except Exception as e:
         print(f"❌ Error during startup migration: {e}")
         print("⚠️  Application will continue, but database may be incomplete.")
@@ -1669,6 +1679,116 @@ METABASE_CONFIG = {
 # METABASE API INTEGRATION
 # ============================================================================
 
+def get_encryption_key():
+    """Generate a Fernet key from SECRET_KEY"""
+    secret_key = config_settings.SECRET_KEY.encode()
+    # Fernet requires 32-byte key, so we'll hash the SECRET_KEY
+    from hashlib import sha256
+    key = sha256(secret_key).digest()
+    return base64.urlsafe_b64encode(key)
+
+def encrypt_password(password: str) -> str:
+    """Encrypt a password using Fernet"""
+    key = get_encryption_key()
+    f = Fernet(key)
+    return f.encrypt(password.encode()).decode()
+
+def decrypt_password(encrypted_password: str) -> str:
+    """Decrypt a password using Fernet"""
+    try:
+        key = get_encryption_key()
+        f = Fernet(key)
+        return f.decrypt(encrypted_password.encode()).decode()
+    except Exception as e:
+        print(f"❌ Error decrypting password: {e}")
+        return ""
+
+def get_metabase_setting(db: Session, key: str) -> Optional[str]:
+    """Get a Metabase setting from the database"""
+    setting = db.query(Settings).filter(Settings.key == key).first()
+    return setting.value if setting else None
+
+def set_metabase_setting(db: Session, key: str, value: str, description: str = None):
+    """Set a Metabase setting in the database"""
+    setting = db.query(Settings).filter(Settings.key == key).first()
+    if setting:
+        setting.value = value
+        if description:
+            setting.description = description
+        setting.updated_at = datetime.utcnow()
+    else:
+        setting = Settings(
+            key=key,
+            value=value,
+            description=description
+        )
+        db.add(setting)
+    db.commit()
+    return setting
+
+def load_metabase_credentials(db: Session):
+    """Load Metabase credentials from database and attempt auto-login"""
+    try:
+        session_token = get_metabase_setting(db, "metabase_session_token")
+        username = get_metabase_setting(db, "metabase_username")
+        encrypted_password = get_metabase_setting(db, "metabase_password")
+        
+        # If we have a session token, try to use it
+        if session_token:
+            print(f"🔑 Loading stored Metabase session token...")
+            METABASE_CONFIG["session_token"] = session_token
+            METABASE_CONFIG["use_session_auth"] = True
+            
+            # Validate the token by making a test request
+            try:
+                headers = {
+                    "X-Metabase-Session": session_token,
+                    "Content-Type": "application/json"
+                }
+                test_url = f"{METABASE_CONFIG['base_url']}/api/session/properties"
+                response = requests.get(test_url, headers=headers, timeout=10)
+                if response.status_code == 200:
+                    print(f"   ✅ Stored session token is valid")
+                    return True
+                else:
+                    print(f"   ⚠️  Stored session token is invalid (status {response.status_code}), attempting auto-login...")
+            except Exception as e:
+                print(f"   ⚠️  Error validating session token: {e}, attempting auto-login...")
+        
+        # If no valid session token, try auto-login with stored credentials
+        if username and encrypted_password:
+            password = decrypt_password(encrypted_password)
+            if password:
+                print(f"🔑 Attempting auto-login with stored credentials...")
+                try:
+                    url = f"{METABASE_CONFIG['base_url']}/api/session"
+                    headers = {"Content-Type": "application/json"}
+                    response = requests.post(
+                        url,
+                        headers=headers,
+                        json={"username": username, "password": password},
+                        timeout=30
+                    )
+                    if response.status_code == 200:
+                        data = response.json()
+                        session_token = data.get('id')
+                        if session_token:
+                            METABASE_CONFIG["session_token"] = session_token
+                            METABASE_CONFIG["use_session_auth"] = True
+                            # Save the new session token
+                            set_metabase_setting(db, "metabase_session_token", session_token, "Metabase session token")
+                            print(f"   ✅ Auto-login successful! Session token saved.")
+                            return True
+                except Exception as e:
+                    print(f"   ❌ Auto-login failed: {e}")
+        
+        print(f"   ℹ️  No stored credentials found or auto-login failed. Manual login required.")
+        return False
+        
+    except Exception as e:
+        print(f"❌ Error loading Metabase credentials: {e}")
+        return False
+
 def get_metabase_headers():
     """Get headers for Metabase API requests"""
     # Use session token if available, otherwise use API key
@@ -1694,11 +1814,13 @@ def get_metabase_headers():
 @app.post("/api/metabase/login")
 def metabase_login(
     credentials: dict,
-    current_user: User = Depends(auth.get_current_user)
+    current_user: User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     Login to Metabase and get a session token
     This allows access to endpoints that the API key cannot access
+    Credentials are saved to the database for automatic login on next startup
     """
     try:
         url = f"{METABASE_CONFIG['base_url']}/api/session"
@@ -1708,6 +1830,7 @@ def metabase_login(
         
         username = credentials.get('username')
         password = credentials.get('password')
+        save_credentials = credentials.get('save_credentials', True)  # Default to saving
         
         if not username or not password:
             raise HTTPException(
@@ -1733,12 +1856,24 @@ def metabase_login(
                 METABASE_CONFIG["use_session_auth"] = True
                 print(f"   ✅ Session token obtained: {session_token[:20]}...")
                 print(f"   ✅ Session auth enabled: {METABASE_CONFIG['use_session_auth']}")
-                print(f"   ✅ Token stored: {bool(METABASE_CONFIG.get('session_token'))}")
+                
+                # Save credentials to database for future auto-login
+                if save_credentials:
+                    try:
+                        set_metabase_setting(db, "metabase_session_token", session_token, "Metabase session token")
+                        set_metabase_setting(db, "metabase_username", username, "Metabase username for auto-login")
+                        encrypted_password = encrypt_password(password)
+                        set_metabase_setting(db, "metabase_password", encrypted_password, "Metabase password (encrypted) for auto-login")
+                        print(f"   ✅ Credentials saved to database for auto-login")
+                    except Exception as e:
+                        print(f"   ⚠️  Could not save credentials: {e}")
                 
                 return {
                     "success": True,
-                    "message": "Successfully logged into Metabase. Session token is now active for all API calls.",
-                    "session_token_preview": session_token[:20] + "..."
+                    "message": "Successfully logged into Metabase. Session token is now active for all API calls." + 
+                               (" Credentials saved for automatic login." if save_credentials else ""),
+                    "session_token_preview": session_token[:20] + "...",
+                    "credentials_saved": save_credentials
                 }
             else:
                 return {
