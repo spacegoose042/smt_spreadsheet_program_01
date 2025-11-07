@@ -370,15 +370,15 @@ export default function WireHarnessTimeline() {
   }
 
   // Calculate position and dimensions for a job block within a day
-  const getJobPositionInDay = (job, day, allDayJobs) => {
+  const getJobPositionInDay = (job, day, allDayJobs, jobIndex) => {
     const timeRange = getJobTimeRangeForDay(job, day)
     
     if (!timeRange.startTime || !timeRange.endTime) {
-      // No specific times - take full day
+      // No specific times - take full day, stack by index
       return {
         left: '0%',
         width: '100%',
-        top: 0
+        top: `${jobIndex * 28}px` // 28px per row (22px height + 6px gap)
       }
     }
     
@@ -398,64 +398,82 @@ export default function WireHarnessTimeline() {
     const leftPercent = (jobStartOffset / workDayDurationMinutes) * 100
     const widthPercent = (jobDuration / workDayDurationMinutes) * 100
     
-    // Calculate vertical stacking for overlapping jobs using interval scheduling
-    // Build a list of all jobs with their time ranges
-    const jobsWithRanges = allDayJobs.map(j => {
+    // Calculate vertical stacking for overlapping jobs
+    // Build a list of all jobs with their time ranges, sorted by start time
+    const jobsWithRanges = allDayJobs.map((j, idx) => {
       const range = getJobTimeRangeForDay(j, day)
       return {
         job: j,
+        index: idx,
         start: range.startTime ? range.startTime.getTime() : null,
         end: range.endTime ? range.endTime.getTime() : null
       }
     }).filter(j => j.start !== null && j.end !== null)
     
-    // Sort by start time
-    jobsWithRanges.sort((a, b) => a.start - b.start)
+    // Sort by start time, then by original index for consistency
+    jobsWithRanges.sort((a, b) => {
+      if (a.start !== b.start) return a.start - b.start
+      return a.index - b.index
+    })
     
-    // Find which row this job should be on by checking overlaps
-    let rowIndex = 0
-    const currentJobRange = {
-      start: timeRange.startTime.getTime(),
-      end: timeRange.endTime.getTime()
-    }
-    
-    // For each job that starts before or at the same time as this job
-    for (const otherJobRange of jobsWithRanges) {
-      if (otherJobRange.job === job) continue
-      if (otherJobRange.start > currentJobRange.start) break
-      
-      // Check if they overlap
-      const overlaps = !(otherJobRange.end <= currentJobRange.start || otherJobRange.start >= currentJobRange.end)
-      
-      if (overlaps) {
-        // Find which row the other job is on
-        let otherRow = 0
-        for (const checkJobRange of jobsWithRanges) {
-          if (checkJobRange.job === otherJobRange.job) break
-          if (checkJobRange.start >= otherJobRange.start) break
-          
-          const checkOverlaps = !(checkJobRange.end <= otherJobRange.start || checkJobRange.start >= otherJobRange.end)
-          if (checkOverlaps) {
-            otherRow++
-          }
-        }
-        
-        // This job needs to be on a row after the overlapping job
-        rowIndex = Math.max(rowIndex, otherRow + 1)
+    // Find the current job's position in the sorted list
+    const currentJobIndex = jobsWithRanges.findIndex(j => j.job === job)
+    if (currentJobIndex === -1) {
+      // Fallback if job not found
+      return {
+        left: `${Math.max(0, leftPercent)}%`,
+        width: `${Math.min(100, widthPercent)}%`,
+        top: `${jobIndex * 28}px`,
+        zIndex: 2
       }
     }
     
-    // Alternative simpler approach: count overlapping jobs that start before this one
-    const overlappingBefore = jobsWithRanges.filter(other => {
-      if (other.job === job) return false
-      if (other.start > currentJobRange.start) return false
-      return !(other.end <= currentJobRange.start || other.start >= currentJobRange.end)
-    }).length
+    const currentJobRange = jobsWithRanges[currentJobIndex]
+    
+    // Assign rows using a greedy algorithm
+    // Each row can only contain non-overlapping jobs
+    const rows = []
+    
+    // Process jobs in order
+    for (let i = 0; i <= currentJobIndex; i++) {
+      const jobToPlace = jobsWithRanges[i]
+      let placed = false
+      
+      // Try to place in existing row
+      for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
+        const row = rows[rowIdx]
+        // Check if this job overlaps with any job in this row
+        const overlaps = row.some(existingJob => {
+          return !(existingJob.end <= jobToPlace.start || existingJob.start >= jobToPlace.end)
+        })
+        
+        if (!overlaps) {
+          // Can place in this row
+          row.push(jobToPlace)
+          placed = true
+          break
+        }
+      }
+      
+      // If couldn't place in existing row, create new row
+      if (!placed) {
+        rows.push([jobToPlace])
+      }
+    }
+    
+    // Find which row the current job is in
+    let rowIndex = 0
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i].some(j => j.job === job)) {
+        rowIndex = i
+        break
+      }
+    }
     
     return {
       left: `${Math.max(0, leftPercent)}%`,
       width: `${Math.min(100, widthPercent)}%`,
-      top: `${Math.max(rowIndex, overlappingBefore) * 28}px`, // 28px per row (22px height + 6px gap)
+      top: `${rowIndex * 28}px`, // 28px per row (22px height + 6px gap)
       zIndex: 2
     }
   }
@@ -1089,7 +1107,7 @@ export default function WireHarnessTimeline() {
                             }}>
                               {sortedDayJobs.map((job, jobIdx) => {
                                 const jobKey = `${job.orderNumber}-${job.operation}-${dayIdx}`
-                                const position = getJobPositionInDay(job, day, sortedDayJobs)
+                                const position = getJobPositionInDay(job, day, sortedDayJobs, jobIdx)
                                 const timeRange = getJobTimeRangeForDay(job, day)
                                 
                                 return (
