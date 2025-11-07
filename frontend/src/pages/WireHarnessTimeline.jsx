@@ -430,6 +430,20 @@ export default function WireHarnessTimeline() {
   const MIN_DAY_BLOCK_WIDTH_PERCENT = 1.5
   const MIN_TIMELINE_BLOCK_WIDTH_PERCENT = 0.5
 
+  const workcenterColorMap = {
+    'WH WIRE AND CABLE PROCESSING': '#ffffff',
+    'WH TERMINATING': '#bbf7d0',
+    'WH SMALL ASSEMBLY': '#fef08a',
+    'WH LARGE ASSEMBLY': '#fdba74',
+    'WH ULTRA SONIC SPLICING': '#bfdbfe',
+    'WH OVERMOLDING': '#fca5a5',
+    'WH QUALITY CONTROL': '#e9d5ff'
+  }
+
+  const getWorkcenterBackground = (name) => {
+    return workcenterColorMap[name] || '#f9fafb'
+  }
+
   const getLaneKey = (job) => {
     const order = job.order ?? job.orderDisplay ?? ''
     const lineItem = job.lineItem ?? ''
@@ -1149,7 +1163,7 @@ export default function WireHarnessTimeline() {
                   <div style={{
                     padding: '1rem',
                     borderRight: '2px solid #e5e7eb',
-                    backgroundColor: '#f9fafb',
+                    backgroundColor: getWorkcenterBackground(workcenter.name),
                     display: 'flex',
                     alignItems: 'center',
                     position: 'sticky',
