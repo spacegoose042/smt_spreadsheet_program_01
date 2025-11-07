@@ -430,6 +430,20 @@ export default function WireHarnessTimeline() {
   const MIN_DAY_BLOCK_WIDTH_PERCENT = 1.5
   const MIN_TIMELINE_BLOCK_WIDTH_PERCENT = 0.5
 
+  const getLaneKey = (job) => {
+    const order = job.order ?? job.orderDisplay ?? ''
+    const lineItem = job.lineItem ?? ''
+    const operation = job.operation ?? ''
+    const location = job.currentLocation ?? ''
+    const startKey = job.startDateTime ? job.startDateTime.toISOString()
+      : job.startDate ? new Date(job.startDate).toISOString()
+      : ''
+    const endKey = job.endDateTime ? job.endDateTime.toISOString()
+      : job.endDate ? new Date(job.endDate).toISOString()
+      : ''
+    return `${order}|${lineItem}|${operation}|${location}|${startKey}|${endKey}`
+  }
+
   const getDayStart = (date) => {
     const d = new Date(date)
     d.setHours(DAY_START_HOUR, DAY_START_MINUTE, 0, 0)
@@ -477,7 +491,8 @@ export default function WireHarnessTimeline() {
       } else {
         laneEndTimes[laneIndex] = range.endMs
       }
-      laneMap.set(range.job, laneIndex)
+      const key = getLaneKey(range.job)
+      laneMap.set(key, laneIndex)
     })
 
     return { laneMap, laneCount: laneEndTimes.length }
@@ -528,7 +543,7 @@ export default function WireHarnessTimeline() {
   }
 
   const getJobPositionForDay = (job, day, laneMap) => {
-    const laneIndex = laneMap.get(job) ?? 0
+    const laneIndex = laneMap.get(getLaneKey(job)) ?? 0
     const dayStartMs = getDayStart(day).getTime()
     const dayEndMs = getDayEnd(day).getTime()
 
@@ -557,7 +572,7 @@ export default function WireHarnessTimeline() {
   }
 
   const getJobPositionForTimeline = (job, timelineStart, timelineDays, laneMap) => {
-    const laneIndex = laneMap.get(job) ?? 0
+    const laneIndex = laneMap.get(getLaneKey(job)) ?? 0
     const timelineStartMs = startOfDay(timelineStart).getTime()
     const timelineEndMs = timelineStartMs + timelineDays * 24 * 60 * 60 * 1000
 
@@ -1167,7 +1182,7 @@ export default function WireHarnessTimeline() {
                       const isToday = format(day, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')
                       
                       // Sort jobs by start time for proper stacking
-                      const sortedDayJobs = [...dayJobs].sort((a, b) => {
+                      const sortedDayJobs = dayJobs.slice().sort((a, b) => {
                         const aRange = getJobTimeRangeForDay(a, day)
                         const bRange = getJobTimeRangeForDay(b, day)
                         if (!aRange.startTime || !bRange.startTime) return 0
