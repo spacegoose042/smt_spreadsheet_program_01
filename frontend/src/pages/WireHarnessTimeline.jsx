@@ -163,7 +163,14 @@ export default function WireHarnessTimeline() {
         }
       }
 
-      const jobKey = [row[colMap.order] || '', row[colMap.line] || '', row[colMap.part] || '', row[colMap.operation] || ''].join('|')
+      const workOrder = (row[colMap.order] || '').toString()
+      const lineItem = row[colMap.line] !== undefined && row[colMap.line] !== null ? row[colMap.line].toString() : ''
+      const workOrderDisplay = lineItem ? `${workOrder}-${lineItem}` : workOrder
+      const partNumber = row[colMap.part] || ''
+      const operationName = row[colMap.operation] || ''
+      const currentLocation = row[colMap.currentLocation] || ''
+
+      const jobKey = [workOrder, lineItem, partNumber, operationName, currentLocation].join('|')
       const workcenterGroup = grouped[workcenter]
       const jobMap = workcenterGroup.jobMap
       const existing = jobMap.get(jobKey)
@@ -194,21 +201,22 @@ export default function WireHarnessTimeline() {
         }
       } else {
         const jobEntry = {
-          order: row[colMap.order] || '',
-          line: row[colMap.line] || '',
-          part: row[colMap.part] || '',
-          operation: row[colMap.operation] || '',
+          order: workOrder,
+          orderNumber: workOrder,
+          lineItem,
+          orderDisplay: workOrderDisplay,
+          part: partNumber,
+          operation: operationName,
           startDate, // Date only (for day filtering)
           endDate,   // Date only (for day filtering)
           startDateTime: startTime, // Full datetime with time
           endDateTime: endTime,     // Full datetime with time
           hours: hoursValue,
-          currentLocation: row[colMap.currentLocation] || '',
+          currentLocation,
           prodStatus,
           notes: row[colMap.notes] || '',
           buildOrder: row[colMap.buildOrder] || null,
           priority: row[colMap.priority] || 0,
-          orderNumber: `${row[colMap.order] || ''}.${row[colMap.line] || ''}`,
           rawRow: row,
           colMap
         }
@@ -217,7 +225,6 @@ export default function WireHarnessTimeline() {
         jobMap.set(jobKey, jobEntry)
       }
     })
-
     return Object.values(grouped)
       .map(wc => {
         const { jobMap, ...rest } = wc
@@ -272,8 +279,8 @@ export default function WireHarnessTimeline() {
         // Work order filter
         if (workOrderFilter.trim()) {
           const searchTerm = workOrderFilter.trim().toLowerCase()
-          const orderMatch = job.orderNumber?.toLowerCase().includes(searchTerm) ||
-                           job.order?.toLowerCase().includes(searchTerm) ||
+          const orderMatch = job.order?.toLowerCase().includes(searchTerm) ||
+                           job.orderDisplay?.toLowerCase().includes(searchTerm) ||
                            job.part?.toLowerCase().includes(searchTerm)
           if (!orderMatch) return false
         }
@@ -1291,10 +1298,11 @@ export default function WireHarnessTimeline() {
                                 minHeight: `${Math.max(100, (maxRow + 1) * 28 + 20)}px` // Dynamic height based on actual rows needed
                               }}>
                                 {sortedDayJobs.map((job, jobIdx) => {
-                                  const jobKey = `${job.orderNumber}-${job.operation}-${dayIdx}`
+                                  const jobKey = `${job.orderDisplay}-${job.operation}-${dayIdx}`
                                   const position = getJobPositionInDay(job, day, sortedDayJobs, jobIdx, jobToRowMap)
                                   const timeRange = getJobTimeRangeForDay(job, day)
-                                
+                                  const blockWidth = Math.max(0, parseFloat(position.width.replace('%', '')) || 0)
+
                                   return (
                                     <div
                                       key={jobKey}
@@ -1325,8 +1333,9 @@ export default function WireHarnessTimeline() {
                                         alignItems: 'center',
                                         overflow: 'hidden'
                                       }}
-                                      title={`${job.orderNumber} - ${job.part}
-Operation: ${job.operation}
+                                      title={`${job.orderDisplay} - ${job.part}
+Build Operation: ${job.operation || 'N/A'}
+Ordline Status: ${job.currentLocation || 'N/A'}
 Status: ${job.prodStatus || 'N/A'}
 Hours: ${parseFloat(job.hours || 0).toFixed(2)}h
 ${job.startDateTime ? `Start: ${format(job.startDateTime, 'MMM d, yyyy h:mm a')}` : (job.startDate ? `Start: ${format(job.startDate, 'MMM d, yyyy')}` : '')}
@@ -1351,15 +1360,20 @@ ${timeRange.start && timeRange.end ? `Scheduled: ${timeRange.start} - ${timeRang
                                         flex: 1
                                       }}>
                                         <div style={{ fontWeight: 700, fontSize: '0.7rem' }}>
-                                          {job.orderNumber}
+                                          {job.orderDisplay}
                                         </div>
-                                        {job.operation && parseFloat(position.width.replace('%', '')) > 15 && (
+                                        {job.operation && blockWidth > 15 && (
                                           <div style={{ fontSize: '0.6rem', opacity: 0.9, marginTop: '0.05rem' }}>
                                             {job.operation}
                                           </div>
                                         )}
+                                      {job.currentLocation && blockWidth > 30 && (
+                                          <div style={{ fontSize: '0.55rem', opacity: 0.75, marginTop: '0.05rem' }}>
+                                            {job.currentLocation}
+                                          </div>
+                                        )}
                                       </div>
-                                      {zoomLevel === 'day' && parseFloat(position.width.replace('%', '')) > 20 && (
+                                      {blockWidth > 20 && (
                                         <div style={{ 
                                           fontSize: '0.6rem', 
                                           opacity: 0.9,
@@ -1430,7 +1444,8 @@ ${timeRange.start && timeRange.end ? `Scheduled: ${timeRange.start} - ${timeRang
                             const position = getJobPositionForTimeline(job, timelineStart, timelineDays, jobToRowMap, jobIdx)
                             if (!position) return null
                             
-                            const jobKey = `${job.orderNumber}-${job.operation}-${jobIdx}`
+                            const jobKey = `${job.orderDisplay}-${job.operation}-${jobIdx}`
+                            const blockWidth = Math.max(0, parseFloat(position.width.replace('%', '')) || 0)
                             
                             return (
                               <div
@@ -1462,8 +1477,9 @@ ${timeRange.start && timeRange.end ? `Scheduled: ${timeRange.start} - ${timeRang
                                     alignItems: 'center',
                                     overflow: 'hidden'
                                   }}
-                                  title={`${job.orderNumber} - ${job.part}
-Operation: ${job.operation}
+                                  title={`${job.orderDisplay} - ${job.part}
+Build Operation: ${job.operation || 'N/A'}
+Ordline Status: ${job.currentLocation || 'N/A'}
 Status: ${job.prodStatus || 'N/A'}
 Hours: ${parseFloat(job.hours || 0).toFixed(2)}h
 ${job.startDateTime ? `Start: ${format(job.startDateTime, 'MMM d, yyyy h:mm a')}` : (job.startDate ? `Start: ${format(job.startDate, 'MMM d, yyyy')}` : '')}
@@ -1487,11 +1503,16 @@ ${job.notes ? `Notes: ${job.notes}` : ''}`}
                                     flex: 1
                                   }}>
                                     <div style={{ fontWeight: 700, fontSize: '0.7rem' }}>
-                                      {job.orderNumber}
+                                      {job.orderDisplay}
                                     </div>
-                                    {job.operation && parseFloat(position.width.replace('%', '')) > 15 && (
+                                    {job.operation && blockWidth > 15 && (
                                       <div style={{ fontSize: '0.6rem', opacity: 0.9, marginTop: '0.05rem' }}>
                                         {job.operation}
+                                      </div>
+                                    )}
+                                    {job.currentLocation && blockWidth > 30 && (
+                                      <div style={{ fontSize: '0.55rem', opacity: 0.75, marginTop: '0.05rem' }}>
+                                        {job.currentLocation}
                                       </div>
                                     )}
                                   </div>
