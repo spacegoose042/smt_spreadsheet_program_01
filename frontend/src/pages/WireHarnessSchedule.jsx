@@ -4,10 +4,25 @@ import { getWireHarnessSchedule } from '../api'
 import { Calendar, Clock, Package, AlertCircle, RefreshCw, Loader2, TrendingUp, MapPin, Wrench, FileText, Filter, X } from 'lucide-react'
 import { format, parseISO, isAfter, isBefore, startOfDay, endOfDay, differenceInDays, isWithinInterval } from 'date-fns'
 
+const PREFERRED_WIRE_HARNESS_WORKCENTERS = [
+  'WH WIRE AND CABLE PROCESSING',
+  'WH TERMINATING',
+  'WH SMALL ASSEMBLY',
+  'WH LARGE ASSEMBLY',
+  'WH ULTRA SONIC SPLICING',
+  'WH OVERMOLDING',
+  'WH QUALITY CONTROL'
+]
+
+const WORKCENTER_ORDER_MAP = PREFERRED_WIRE_HARNESS_WORKCENTERS.reduce((acc, name, index) => {
+  acc[name] = index
+  return acc
+}, {})
+
 export default function WireHarnessSchedule() {
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [lastRefresh, setLastRefresh] = useState(new Date())
-  const [selectedWorkcenters, setSelectedWorkcenters] = useState([]) // Empty = all
+  const [selectedWorkcenters, setSelectedWorkcenters] = useState(PREFERRED_WIRE_HARNESS_WORKCENTERS) // default visible
   const [selectedProdStatuses, setSelectedProdStatuses] = useState([]) // Empty = all
   const [dateFilterStart, setDateFilterStart] = useState('')
   const [dateFilterEnd, setDateFilterEnd] = useState('')
@@ -147,7 +162,12 @@ export default function WireHarnessSchedule() {
           return (b.priority || 0) - (a.priority || 0)
         })
       }))
-      .sort((a, b) => a.name.localeCompare(b.name))
+      .sort((a, b) => {
+        const orderA = WORKCENTER_ORDER_MAP[a.name] ?? Number.MAX_SAFE_INTEGER
+        const orderB = WORKCENTER_ORDER_MAP[b.name] ?? Number.MAX_SAFE_INTEGER
+        if (orderA !== orderB) return orderA - orderB
+        return a.name.localeCompare(b.name)
+      })
   }, [scheduleData])
 
   // Extract unique values for filters
@@ -164,8 +184,16 @@ export default function WireHarnessSchedule() {
       })
     })
     
+    const workcenterList = Array.from(workcentersSet)
+    workcenterList.sort((a, b) => {
+      const orderA = WORKCENTER_ORDER_MAP[a] ?? Number.MAX_SAFE_INTEGER
+      const orderB = WORKCENTER_ORDER_MAP[b] ?? Number.MAX_SAFE_INTEGER
+      if (orderA !== orderB) return orderA - orderB
+      return a.localeCompare(b)
+    })
+    
     return {
-      uniqueWorkcenters: Array.from(workcentersSet).sort(),
+      uniqueWorkcenters: workcenterList,
       uniqueProdStatuses: Array.from(statusesSet).sort()
     }
   }, [workcenters])
@@ -246,7 +274,12 @@ export default function WireHarnessSchedule() {
     }
   }, [workcenters])
 
-  const hasActiveFilters = selectedWorkcenters.length > 0 || 
+  const isDefaultWorkcenterSelection = selectedWorkcenters.length === PREFERRED_WIRE_HARNESS_WORKCENTERS.length &&
+    PREFERRED_WIRE_HARNESS_WORKCENTERS.every(wc => selectedWorkcenters.includes(wc))
+
+  const hasWorkcenterFilter = selectedWorkcenters.length > 0 && !isDefaultWorkcenterSelection
+
+  const hasActiveFilters = hasWorkcenterFilter || 
                           selectedProdStatuses.length > 0 || 
                           dateFilterStart || 
                           dateFilterEnd
