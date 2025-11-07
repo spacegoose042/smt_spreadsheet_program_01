@@ -286,6 +286,59 @@ export default function WireHarnessSchedule() {
 
   const isShowingAllWorkcenters = selectedWorkcenters.length === 0
 
+  const dateButtonStyle = (active) => ({
+    padding: '0.35rem 0.8rem',
+    borderRadius: '999px',
+    border: `1px solid ${active ? '#0f766e' : '#d1d5db'}`,
+    backgroundColor: active ? '#0f766e' : '#ffffff',
+    color: active ? '#ffffff' : '#1f2937',
+    fontSize: '0.8rem',
+    fontWeight: active ? 600 : 500,
+    cursor: 'pointer',
+    transition: 'background-color 0.2s, color 0.2s, border-color 0.2s',
+    boxShadow: active ? '0 0 0 1px rgba(15,118,110,0.25)' : 'none'
+  })
+
+  const handleDatePreset = (preset) => {
+    const today = new Date()
+    const start = new Date(today)
+    const end = new Date(today)
+
+    switch (preset) {
+      case 'today':
+        break
+      case 'tomorrow':
+        start.setDate(start.getDate() + 1)
+        end.setDate(end.getDate() + 1)
+        break
+      case 'thisWeek': {
+        const dayOfWeek = start.getDay() === 0 ? 7 : start.getDay()
+        start.setDate(start.getDate() - (dayOfWeek - 1))
+        end.setDate(start.getDate() + 6)
+        break
+      }
+      case 'nextWeek': {
+        const dayOfWeek = start.getDay() === 0 ? 7 : start.getDay()
+        start.setDate(start.getDate() - (dayOfWeek - 1) + 7)
+        end.setTime(start.getTime())
+        end.setDate(end.getDate() + 6)
+        break
+      }
+      case 'thisMonth':
+        start.setDate(1)
+        end.setMonth(start.getMonth() + 1, 0)
+        break
+      case 'next30':
+        end.setDate(end.getDate() + 30)
+        break
+      default:
+        break
+    }
+
+    setDateFilterStart(start.toISOString().slice(0, 10))
+    setDateFilterEnd(end.toISOString().slice(0, 10))
+  }
+
   const quickButtonStyle = (active) => ({
     padding: '0.4rem 0.85rem',
     borderRadius: '999px',
@@ -488,6 +541,80 @@ export default function WireHarnessSchedule() {
         })}
       </div>
 
+
+      <div style={{ marginTop: '0.75rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#0f172a' }}>Quick Dates:</span>
+        {['today', 'tomorrow', 'thisWeek', 'nextWeek', 'thisMonth', 'next30'].map((preset) => {
+          const labelMap = {
+            today: 'Today',
+            tomorrow: 'Tomorrow',
+            thisWeek: 'This Week',
+            nextWeek: 'Next Week',
+            thisMonth: 'This Month',
+            next30: 'Next 30 Days'
+          }
+
+          const isActive = (() => {
+            if (!dateFilterStart || !dateFilterEnd) return false
+            const today = new Date()
+            const start = new Date(today)
+            const end = new Date(today)
+            switch (preset) {
+              case 'today':
+                break
+              case 'tomorrow':
+                start.setDate(start.getDate() + 1)
+                end.setDate(end.getDate() + 1)
+                break
+              case 'thisWeek': {
+                const dayOfWeek = start.getDay() === 0 ? 7 : start.getDay()
+                start.setDate(start.getDate() - (dayOfWeek - 1))
+                end.setDate(start.getDate() + 6)
+                break
+              }
+              case 'nextWeek': {
+                const dayOfWeek = start.getDay() === 0 ? 7 : start.getDay()
+                start.setDate(start.getDate() - (dayOfWeek - 1) + 7)
+                end.setTime(start.getTime())
+                end.setDate(end.getDate() + 6)
+                break
+              }
+              case 'thisMonth':
+                start.setDate(1)
+                end.setMonth(start.getMonth() + 1, 0)
+                break
+              case 'next30':
+                end.setDate(end.getDate() + 30)
+                break
+              default:
+                break
+            }
+            const currentStart = new Date(dateFilterStart)
+            const currentEnd = new Date(dateFilterEnd)
+            return currentStart.toDateString() === start.toDateString() && currentEnd.toDateString() === end.toDateString()
+          })()
+
+          return (
+            <button
+              key={preset}
+              type='button'
+              style={dateButtonStyle(isActive)}
+              onClick={() => handleDatePreset(preset)}
+            >
+              {labelMap[preset]}
+            </button>
+          )
+        })}
+        {(dateFilterStart || dateFilterEnd) && (
+          <button
+            type='button'
+            style={dateButtonStyle(false)}
+            onClick={() => { setDateFilterStart(''); setDateFilterEnd('') }}
+          >
+            Clear Dates
+          </button>
+        )}
+      </div>
       {/* Filter Panel */}
       {showFilters && (
         <div className="card" style={{ marginBottom: '2rem', backgroundColor: '#f9fafb' }}>
