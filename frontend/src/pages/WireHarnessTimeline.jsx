@@ -356,10 +356,6 @@ export default function WireHarnessTimeline() {
     )
   }
 
-  const handleManualRefresh = () => {
-    refetch()
-  }
-
   const getStatusColor = (status) => {
     if (!status) return '#6c757d'
     const statusLower = status.toLowerCase()
