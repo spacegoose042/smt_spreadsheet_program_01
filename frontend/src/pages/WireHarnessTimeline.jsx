@@ -310,14 +310,50 @@ export default function WireHarnessTimeline() {
 
   // Check if a job is scheduled for a specific day
   const isJobScheduledForDay = (job, day) => {
-    if (!job.startDate || !job.endDate) return false
+    // Use datetime if available, otherwise fall back to date
+    const jobStart = job.startDateTime ? startOfDay(job.startDateTime) : (job.startDate ? startOfDay(job.startDate) : null)
+    const jobEnd = job.endDateTime ? startOfDay(job.endDateTime) : (job.endDate ? startOfDay(job.endDate) : null)
     
-    const jobStart = startOfDay(job.startDate)
-    const jobEnd = endOfDay(job.endDate)
+    if (!jobStart || !jobEnd) return false
+    
     const checkDay = startOfDay(day)
     
     // Job is scheduled for this day if the day falls within the job's date range
     return checkDay >= jobStart && checkDay <= jobEnd
+  }
+
+  // Get the scheduled time range for a job on a specific day
+  const getJobTimeRangeForDay = (job, day) => {
+    if (!job.startDateTime || !job.endDateTime) {
+      // Fallback to default work hours if no specific times
+      return { start: '7:30 AM', end: '4:30 PM' }
+    }
+    
+    const jobStart = job.startDateTime
+    const jobEnd = job.endDateTime
+    const checkDay = startOfDay(day)
+    const jobStartDay = startOfDay(jobStart)
+    const jobEndDay = startOfDay(jobEnd)
+    
+    // If job spans multiple days, show appropriate time range for this day
+    if (format(checkDay, 'yyyy-MM-dd') === format(jobStartDay, 'yyyy-MM-dd')) {
+      // First day - show from job start time
+      return {
+        start: format(jobStart, 'h:mm a'),
+        end: format(checkDay, 'yyyy-MM-dd') === format(jobEndDay, 'yyyy-MM-dd') 
+          ? format(jobEnd, 'h:mm a')
+          : '4:30 PM'
+      }
+    } else if (format(checkDay, 'yyyy-MM-dd') === format(jobEndDay, 'yyyy-MM-dd')) {
+      // Last day - show until job end time
+      return {
+        start: '7:30 AM',
+        end: format(jobEnd, 'h:mm a')
+      }
+    } else {
+      // Middle day - show full work day
+      return { start: '7:30 AM', end: '4:30 PM' }
+    }
   }
 
   // Get jobs scheduled for a specific day and workcenter
