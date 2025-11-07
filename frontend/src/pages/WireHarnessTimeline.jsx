@@ -326,7 +326,7 @@ export default function WireHarnessTimeline() {
   const getJobTimeRangeForDay = (job, day) => {
     if (!job.startDateTime || !job.endDateTime) {
       // Fallback to default work hours if no specific times
-      return { start: '7:30 AM', end: '4:30 PM' }
+      return { start: '7:30 AM', end: '4:30 PM', startTime: null, endTime: null }
     }
     
     const jobStart = job.startDateTime
@@ -338,21 +338,125 @@ export default function WireHarnessTimeline() {
     // If job spans multiple days, show appropriate time range for this day
     if (format(checkDay, 'yyyy-MM-dd') === format(jobStartDay, 'yyyy-MM-dd')) {
       // First day - show from job start time
+      const endTime = format(checkDay, 'yyyy-MM-dd') === format(jobEndDay, 'yyyy-MM-dd') 
+        ? jobEnd
+        : new Date(checkDay.getTime() + (16 * 60 + 30) * 60 * 1000) // 4:30 PM
       return {
         start: format(jobStart, 'h:mm a'),
-        end: format(checkDay, 'yyyy-MM-dd') === format(jobEndDay, 'yyyy-MM-dd') 
-          ? format(jobEnd, 'h:mm a')
-          : '4:30 PM'
+        end: format(endTime, 'h:mm a'),
+        startTime: jobStart,
+        endTime: endTime
       }
     } else if (format(checkDay, 'yyyy-MM-dd') === format(jobEndDay, 'yyyy-MM-dd')) {
       // Last day - show until job end time
+      const startTime = new Date(checkDay.getTime() + (7 * 60 + 30) * 60 * 1000) // 7:30 AM
       return {
         start: '7:30 AM',
-        end: format(jobEnd, 'h:mm a')
+        end: format(jobEnd, 'h:mm a'),
+        startTime: startTime,
+        endTime: jobEnd
       }
     } else {
       // Middle day - show full work day
-      return { start: '7:30 AM', end: '4:30 PM' }
+      const startTime = new Date(checkDay.getTime() + (7 * 60 + 30) * 60 * 1000) // 7:30 AM
+      const endTime = new Date(checkDay.getTime() + (16 * 60 + 30) * 60 * 1000) // 4:30 PM
+      return { 
+        start: '7:30 AM', 
+        end: '4:30 PM',
+        startTime: startTime,
+        endTime: endTime
+      }
+    }
+  }
+
+  // Calculate position and dimensions for a job block within a day
+  const getJobPositionInDay = (job, day, allDayJobs) => {
+    const timeRange = getJobTimeRangeForDay(job, day)
+    
+    if (!timeRange.startTime || !timeRange.endTime) {
+      // No specific times - take full day
+      return {
+        left: '0%',
+        width: '100%',
+        top: 0
+      }
+    }
+    
+    // Work day: 7:30 AM (7.5 hours = 450 minutes from midnight) to 4:30 PM (16.5 hours = 990 minutes)
+    const workDayStartMinutes = 7 * 60 + 30 // 7:30 AM = 450 minutes
+    const workDayEndMinutes = 16 * 60 + 30 // 4:30 PM = 990 minutes
+    const workDayDurationMinutes = workDayEndMinutes - workDayStartMinutes // 540 minutes (9 hours)
+    
+    // Calculate job position within work day
+    const jobStartMinutes = timeRange.startTime.getHours() * 60 + timeRange.startTime.getMinutes()
+    const jobEndMinutes = timeRange.endTime.getHours() * 60 + timeRange.endTime.getMinutes()
+    
+    // Position relative to work day start
+    const jobStartOffset = Math.max(0, jobStartMinutes - workDayStartMinutes)
+    const jobDuration = Math.min(workDayDurationMinutes, jobEndMinutes - workDayStartMinutes) - jobStartOffset
+    
+    const leftPercent = (jobStartOffset / workDayDurationMinutes) * 100
+    const widthPercent = (jobDuration / workDayDurationMinutes) * 100
+    
+    // Calculate vertical stacking for overlapping jobs using interval scheduling
+    // Build a list of all jobs with their time ranges
+    const jobsWithRanges = allDayJobs.map(j => {
+      const range = getJobTimeRangeForDay(j, day)
+      return {
+        job: j,
+        start: range.startTime ? range.startTime.getTime() : null,
+        end: range.endTime ? range.endTime.getTime() : null
+      }
+    }).filter(j => j.start !== null && j.end !== null)
+    
+    // Sort by start time
+    jobsWithRanges.sort((a, b) => a.start - b.start)
+    
+    // Find which row this job should be on by checking overlaps
+    let rowIndex = 0
+    const currentJobRange = {
+      start: timeRange.startTime.getTime(),
+      end: timeRange.endTime.getTime()
+    }
+    
+    // For each job that starts before or at the same time as this job
+    for (const otherJobRange of jobsWithRanges) {
+      if (otherJobRange.job === job) continue
+      if (otherJobRange.start > currentJobRange.start) break
+      
+      // Check if they overlap
+      const overlaps = !(otherJobRange.end <= currentJobRange.start || otherJobRange.start >= currentJobRange.end)
+      
+      if (overlaps) {
+        // Find which row the other job is on
+        let otherRow = 0
+        for (const checkJobRange of jobsWithRanges) {
+          if (checkJobRange.job === otherJobRange.job) break
+          if (checkJobRange.start >= otherJobRange.start) break
+          
+          const checkOverlaps = !(checkJobRange.end <= otherJobRange.start || checkJobRange.start >= otherJobRange.end)
+          if (checkOverlaps) {
+            otherRow++
+          }
+        }
+        
+        // This job needs to be on a row after the overlapping job
+        rowIndex = Math.max(rowIndex, otherRow + 1)
+      }
+    }
+    
+    // Alternative simpler approach: count overlapping jobs that start before this one
+    const overlappingBefore = jobsWithRanges.filter(other => {
+      if (other.job === job) return false
+      if (other.start > currentJobRange.start) return false
+      return !(other.end <= currentJobRange.start || other.start >= currentJobRange.end)
+    }).length
+    
+    return {
+      left: `${Math.max(0, leftPercent)}%`,
+      width: `${Math.min(100, widthPercent)}%`,
+      top: `${Math.max(rowIndex, overlappingBefore) * 28}px`, // 28px per row (22px height + 6px gap)
+      zIndex: 2
     }
   }
 
@@ -919,6 +1023,14 @@ export default function WireHarnessTimeline() {
                       const isWeekend = day.getDay() === 0 || day.getDay() === 6
                       const isToday = format(day, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')
                       
+                      // Sort jobs by start time for proper stacking
+                      const sortedDayJobs = [...dayJobs].sort((a, b) => {
+                        const aRange = getJobTimeRangeForDay(a, day)
+                        const bRange = getJobTimeRangeForDay(b, day)
+                        if (!aRange.startTime || !bRange.startTime) return 0
+                        return aRange.startTime.getTime() - bRange.startTime.getTime()
+                      })
+                      
                       return (
                         <div
                           key={dayIdx}
@@ -927,90 +1039,134 @@ export default function WireHarnessTimeline() {
                             borderRight: dayIdx < days.length - 1 ? '1px solid #e5e7eb' : 'none',
                             borderLeft: dayIdx === 0 ? '2px solid #3b82f6' : 'none',
                             backgroundColor: isToday ? '#eff6ff' : isWeekend ? '#f9fafb' : 'white',
-                            minHeight: '80px',
+                            minHeight: '120px',
                             padding: '0.25rem'
                           }}
                         >
-                          {/* Job Blocks for this day */}
-                          {dayJobs.length === 0 ? (
+                          {/* Time scale (hour markers) */}
+                          {zoomLevel === 'day' && (
+                            <div style={{
+                              position: 'absolute',
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              height: '20px',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              padding: '0 0.25rem',
+                              fontSize: '0.6rem',
+                              color: '#6c757d',
+                              borderBottom: '1px solid #e5e7eb',
+                              backgroundColor: 'rgba(249, 250, 251, 0.8)',
+                              zIndex: 1
+                            }}>
+                              {[8, 10, 12, 14, 16].map(hour => (
+                                <span key={hour} style={{ 
+                                  position: 'absolute',
+                                  left: `${((hour * 60 - 450) / 540) * 100}%` // 450 = 7:30 AM in minutes, 540 = 9 hours
+                                }}>
+                                  {hour}:00
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          
+                          {/* Job Blocks for this day - positioned by time */}
+                          {sortedDayJobs.length === 0 ? (
                             <div style={{ 
                               fontSize: '0.7rem', 
                               color: '#9ca3af', 
                               textAlign: 'center',
-                              paddingTop: '0.5rem'
+                              paddingTop: '2rem'
                             }}>
                               {isWeekend ? 'Weekend' : ''}
                             </div>
                           ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                              {dayJobs.map((job, jobIdx) => {
+                            <div style={{ 
+                              position: 'relative', 
+                              marginTop: zoomLevel === 'day' ? '20px' : '0',
+                              minHeight: '100px'
+                            }}>
+                              {sortedDayJobs.map((job, jobIdx) => {
                                 const jobKey = `${job.orderNumber}-${job.operation}-${dayIdx}`
+                                const position = getJobPositionInDay(job, day, sortedDayJobs)
+                                const timeRange = getJobTimeRangeForDay(job, day)
+                                
                                 return (
                                   <div
                                     key={jobKey}
                                     style={{
-                                      backgroundColor: getStatusColor(job.prodStatus),
-                                      color: 'white',
-                                      borderRadius: '4px',
-                                      padding: '0.4rem 0.5rem',
-                                      fontSize: '0.7rem',
-                                      fontWeight: 600,
-                                      border: '1px solid rgba(0,0,0,0.1)',
-                                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                                      cursor: 'pointer',
-                                      transition: 'all 0.2s',
-                                      minHeight: '22px',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'space-between'
+                                      position: 'absolute',
+                                      left: position.left,
+                                      width: position.width,
+                                      top: position.top,
+                                      height: '22px',
+                                      zIndex: position.zIndex,
+                                      minWidth: '40px'
                                     }}
-                                    title={`${job.orderNumber} - ${job.part}
+                                  >
+                                    <div
+                                      style={{
+                                        height: '100%',
+                                        backgroundColor: getStatusColor(job.prodStatus),
+                                        color: 'white',
+                                        borderRadius: '4px',
+                                        padding: '0.25rem 0.4rem',
+                                        fontSize: '0.7rem',
+                                        fontWeight: 600,
+                                        border: '1px solid rgba(0,0,0,0.1)',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        overflow: 'hidden'
+                                      }}
+                                      title={`${job.orderNumber} - ${job.part}
 Operation: ${job.operation}
 Status: ${job.prodStatus || 'N/A'}
 Hours: ${parseFloat(job.hours || 0).toFixed(2)}h
 ${job.startDateTime ? `Start: ${format(job.startDateTime, 'MMM d, yyyy h:mm a')}` : (job.startDate ? `Start: ${format(job.startDate, 'MMM d, yyyy')}` : '')}
 ${job.endDateTime ? `End: ${format(job.endDateTime, 'MMM d, yyyy h:mm a')}` : (job.endDate ? `End: ${format(job.endDate, 'MMM d, yyyy')}` : '')}
 ${job.notes ? `Notes: ${job.notes}` : ''}
-${job.startDateTime && job.endDateTime ? `Scheduled: ${format(job.startDateTime, 'h:mm a')} - ${format(job.endDateTime, 'h:mm a')}` : 'Work Hours: 7:30 AM - 4:30 PM'}`}
-                                    onMouseEnter={(e) => {
-                                      e.currentTarget.style.transform = 'scale(1.02)'
-                                      e.currentTarget.style.zIndex = '10'
-                                      e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)'
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      e.currentTarget.style.transform = 'scale(1)'
-                                      e.currentTarget.style.zIndex = '1'
-                                      e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)'
-                                    }}
-                                  >
-                                    <div style={{ 
-                                      overflow: 'hidden', 
-                                      textOverflow: 'ellipsis', 
-                                      whiteSpace: 'nowrap',
-                                      flex: 1
-                                    }}>
-                                      <div style={{ fontWeight: 700, fontSize: '0.75rem' }}>
-                                        {job.orderNumber}
-                                      </div>
-                                      {job.operation && (
-                                        <div style={{ fontSize: '0.65rem', opacity: 0.9, marginTop: '0.1rem' }}>
-                                          {job.operation}
+${timeRange.start && timeRange.end ? `Scheduled: ${timeRange.start} - ${timeRange.end}` : 'Work Hours: 7:30 AM - 4:30 PM'}`}
+                                      onMouseEnter={(e) => {
+                                        e.currentTarget.style.transform = 'scale(1.05)'
+                                        e.currentTarget.style.zIndex = '10'
+                                        e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)'
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'scale(1)'
+                                        e.currentTarget.style.zIndex = position.zIndex
+                                        e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)'
+                                      }}
+                                    >
+                                      <div style={{ 
+                                        overflow: 'hidden', 
+                                        textOverflow: 'ellipsis', 
+                                        whiteSpace: 'nowrap',
+                                        flex: 1
+                                      }}>
+                                        <div style={{ fontWeight: 700, fontSize: '0.7rem' }}>
+                                          {job.orderNumber}
                                         </div>
-                                      )}
-                                    </div>
-                                    {zoomLevel === 'day' && (() => {
-                                      const timeRange = getJobTimeRangeForDay(job, day)
-                                      return (
+                                        {job.operation && parseFloat(position.width.replace('%', '')) > 15 && (
+                                          <div style={{ fontSize: '0.6rem', opacity: 0.9, marginTop: '0.05rem' }}>
+                                            {job.operation}
+                                          </div>
+                                        )}
+                                      </div>
+                                      {zoomLevel === 'day' && parseFloat(position.width.replace('%', '')) > 20 && (
                                         <div style={{ 
-                                          fontSize: '0.65rem', 
+                                          fontSize: '0.6rem', 
                                           opacity: 0.9,
-                                          marginLeft: '0.5rem',
+                                          marginLeft: '0.25rem',
                                           whiteSpace: 'nowrap'
                                         }}>
                                           {timeRange.start}-{timeRange.end}
                                         </div>
-                                      )
-                                    })()}
+                                      )}
+                                    </div>
                                   </div>
                                 )
                               })}
