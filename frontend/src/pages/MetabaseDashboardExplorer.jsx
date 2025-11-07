@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getMetabaseDashboard, executeDashboardWithParams } from '../api'
-import { Search, Loader2, CheckCircle2, XCircle, Info, Database, Play } from 'lucide-react'
+import { getMetabaseDashboard, executeDashboardWithParams, testMetabaseConnection } from '../api'
+import { Search, Loader2, CheckCircle2, XCircle, Info, Database, Play, TestTube } from 'lucide-react'
 
 export default function MetabaseDashboardExplorer() {
   const [dashboardId, setDashboardId] = useState('64')
@@ -13,6 +13,29 @@ export default function MetabaseDashboardExplorer() {
   const [prodStatus, setProdStatus] = useState('')
   const [mode, setMode] = useState('info') // 'info' or 'execute'
   const [hasRequested, setHasRequested] = useState(false) // Track if user has clicked a button
+  const [testConnection, setTestConnection] = useState(false) // Track if testing connection
+
+  const { data: connectionTest, isLoading: isLoadingConnection, error: connectionError, refetch: refetchConnection } = useQuery({
+    queryKey: ['metabaseConnectionTest'],
+    queryFn: async () => {
+      try {
+        const response = await testMetabaseConnection()
+        return response.data || response
+      } catch (error) {
+        console.error('Metabase connection test error:', error)
+        const errorMessage = error.response?.data?.detail || 
+                            error.response?.data?.message || 
+                            error.message || 
+                            'Failed to test connection'
+        const customError = new Error(errorMessage)
+        customError.statusCode = error.response?.status
+        customError.response = error.response
+        throw customError
+      }
+    },
+    enabled: testConnection,
+    retry: false,
+  })
 
   const { data: dashboardInfo, isLoading: isLoadingInfo, error: errorInfo, refetch: refetchInfo } = useQuery({
     queryKey: ['metabaseDashboard', dashboardId],
@@ -73,7 +96,7 @@ export default function MetabaseDashboardExplorer() {
     retry: false, // Don't retry on error
   })
 
-  const isLoading = isLoadingInfo || isLoadingResults
+  const isLoading = isLoadingInfo || isLoadingResults || isLoadingConnection
 
   return (
     <div className="container">
@@ -122,6 +145,27 @@ export default function MetabaseDashboardExplorer() {
                 <option value="execute">Execute Dashboard</option>
               </select>
             </label>
+            <button
+              onClick={() => {
+                setTestConnection(true)
+                setTimeout(() => refetchConnection(), 100)
+              }}
+              disabled={isLoading}
+              className="btn btn-secondary"
+              style={{ marginTop: '1.5rem' }}
+            >
+              {isLoadingConnection ? (
+                <>
+                  <Loader2 size={18} style={{ marginRight: '0.5rem', animation: 'spin 1s linear infinite' }} />
+                  Testing...
+                </>
+              ) : (
+                <>
+                  <TestTube size={18} style={{ marginRight: '0.5rem' }} />
+                  Test Connection
+                </>
+              )}
+            </button>
             <button
               onClick={() => {
                 setHasRequested(true)
@@ -433,6 +477,102 @@ export default function MetabaseDashboardExplorer() {
                 Failed to execute dashboard
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Connection Test Results */}
+      {testConnection && connectionTest && (
+        <div className="card">
+          <div className="card-body">
+            <h2 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <TestTube size={20} />
+              Connection Test Results
+            </h2>
+            
+            {connectionTest.success ? (
+              <div style={{ padding: '1rem', backgroundColor: '#d4edda', borderRadius: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <CheckCircle2 size={20} color="#28a745" style={{ marginRight: '0.5rem' }} />
+                  <strong>Connection Successful!</strong>
+                </div>
+                <div style={{ marginTop: '0.5rem' }}>
+                  <strong>Working Format:</strong> {connectionTest.working_format || 'Unknown'}<br />
+                  <strong>Status Code:</strong> {connectionTest.status_code}
+                </div>
+                {connectionTest.tested_formats && (
+                  <details style={{ marginTop: '1rem' }}>
+                    <summary style={{ cursor: 'pointer', fontWeight: 500 }}>All Tested Formats</summary>
+                    <pre style={{ 
+                      marginTop: '0.5rem', 
+                      padding: '1rem', 
+                      backgroundColor: '#f8f9fa', 
+                      borderRadius: '6px',
+                      overflow: 'auto',
+                      fontSize: '0.85rem'
+                    }}>
+                      {JSON.stringify(connectionTest.tested_formats, null, 2)}
+                    </pre>
+                  </details>
+                )}
+              </div>
+            ) : (
+              <div style={{ padding: '1rem', backgroundColor: '#fff3cd', borderRadius: '6px', border: '1px solid #ffc107' }}>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <XCircle size={20} color="#dc3545" style={{ marginRight: '0.5rem' }} />
+                  <strong>Connection Failed</strong>
+                </div>
+                <div style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>
+                  {connectionTest.message || 'Failed to connect to Metabase'}
+                </div>
+                {connectionTest.tested_formats && (
+                  <div style={{ marginTop: '1rem' }}>
+                    <strong>Tested Formats:</strong>
+                    <ul style={{ marginTop: '0.5rem', paddingLeft: '1.5rem' }}>
+                      {connectionTest.tested_formats.map((format, idx) => (
+                        <li key={idx} style={{ marginBottom: '0.5rem' }}>
+                          <strong>{format.format}:</strong> {format.success ? '✅ Success' : `❌ ${format.message || format.error || 'Failed'}`}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <details style={{ marginTop: '1rem' }}>
+                  <summary style={{ cursor: 'pointer', fontSize: '0.85rem' }}>Full Test Results</summary>
+                  <pre style={{ 
+                    marginTop: '0.5rem', 
+                    padding: '1rem', 
+                    backgroundColor: '#f8f9fa', 
+                    borderRadius: '6px',
+                    overflow: 'auto',
+                    fontSize: '0.8rem'
+                  }}>
+                    {JSON.stringify(connectionTest, null, 2)}
+                  </pre>
+                </details>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {testConnection && connectionError && (
+        <div className="card">
+          <div className="card-body" style={{ 
+            color: '#dc3545',
+            padding: '1.5rem',
+            backgroundColor: '#fff3cd',
+            border: '1px solid #ffc107'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <XCircle size={20} style={{ marginRight: '0.5rem' }} />
+              <strong>Connection Test Error</strong>
+            </div>
+            <div style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>
+              {connectionError?.message || 
+               connectionError?.response?.data?.detail || 
+               'Failed to test connection'}
+            </div>
           </div>
         </div>
       )}

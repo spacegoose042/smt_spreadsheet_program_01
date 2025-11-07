@@ -1668,8 +1668,10 @@ METABASE_CONFIG = {
 
 def get_metabase_headers():
     """Get headers for Metabase API requests"""
+    # Try both formats - some Metabase versions use different auth
     return {
         "X-Metabase-Api-Key": METABASE_CONFIG["api_key"],
+        "Authorization": f"Bearer {METABASE_CONFIG['api_key']}",
         "Content-Type": "application/json"
     }
 
@@ -1678,65 +1680,94 @@ def test_metabase_connection(
     current_user: User = Depends(auth.get_current_user)
 ):
     """
-    Test connection to Metabase API
+    Test connection to Metabase API - tries multiple authentication formats
     """
-    try:
-        url = f"{METABASE_CONFIG['base_url']}/api/session/properties"
-        headers = get_metabase_headers()
-        
-        print(f"🔍 Testing Metabase connection: {url}")
-        print(f"   Headers: {headers}")
-        print(f"   API Key: {METABASE_CONFIG['api_key'][:10]}...")
-        
-        response = requests.get(url, headers=headers, timeout=30)
-        
-        print(f"   Response status: {response.status_code}")
-        print(f"   Response headers: {dict(response.headers)}")
-        
-        if response.status_code == 200:
-            try:
-                data = response.json()
-                return {
-                    "success": True,
-                    "status_code": response.status_code,
-                    "message": "Successfully connected to Metabase",
-                    "data": data
-                }
-            except ValueError as e:
-                return {
-                    "success": False,
-                    "status_code": response.status_code,
-                    "message": f"Got 200 but failed to parse JSON: {str(e)}",
-                    "response_text": response.text[:500]
-                }
-        else:
-            error_text = response.text[:500] if response.text else "No error message"
-            print(f"   ❌ Error response: {error_text}")
-            return {
-                "success": False,
+    url = f"{METABASE_CONFIG['base_url']}/api/session/properties"
+    api_key = METABASE_CONFIG['api_key']
+    
+    # Try different authentication formats
+    auth_formats = [
+        {
+            "name": "X-Metabase-Api-Key",
+            "headers": {
+                "X-Metabase-Api-Key": api_key,
+                "Content-Type": "application/json"
+            }
+        },
+        {
+            "name": "Authorization Bearer",
+            "headers": {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+        },
+        {
+            "name": "Both headers",
+            "headers": {
+                "X-Metabase-Api-Key": api_key,
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+        }
+    ]
+    
+    results = []
+    
+    for auth_format in auth_formats:
+        try:
+            print(f"🔍 Testing Metabase connection with {auth_format['name']}: {url}")
+            print(f"   Headers: {auth_format['headers']}")
+            
+            response = requests.get(url, headers=auth_format['headers'], timeout=30)
+            
+            print(f"   Response status: {response.status_code}")
+            
+            result = {
+                "format": auth_format['name'],
                 "status_code": response.status_code,
-                "message": f"Unexpected status code: {response.status_code}",
-                "response_text": error_text
+                "success": response.status_code == 200
             }
             
-    except requests.exceptions.RequestException as e:
-        import traceback
-        error_trace = traceback.format_exc()
-        print(f"❌ Metabase connection error: {str(e)}")
-        print(f"   Traceback: {error_trace}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to connect to Metabase: {str(e)}"
-        )
-    except Exception as e:
-        import traceback
-        error_trace = traceback.format_exc()
-        print(f"❌ Unexpected error: {str(e)}")
-        print(f"   Traceback: {error_trace}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Unexpected error: {str(e)}"
-        )
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                    result["message"] = "Successfully connected"
+                    result["data"] = data
+                    results.append(result)
+                    # If one works, return it immediately
+                    return {
+                        "success": True,
+                        "working_format": auth_format['name'],
+                        "status_code": response.status_code,
+                        "message": f"Successfully connected using {auth_format['name']}",
+                        "data": data,
+                        "all_tests": results
+                    }
+                except ValueError as e:
+                    result["message"] = f"Got 200 but failed to parse JSON: {str(e)}"
+                    result["response_text"] = response.text[:500]
+            else:
+                error_text = response.text[:500] if response.text else "No error message"
+                result["message"] = f"Status {response.status_code}: {error_text}"
+                result["error"] = error_text
+                
+            results.append(result)
+            
+        except requests.exceptions.RequestException as e:
+            print(f"   ❌ Request error with {auth_format['name']}: {str(e)}")
+            results.append({
+                "format": auth_format['name'],
+                "success": False,
+                "error": str(e)
+            })
+    
+    # If we get here, none of the formats worked
+    return {
+        "success": False,
+        "message": "None of the authentication formats worked",
+        "api_key_preview": api_key[:10] + "...",
+        "tested_formats": results
+    }
 
 @app.get("/api/metabase/databases")
 def get_metabase_databases(
