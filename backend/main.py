@@ -1668,10 +1668,9 @@ METABASE_CONFIG = {
 
 def get_metabase_headers():
     """Get headers for Metabase API requests"""
-    # Try both formats - some Metabase versions use different auth
+    # Use X-Metabase-Api-Key format (confirmed working from connection test)
     return {
         "X-Metabase-Api-Key": METABASE_CONFIG["api_key"],
-        "Authorization": f"Bearer {METABASE_CONFIG['api_key']}",
         "Content-Type": "application/json"
     }
 
@@ -1680,9 +1679,9 @@ def test_metabase_connection(
     current_user: User = Depends(auth.get_current_user)
 ):
     """
-    Test connection to Metabase API - tries multiple authentication formats
+    Test connection to Metabase API - tries multiple authentication formats and endpoints
     """
-    url = f"{METABASE_CONFIG['base_url']}/api/session/properties"
+    base_url = METABASE_CONFIG['base_url']
     api_key = METABASE_CONFIG['api_key']
     
     # Try different authentication formats
@@ -1700,30 +1699,58 @@ def test_metabase_connection(
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json"
             }
-        },
-        {
-            "name": "Both headers",
-            "headers": {
-                "X-Metabase-Api-Key": api_key,
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            }
         }
     ]
     
-    results = []
+    # Test different endpoints to see what the API key can access
+    test_endpoints = [
+        {"name": "Session Properties", "url": f"{base_url}/api/session/properties", "method": "GET"},
+        {"name": "Databases", "url": f"{base_url}/api/database", "method": "GET"},
+        {"name": "Cards", "url": f"{base_url}/api/card", "method": "GET"},
+        {"name": "Dashboards", "url": f"{base_url}/api/dashboard", "method": "GET"},
+        {"name": "Dashboard 64", "url": f"{base_url}/api/dashboard/64", "method": "GET"},
+    ]
     
+    results = []
+    working_format = None
+    
+    # First, find which auth format works
     for auth_format in auth_formats:
         try:
-            print(f"🔍 Testing Metabase connection with {auth_format['name']}: {url}")
-            print(f"   Headers: {auth_format['headers']}")
+            url = f"{base_url}/api/session/properties"
+            print(f"🔍 Testing auth format {auth_format['name']}: {url}")
             
             response = requests.get(url, headers=auth_format['headers'], timeout=30)
             
-            print(f"   Response status: {response.status_code}")
+            if response.status_code == 200:
+                working_format = auth_format['name']
+                print(f"   ✅ {auth_format['name']} works!")
+                break
+        except:
+            continue
+    
+    if not working_format:
+        return {
+            "success": False,
+            "message": "None of the authentication formats worked",
+            "api_key_preview": api_key[:10] + "...",
+        }
+    
+    # Use the working format to test endpoints
+    headers = auth_formats[0]['headers'] if working_format == "X-Metabase-Api-Key" else auth_formats[1]['headers']
+    
+    endpoint_results = []
+    for endpoint in test_endpoints:
+        try:
+            print(f"🔍 Testing endpoint: {endpoint['name']}")
+            if endpoint['method'] == 'GET':
+                response = requests.get(endpoint['url'], headers=headers, timeout=30)
+            else:
+                response = requests.post(endpoint['url'], headers=headers, timeout=30)
             
             result = {
-                "format": auth_format['name'],
+                "endpoint": endpoint['name'],
+                "url": endpoint['url'],
                 "status_code": response.status_code,
                 "success": response.status_code == 200
             }
@@ -1731,42 +1758,35 @@ def test_metabase_connection(
             if response.status_code == 200:
                 try:
                     data = response.json()
-                    result["message"] = "Successfully connected"
-                    result["data"] = data
-                    results.append(result)
-                    # If one works, return it immediately
-                    return {
-                        "success": True,
-                        "working_format": auth_format['name'],
-                        "status_code": response.status_code,
-                        "message": f"Successfully connected using {auth_format['name']}",
-                        "data": data,
-                        "all_tests": results
-                    }
-                except ValueError as e:
-                    result["message"] = f"Got 200 but failed to parse JSON: {str(e)}"
-                    result["response_text"] = response.text[:500]
+                    result["message"] = "Success"
+                    if isinstance(data, list):
+                        result["count"] = len(data)
+                    elif isinstance(data, dict) and 'data' in data:
+                        result["count"] = len(data.get('data', []))
+                except:
+                    result["message"] = "Success (non-JSON response)"
             else:
-                error_text = response.text[:500] if response.text else "No error message"
+                error_text = response.text[:200] if response.text else "No error message"
                 result["message"] = f"Status {response.status_code}: {error_text}"
                 result["error"] = error_text
-                
-            results.append(result)
             
-        except requests.exceptions.RequestException as e:
-            print(f"   ❌ Request error with {auth_format['name']}: {str(e)}")
-            results.append({
-                "format": auth_format['name'],
+            endpoint_results.append(result)
+            print(f"   {'✅' if result['success'] else '❌'} {endpoint['name']}: {response.status_code}")
+            
+        except Exception as e:
+            endpoint_results.append({
+                "endpoint": endpoint['name'],
+                "url": endpoint['url'],
                 "success": False,
                 "error": str(e)
             })
+            print(f"   ❌ {endpoint['name']}: {str(e)}")
     
-    # If we get here, none of the formats worked
     return {
-        "success": False,
-        "message": "None of the authentication formats worked",
-        "api_key_preview": api_key[:10] + "...",
-        "tested_formats": results
+        "success": True,
+        "working_format": working_format,
+        "message": f"Connection successful using {working_format}",
+        "endpoint_tests": endpoint_results
     }
 
 @app.get("/api/metabase/databases")
