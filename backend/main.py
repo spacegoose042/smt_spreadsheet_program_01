@@ -1732,10 +1732,12 @@ def metabase_login(
                 METABASE_CONFIG["session_token"] = session_token
                 METABASE_CONFIG["use_session_auth"] = True
                 print(f"   ✅ Session token obtained: {session_token[:20]}...")
+                print(f"   ✅ Session auth enabled: {METABASE_CONFIG['use_session_auth']}")
+                print(f"   ✅ Token stored: {bool(METABASE_CONFIG.get('session_token'))}")
                 
                 return {
                     "success": True,
-                    "message": "Successfully logged into Metabase",
+                    "message": "Successfully logged into Metabase. Session token is now active for all API calls.",
                     "session_token_preview": session_token[:20] + "..."
                 }
             else:
