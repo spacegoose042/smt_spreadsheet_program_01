@@ -1,12 +1,17 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getWireHarnessSchedule } from '../api'
-import { Calendar, Clock, Package, AlertCircle, RefreshCw, Loader2, TrendingUp, MapPin, Wrench, FileText } from 'lucide-react'
-import { format, parseISO, isAfter, isBefore, startOfDay, endOfDay, differenceInDays } from 'date-fns'
+import { Calendar, Clock, Package, AlertCircle, RefreshCw, Loader2, TrendingUp, MapPin, Wrench, FileText, Filter, X } from 'lucide-react'
+import { format, parseISO, isAfter, isBefore, startOfDay, endOfDay, differenceInDays, isWithinInterval } from 'date-fns'
 
 export default function WireHarnessSchedule() {
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [lastRefresh, setLastRefresh] = useState(new Date())
+  const [selectedWorkcenters, setSelectedWorkcenters] = useState([]) // Empty = all
+  const [selectedProdStatuses, setSelectedProdStatuses] = useState([]) // Empty = all
+  const [dateFilterStart, setDateFilterStart] = useState('')
+  const [dateFilterEnd, setDateFilterEnd] = useState('')
+  const [showFilters, setShowFilters] = useState(false)
 
   // Fetch schedule data with auto-refresh every 5 minutes
   const { data: scheduleData, isLoading, error, refetch } = useQuery({
@@ -145,6 +150,78 @@ export default function WireHarnessSchedule() {
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [scheduleData])
 
+  // Extract unique values for filters
+  const { uniqueWorkcenters, uniqueProdStatuses } = useMemo(() => {
+    const workcentersSet = new Set()
+    const statusesSet = new Set()
+    
+    workcenters.forEach(wc => {
+      workcentersSet.add(wc.name)
+      wc.jobs.forEach(job => {
+        if (job.prodStatus) {
+          statusesSet.add(job.prodStatus)
+        }
+      })
+    })
+    
+    return {
+      uniqueWorkcenters: Array.from(workcentersSet).sort(),
+      uniqueProdStatuses: Array.from(statusesSet).sort()
+    }
+  }, [workcenters])
+
+  // Apply filters to workcenters
+  const filteredWorkcenters = useMemo(() => {
+    let filtered = workcenters
+
+    // Filter by workcenter
+    if (selectedWorkcenters.length > 0) {
+      filtered = filtered.filter(wc => selectedWorkcenters.includes(wc.name))
+    }
+
+    // Filter by production status and dates
+    filtered = filtered.map(wc => ({
+      ...wc,
+      jobs: wc.jobs.filter(job => {
+        // Production status filter
+        if (selectedProdStatuses.length > 0) {
+          if (!job.prodStatus || !selectedProdStatuses.includes(job.prodStatus)) {
+            return false
+          }
+        }
+
+        // Date filter
+        if (dateFilterStart || dateFilterEnd) {
+          const jobStart = job.startDate ? startOfDay(job.startDate) : null
+          const jobEnd = job.endDate ? endOfDay(job.endDate) : null
+          const filterStart = dateFilterStart ? startOfDay(parseISO(dateFilterStart)) : null
+          const filterEnd = dateFilterEnd ? endOfDay(parseISO(dateFilterEnd)) : null
+
+          // Job must overlap with filter range
+          if (jobStart && jobEnd) {
+            if (filterStart && filterEnd) {
+              // Both dates set - check overlap
+              return !(jobEnd < filterStart || jobStart > filterEnd)
+            } else if (filterStart) {
+              // Only start date - job must start on or after
+              return jobStart >= filterStart
+            } else if (filterEnd) {
+              // Only end date - job must end on or before
+              return jobEnd <= filterEnd
+            }
+          } else if (filterStart || filterEnd) {
+            // Job has no dates but filter is set - exclude it
+            return false
+          }
+        }
+
+        return true
+      })
+    })).filter(wc => wc.jobs.length > 0) // Remove workcenters with no jobs after filtering
+
+    return filtered
+  }, [workcenters, selectedWorkcenters, selectedProdStatuses, dateFilterStart, dateFilterEnd])
+
   // Calculate date range for timeline
   const dateRange = useMemo(() => {
     if (workcenters.length === 0) return { start: new Date(), end: new Date() }
@@ -168,6 +245,34 @@ export default function WireHarnessSchedule() {
       end: maxDate || new Date()
     }
   }, [workcenters])
+
+  const hasActiveFilters = selectedWorkcenters.length > 0 || 
+                          selectedProdStatuses.length > 0 || 
+                          dateFilterStart || 
+                          dateFilterEnd
+
+  const clearFilters = () => {
+    setSelectedWorkcenters([])
+    setSelectedProdStatuses([])
+    setDateFilterStart('')
+    setDateFilterEnd('')
+  }
+
+  const toggleWorkcenter = (workcenter) => {
+    setSelectedWorkcenters(prev => 
+      prev.includes(workcenter)
+        ? prev.filter(w => w !== workcenter)
+        : [...prev, workcenter]
+    )
+  }
+
+  const toggleProdStatus = (status) => {
+    setSelectedProdStatuses(prev => 
+      prev.includes(status)
+        ? prev.filter(s => s !== status)
+        : [...prev, status]
+    )
+  }
 
   const handleManualRefresh = () => {
     refetch()
@@ -242,7 +347,32 @@ export default function WireHarnessSchedule() {
           <h1 className="page-title">Wire Harness Schedule</h1>
           <p className="page-description">Production schedule for Wire Harness Department (Prodline 300)</p>
         </div>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`btn ${showFilters ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+          >
+            <Filter size={18} />
+            Filters
+            {hasActiveFilters && (
+              <span style={{
+                marginLeft: '0.25rem',
+                backgroundColor: '#ef4444',
+                color: 'white',
+                borderRadius: '50%',
+                width: '20px',
+                height: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '0.75rem',
+                fontWeight: 600
+              }}>
+                {[selectedWorkcenters.length, selectedProdStatuses.length, dateFilterStart ? 1 : 0, dateFilterEnd ? 1 : 0].reduce((a, b) => a + b, 0)}
+              </span>
+            )}
+          </button>
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
             <input
               type="checkbox"
@@ -273,16 +403,230 @@ export default function WireHarnessSchedule() {
         </div>
       </div>
 
-      {workcenters.length === 0 ? (
+      {/* Filter Panel */}
+      {showFilters && (
+        <div className="card" style={{ marginBottom: '2rem', backgroundColor: '#f9fafb' }}>
+          <div className="card-body">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>Filters</h3>
+              {hasActiveFilters && (
+                <button
+                  onClick={clearFilters}
+                  className="btn btn-secondary"
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', padding: '0.5rem 1rem' }}
+                >
+                  <X size={16} />
+                  Clear All
+                </button>
+              )}
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' }}>
+              {/* Workcenter Filter */}
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, fontSize: '0.9rem' }}>
+                  Workcenter (Ordline Status)
+                </label>
+                <div style={{ 
+                  maxHeight: '200px', 
+                  overflowY: 'auto', 
+                  border: '1px solid #e5e7eb', 
+                  borderRadius: '6px',
+                  padding: '0.5rem',
+                  backgroundColor: 'white'
+                }}>
+                  {uniqueWorkcenters.length === 0 ? (
+                    <div style={{ padding: '0.5rem', color: '#6c757d', fontSize: '0.85rem' }}>No workcenters available</div>
+                  ) : (
+                    uniqueWorkcenters.map(wc => (
+                      <label
+                        key={wc}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          padding: '0.5rem',
+                          cursor: 'pointer',
+                          borderRadius: '4px',
+                          transition: 'background-color 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedWorkcenters.includes(wc)}
+                          onChange={() => toggleWorkcenter(wc)}
+                          style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                        />
+                        <span style={{ fontSize: '0.9rem' }}>{wc}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+                {selectedWorkcenters.length > 0 && (
+                  <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#6c757d' }}>
+                    {selectedWorkcenters.length} of {uniqueWorkcenters.length} selected
+                  </div>
+                )}
+              </div>
+
+              {/* Production Status Filter */}
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, fontSize: '0.9rem' }}>
+                  Production Status
+                </label>
+                <div style={{ 
+                  maxHeight: '200px', 
+                  overflowY: 'auto', 
+                  border: '1px solid #e5e7eb', 
+                  borderRadius: '6px',
+                  padding: '0.5rem',
+                  backgroundColor: 'white'
+                }}>
+                  {uniqueProdStatuses.length === 0 ? (
+                    <div style={{ padding: '0.5rem', color: '#6c757d', fontSize: '0.85rem' }}>No statuses available</div>
+                  ) : (
+                    uniqueProdStatuses.map(status => (
+                      <label
+                        key={status}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          padding: '0.5rem',
+                          cursor: 'pointer',
+                          borderRadius: '4px',
+                          transition: 'background-color 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedProdStatuses.includes(status)}
+                          onChange={() => toggleProdStatus(status)}
+                          style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                        />
+                        <span style={{ 
+                          fontSize: '0.9rem',
+                          padding: '0.125rem 0.5rem',
+                          borderRadius: '4px',
+                          backgroundColor: getStatusColor(status) + '20',
+                          color: getStatusColor(status),
+                          border: `1px solid ${getStatusColor(status)}`,
+                          fontWeight: 500
+                        }}>
+                          {status}
+                        </span>
+                      </label>
+                    ))
+                  )}
+                </div>
+                {selectedProdStatuses.length > 0 && (
+                  <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#6c757d' }}>
+                    {selectedProdStatuses.length} of {uniqueProdStatuses.length} selected
+                  </div>
+                )}
+              </div>
+
+              {/* Date Range Filter */}
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, fontSize: '0.9rem' }}>
+                  Date Range
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', color: '#6c757d' }}>
+                      Start Date
+                    </label>
+                    <input
+                      type="date"
+                      value={dateFilterStart}
+                      onChange={(e) => setDateFilterStart(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '0.5rem',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '6px',
+                        fontSize: '0.9rem'
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', color: '#6c757d' }}>
+                      End Date
+                    </label>
+                    <input
+                      type="date"
+                      value={dateFilterEnd}
+                      onChange={(e) => setDateFilterEnd(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '0.5rem',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '6px',
+                        fontSize: '0.9rem'
+                      }}
+                    />
+                  </div>
+                  {(dateFilterStart || dateFilterEnd) && (
+                    <button
+                      onClick={() => {
+                        setDateFilterStart('')
+                        setDateFilterEnd('')
+                      }}
+                      className="btn btn-secondary"
+                      style={{ fontSize: '0.85rem', padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}
+                    >
+                      <X size={14} />
+                      Clear Dates
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {hasActiveFilters && (
+              <div style={{ 
+                marginTop: '1rem', 
+                padding: '0.75rem', 
+                backgroundColor: '#eff6ff', 
+                borderRadius: '6px',
+                fontSize: '0.85rem',
+                color: '#1e40af'
+              }}>
+                <strong>Active Filters:</strong> Showing {filteredWorkcenters.length} workcenter{filteredWorkcenters.length !== 1 ? 's' : ''} with{' '}
+                {filteredWorkcenters.reduce((sum, wc) => sum + wc.jobs.length, 0)} job{filteredWorkcenters.reduce((sum, wc) => sum + wc.jobs.length, 0) !== 1 ? 's' : ''}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {filteredWorkcenters.length === 0 ? (
         <div className="card">
           <div className="card-body" style={{ textAlign: 'center', padding: '2rem' }}>
             <Package size={48} style={{ color: '#9ca3af', marginBottom: '1rem' }} />
-            <p style={{ color: '#6c757d' }}>No schedule data available</p>
+            <p style={{ color: '#6c757d' }}>
+              {hasActiveFilters 
+                ? 'No jobs match the selected filters. Try adjusting your filters.' 
+                : 'No schedule data available'}
+            </p>
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="btn btn-primary"
+                style={{ marginTop: '1rem' }}
+              >
+                Clear Filters
+              </button>
+            )}
           </div>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-          {workcenters.map((workcenter, wcIdx) => (
+          {filteredWorkcenters.map((workcenter, wcIdx) => (
             <div key={wcIdx} className="card" style={{ 
               borderLeft: '4px solid #3b82f6',
               boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
