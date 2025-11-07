@@ -1672,12 +1672,19 @@ METABASE_CONFIG = {
 def get_metabase_headers():
     """Get headers for Metabase API requests"""
     # Use session token if available, otherwise use API key
-    if METABASE_CONFIG.get("use_session_auth") and METABASE_CONFIG.get("session_token"):
+    use_session = METABASE_CONFIG.get("use_session_auth", False)
+    session_token = METABASE_CONFIG.get("session_token")
+    
+    print(f"🔑 Auth check: use_session={use_session}, has_token={bool(session_token)}")
+    
+    if use_session and session_token:
+        print(f"   ✅ Using session token: {session_token[:20]}...")
         return {
-            "X-Metabase-Session": METABASE_CONFIG["session_token"],
+            "X-Metabase-Session": session_token,
             "Content-Type": "application/json"
         }
     else:
+        print(f"   ⚠️  Using API key (session not available)")
         # Use X-Metabase-Api-Key format (confirmed working from connection test)
         return {
             "X-Metabase-Api-Key": METABASE_CONFIG["api_key"],
@@ -2111,7 +2118,10 @@ def get_metabase_dashboard(
         headers = get_metabase_headers()
         
         print(f"🔍 Fetching dashboard {dashboard_id}: {url}")
-        print(f"   Headers: {headers}")
+        print(f"   Using auth: {'Session' if 'X-Metabase-Session' in headers else 'API Key'}")
+        # Don't print full headers with tokens for security
+        header_keys = list(headers.keys())
+        print(f"   Header keys: {header_keys}")
         
         response = requests.get(url, headers=headers, timeout=30)
         
