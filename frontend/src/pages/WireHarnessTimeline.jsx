@@ -1101,36 +1101,36 @@ export default function WireHarnessTimeline() {
                             }}>
                               {isWeekend ? 'Weekend' : ''}
                             </div>
-                          ) : (
-                            {(() => {
-                              // Calculate row assignments once for all jobs in this day
-                              const jobToRowMap = calculateJobRowsForDay(sortedDayJobs, day)
-                              const maxRow = Math.max(...Array.from(jobToRowMap.values()), -1)
-                              
-                              return (
-                                <div style={{ 
-                                  position: 'relative', 
-                                  marginTop: zoomLevel === 'day' ? '20px' : '0',
-                                  minHeight: `${Math.max(100, (maxRow + 1) * 28 + 20)}px` // Dynamic height based on actual rows needed
-                                }}>
-                                  {sortedDayJobs.map((job, jobIdx) => {
-                                    const jobKey = `${job.orderNumber}-${job.operation}-${dayIdx}`
-                                    const position = getJobPositionInDay(job, day, sortedDayJobs, jobIdx, jobToRowMap)
-                                    const timeRange = getJobTimeRangeForDay(job, day)
-                                  
-                                    return (
-                                  <div
-                                    key={jobKey}
-                                    style={{
-                                      position: 'absolute',
-                                      left: position.left,
-                                      width: position.width,
-                                      top: position.top,
-                                      height: '22px',
-                                      zIndex: position.zIndex,
-                                      minWidth: '40px'
-                                    }}
-                                  >
+                          ) : (() => {
+                            // Calculate row assignments once for all jobs in this day
+                            const jobToRowMap = calculateJobRowsForDay(sortedDayJobs, day)
+                            const rowValues = Array.from(jobToRowMap.values())
+                            const maxRow = rowValues.length > 0 ? Math.max(...rowValues) : -1
+                            
+                            return (
+                              <div style={{ 
+                                position: 'relative', 
+                                marginTop: zoomLevel === 'day' ? '20px' : '0',
+                                minHeight: `${Math.max(100, (maxRow + 1) * 28 + 20)}px` // Dynamic height based on actual rows needed
+                              }}>
+                                {sortedDayJobs.map((job, jobIdx) => {
+                                  const jobKey = `${job.orderNumber}-${job.operation}-${dayIdx}`
+                                  const position = getJobPositionInDay(job, day, sortedDayJobs, jobIdx, jobToRowMap)
+                                  const timeRange = getJobTimeRangeForDay(job, day)
+                                
+                                  return (
+                                    <div
+                                      key={jobKey}
+                                      style={{
+                                        position: 'absolute',
+                                        left: position.left,
+                                        width: position.width,
+                                        top: position.top,
+                                        height: '22px',
+                                        zIndex: position.zIndex || 2,
+                                        minWidth: '40px'
+                                      }}
+                                    >
                                     <div
                                       style={{
                                         height: '100%',
@@ -1196,8 +1196,9 @@ ${timeRange.start && timeRange.end ? `Scheduled: ${timeRange.start} - ${timeRang
                                   </div>
                                 )
                               })}
-                            </div>
-                          )}
+                              </div>
+                            )
+                          })()}
                         </div>
                       )
                     })}
