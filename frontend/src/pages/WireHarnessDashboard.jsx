@@ -12,8 +12,7 @@ import {
   Activity,
   Pause,
   Play,
-  Info,
-  ChevronRight
+  Info
 } from 'lucide-react'
 import {
   format,
@@ -300,15 +299,8 @@ const parseScheduleData = (detailData, fallbackData) => {
   return { workcenters, jobs }
 }
 
-const formatTimeRange = (start, end) => {
-  if (!start && !end) return '—'
-  if (start && !end) return `${format(start, 'MMM d, h:mm a')} —`
-  if (!start && end) return `— ${format(end, 'MMM d, h:mm a')}`
-  if (start.toDateString() === end.toDateString()) {
-    return `${format(start, 'MMM d, h:mm a')} – ${format(end, 'h:mm a')}`
-  }
-  return `${format(start, 'MMM d, h:mm a')} – ${format(end, 'MMM d, h:mm a')}`
-}
+
+
 
 export default function WireHarnessDashboard() {
   const [autoRefresh, setAutoRefresh] = useState(true)
@@ -382,9 +374,8 @@ export default function WireHarnessDashboard() {
       return status.includes('missing') || status.includes('hold') || status.includes('waiting') || status.includes('late')
     })
     .sort((a, b) => (a.endDateTime || a.startDateTime || now) - (b.endDateTime || b.startDateTime || now))
-    .slice(0, 8)
+    .slice(0, 12)
 
-  const upcomingJobs = jobs
     .filter(job => job.startDateTime && job.startDateTime >= now)
     .sort((a, b) => a.startDateTime - b.startDateTime)
     .slice(0, 10)
@@ -714,7 +705,7 @@ export default function WireHarnessDashboard() {
             {flaggedJobs.length === 0 ? (
               <p style={{ fontSize: '0.85rem', color: '#6c757d' }}>No blocked or high-risk jobs at the moment.</p>
             ) : (
-              <div style={{ display: 'grid', gap: '0.75rem' }}>
+              <div style={{ display: 'grid', gap: '0.75rem', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
                 {flaggedJobs.map(job => (
                   <div key={`${job.orderDisplay}-${job.operation}`} style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid rgba(148, 163, 184, 0.4)', background: 'rgba(254, 242, 242, 0.75)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 600 }}>
@@ -738,45 +729,12 @@ export default function WireHarnessDashboard() {
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: '1.5rem' }}>
-        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Calendar size={18} />
-            <strong>Next-Up Operations</strong>
-          </div>
-          <div style={{ fontSize: '0.8rem', color: '#6c757d' }}>Earliest 10 operations with a scheduled start time</div>
-        </div>
-        <div className="card-body" style={{ paddingTop: '0.75rem' }}>
-          {upcomingJobs.length === 0 ? (
-            <p style={{ fontSize: '0.85rem', color: '#6c757d' }}>No upcoming operations scheduled.</p>
-          ) : (
-            <div style={{ display: 'grid', gap: '0.75rem' }}>
-              {upcomingJobs.map(job => (
-                <div key={`${job.orderDisplay}-${job.operation}`} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem', border: '1px solid rgba(15, 23, 42, 0.08)', borderRadius: '0.75rem', backgroundColor: '#f9fafb' }}>
-                  <div style={{ flex: '1 1 auto' }}>
-                    <div style={{ fontWeight: 600 }}>{job.orderDisplay}</div>
-                    <div style={{ fontSize: '0.8rem', color: '#4b5563', marginTop: '0.25rem' }}>{job.operation || '—'}</div>
-                    <div style={{ fontSize: '0.75rem', color: '#6c757d', marginTop: '0.25rem' }}>{job.workcenter}</div>
-                  </div>
-                  <div style={{ flex: '0 0 220px', fontSize: '0.8rem', color: '#1f2937' }}>
-                    {formatTimeRange(job.startDateTime, job.endDateTime)}
-                  </div>
-                  <div style={{ fontSize: '0.7rem', color: '#6c757d', textAlign: 'right' }}>
-                    {job.part || '—'}
-                  </div>
-                  <ChevronRight size={16} color="#94a3b8" />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
       {(isFetchingFallback || (isLoadingDetail && scheduleData)) && (
         <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: '#6c757d' }}>
           <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
           Refreshing data...
         </div>
+      )}
       )}
 
       <div style={{ marginTop: '1.5rem', fontSize: '0.75rem', color: '#6c757d', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

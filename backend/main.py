@@ -14,7 +14,7 @@ import requests
 import base64
 from cryptography.fernet import Fernet
 
-from database import engine, get_db, Base
+from database import engine, get_db, Base, SessionLocal
 from models import WorkOrder, SMTLine, CompletedWorkOrder, WorkOrderStatus, Priority, User, UserRole, CapacityOverride, Shift, ShiftBreak, LineConfiguration, Status, IssueType, Issue, IssueSeverity, IssueStatus, ResolutionType, CetecSyncLog, Settings
 import schemas
 import scheduler as sched
@@ -1803,13 +1803,22 @@ def get_metabase_headers():
             "X-Metabase-Session": session_token,
             "Content-Type": "application/json"
         }
-    else:
-        print(f"   ⚠️  Using API key (session not available)")
-        # Use X-Metabase-Api-Key format (confirmed working from connection test)
-        return {
-            "X-Metabase-Api-Key": METABASE_CONFIG["api_key"],
-            "Content-Type": "application/json"
-        }
+
+    # Attempt to load or refresh session automatically using stored credentials
+    if ensure_metabase_session():
+        session_token = METABASE_CONFIG.get("session_token")
+        if session_token:
+            print(f"   ✅ Session token refreshed: {session_token[:20]}...")
+            return {
+                "X-Metabase-Session": session_token,
+                "Content-Type": "application/json"
+            }
+
+    print(f"   ⚠️  Using API key (session not available)")
+    return {
+        "X-Metabase-Api-Key": METABASE_CONFIG["api_key"],
+        "Content-Type": "application/json"
+    }
 
 @app.post("/api/metabase/login")
 def metabase_login(
@@ -3012,6 +3021,28 @@ def diagnose_prodline_data(
             "diagnostics": diagnostics
         }
 
+
+def ensure_metabase_session():
+    """Ensure we have a valid Metabase session token using stored credentials"""
+    use_session = METABASE_CONFIG.get("use_session_auth", False)
+    session_token = METABASE_CONFIG.get("session_token")
+    if use_session and session_token:
+        return True
+
+    db = None
+    try:
+        db = SessionLocal()
+        if load_metabase_credentials(db):
+            return True
+    except Exception as e:
+        print(f"❌ Failed to ensure Metabase session: {e}")
+    finally:
+        if db is not None:
+            try:
+                db.close()
+            except Exception:
+                pass
+    return False
 
 @app.get("/api/cetec/prodline/{prodline}/test-endpoints")
 def test_cetec_schedule_endpoints(
