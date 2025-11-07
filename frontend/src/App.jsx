@@ -22,6 +22,7 @@ import CetecSyncReport from './pages/CetecSyncReport'
 import ProgressDashboard from './pages/ProgressDashboard'
 import ProdlineScheduleExplorer from './pages/ProdlineScheduleExplorer'
 import MetabaseDashboardExplorer from './pages/MetabaseDashboardExplorer'
+import WireHarnessSchedule from './pages/WireHarnessSchedule'
 import './App.css'
 
 function ProtectedRoute({ children, requireAuth = true }) {
@@ -104,6 +105,10 @@ function Navigation() {
           <Link to="/progress" className={isActive('/progress') ? 'active' : ''}>
             <BarChart3 size={18} />
             Progress
+          </Link>
+          <Link to="/wire-harness" className={isActive('/wire-harness') ? 'active' : ''}>
+            <Timer size={18} />
+            Wire Harness
           </Link>
           
           {/* Settings Dropdown */}
@@ -271,6 +276,7 @@ function AppContent() {
           <Route path="/completed" element={<ProtectedRoute><Completed /></ProtectedRoute>} />
           <Route path="/issues" element={<ProtectedRoute><Issues /></ProtectedRoute>} />
           <Route path="/progress" element={<ProtectedRoute><ProgressDashboard /></ProtectedRoute>} />
+          <Route path="/wire-harness" element={<ProtectedRoute><WireHarnessSchedule /></ProtectedRoute>} />
           <Route path="/capacity" element={<ProtectedRoute><CapacityCalendar /></ProtectedRoute>} />
           <Route path="/shifts" element={<ProtectedRoute><ShiftConfiguration /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />

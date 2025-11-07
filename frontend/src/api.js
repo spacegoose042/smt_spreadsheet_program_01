@@ -183,5 +183,11 @@ export const executeDashboardWithParams = (dashboardId, params = {}) =>
 export const exploreProdlineInMetabase = (prodline) =>
   api.get(`/api/metabase/explore/prodline/${prodline}`)
 
+// Wire Harness Schedule - fetch schedule data for prodline 300
+export const getWireHarnessSchedule = (prodline = '300') =>
+  api.get(`/api/metabase/dashboard/64/query`, { 
+    params: { prodline } 
+  })
+
 export default api
 
