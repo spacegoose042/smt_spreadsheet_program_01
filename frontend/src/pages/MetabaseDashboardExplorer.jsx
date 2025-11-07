@@ -414,13 +414,26 @@ export default function MetabaseDashboardExplorer() {
               Execution Results
             </h2>
             
-            {dashboardResults.data?.success ? (
+            {dashboardResults.data ? (
               <div>
-                <div style={{ marginBottom: '1rem', padding: '1rem', backgroundColor: '#d4edda', borderRadius: '6px' }}>
+                <div style={{ 
+                  marginBottom: '1rem', 
+                  padding: '1rem', 
+                  backgroundColor: dashboardResults.data.success ? '#d4edda' : '#f8d7da', 
+                  borderRadius: '6px',
+                  color: dashboardResults.data.success ? '#155724' : '#721c24'
+                }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.5rem', marginBottom: '0.5rem' }}>
                     <div><strong>Dashboard:</strong> {dashboardResults.data.dashboard_name || 'Unknown'}</div>
                     <div><strong>Cards Executed:</strong> {dashboardResults.data.cards_executed || 0}</div>
-                    <div><strong>Total Rows:</strong> {dashboardResults.data.results?.reduce((sum, r) => sum + (r.row_count || 0), 0) || 0}</div>
+                    {dashboardResults.data.success ? (
+                      <>
+                        <div><strong>Cards Succeeded:</strong> {dashboardResults.data.cards_succeeded || 0}</div>
+                        <div><strong>Total Rows:</strong> {dashboardResults.data.results?.reduce((sum, r) => sum + (r.row_count || 0), 0) || 0}</div>
+                      </>
+                    ) : (
+                      <div><strong>Cards Failed:</strong> {dashboardResults.data.cards_failed || 0}</div>
+                    )}
                   </div>
                   {dashboardResults.data.parameters && Object.keys(dashboardResults.data.parameters).length > 0 && (
                     <details style={{ marginTop: '0.5rem' }}>
@@ -433,6 +446,20 @@ export default function MetabaseDashboardExplorer() {
                         fontSize: '0.85rem'
                       }}>
                         {JSON.stringify(dashboardResults.data.parameters, null, 2)}
+                      </pre>
+                    </details>
+                  )}
+                  {dashboardResults.data.metabase_parameters && Object.keys(dashboardResults.data.metabase_parameters).length > 0 && (
+                    <details style={{ marginTop: '0.5rem' }}>
+                      <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Metabase Parameters (for debugging)</summary>
+                      <pre style={{ 
+                        marginTop: '0.5rem', 
+                        padding: '0.5rem', 
+                        backgroundColor: '#f8f9fa', 
+                        borderRadius: '4px',
+                        fontSize: '0.85rem'
+                      }}>
+                        {JSON.stringify(dashboardResults.data.metabase_parameters, null, 2)}
                       </pre>
                     </details>
                   )}
