@@ -45,12 +45,16 @@ function Navigation() {
   const location = useLocation()
   const { user, logout, isAdmin } = useAuth()
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [surfaceMountOpen, setSurfaceMountOpen] = useState(false)
   const [wireHarnessOpen, setWireHarnessOpen] = useState(false)
   const settingsRef = useRef(null)
+  const surfaceMountRef = useRef(null)
   const wireHarnessRef = useRef(null)
   
   const isActive = (path) => location.pathname === path
+  const surfaceMountPaths = ['/', '/schedule', '/visual', '/lines', '/completed', '/issues', '/progress']
   const wireHarnessPaths = ['/wire-harness-dashboard', '/wire-harness', '/wire-harness-timeline']
+  const isSurfaceMountActive = surfaceMountPaths.includes(location.pathname)
   const isWireHarnessActive = wireHarnessPaths.includes(location.pathname)
   const isSettingsActive = ['/capacity', '/shifts', '/users', '/statuses', '/issue-types', '/resolution-types', '/cetec-import', '/cetec-sync-report', '/prodline-explorer', '/metabase-explorer', '/settings', '/change-password'].includes(location.pathname)
   
@@ -59,6 +63,9 @@ function Navigation() {
     function handleClickOutside(event) {
       if (settingsRef.current && !settingsRef.current.contains(event.target)) {
         setSettingsOpen(false)
+      }
+      if (surfaceMountRef.current && !surfaceMountRef.current.contains(event.target)) {
+        setSurfaceMountOpen(false)
       }
       if (wireHarnessRef.current && !wireHarnessRef.current.contains(event.target)) {
         setWireHarnessOpen(false)
@@ -70,6 +77,7 @@ function Navigation() {
 
   useEffect(() => {
     setSettingsOpen(false)
+    setSurfaceMountOpen(false)
     setWireHarnessOpen(false)
   }, [location.pathname])
   
@@ -89,37 +97,55 @@ function Navigation() {
               e.target.nextSibling.style.display = 'block'
             }}
           />
-          <h1 style={{ display: 'none' }}>SMT Scheduler</h1>
+          <h1 style={{ display: 'none' }}>S & Y Schedule</h1>
         </div>
         <div className="nav-links">
-          <Link to="/" className={isActive('/') ? 'active' : ''}>
-            <Home size={18} />
-            Dashboard
-          </Link>
-          <Link to="/schedule" className={isActive('/schedule') ? 'active' : ''}>
-            <Calendar size={18} />
-            Schedule
-          </Link>
-          <Link to="/visual" className={isActive('/visual') ? 'active' : ''}>
-            <LayoutGrid size={18} />
-            Visual
-          </Link>
-          <Link to="/lines" className={isActive('/lines') ? 'active' : ''}>
-            <List size={18} />
-            Lines
-          </Link>
-          <Link to="/completed" className={isActive('/completed') ? 'active' : ''}>
-            <CheckCircle size={18} />
-            Completed
-          </Link>
-          <Link to="/issues" className={isActive('/issues') ? 'active' : ''}>
-            <AlertTriangle size={18} />
-            Issues
-          </Link>
-          <Link to="/progress" className={isActive('/progress') ? 'active' : ''}>
-            <BarChart3 size={18} />
-            Progress
-          </Link>
+          <div className="nav-dropdown" ref={surfaceMountRef}>
+            <button
+              className={`nav-dropdown-trigger ${isSurfaceMountActive ? 'active' : ''}`}
+              onClick={() => setSurfaceMountOpen(!surfaceMountOpen)}
+            >
+              <Home size={18} />
+              Surface Mount
+              <ChevronDown size={16} style={{
+                transform: surfaceMountOpen ? 'rotate(180deg)' : 'rotate(0)',
+                transition: 'transform 0.2s'
+              }} />
+            </button>
+
+            {surfaceMountOpen && (
+              <div className="nav-dropdown-menu">
+                <Link to="/" className={isActive('/') ? 'active' : ''} onClick={() => setSurfaceMountOpen(false)}>
+                  <Home size={16} />
+                  Dashboard
+                </Link>
+                <Link to="/schedule" className={isActive('/schedule') ? 'active' : ''} onClick={() => setSurfaceMountOpen(false)}>
+                  <Calendar size={16} />
+                  Schedule
+                </Link>
+                <Link to="/visual" className={isActive('/visual') ? 'active' : ''} onClick={() => setSurfaceMountOpen(false)}>
+                  <LayoutGrid size={16} />
+                  Visual Scheduler
+                </Link>
+                <Link to="/lines" className={isActive('/lines') ? 'active' : ''} onClick={() => setSurfaceMountOpen(false)}>
+                  <List size={16} />
+                  Lines
+                </Link>
+                <Link to="/completed" className={isActive('/completed') ? 'active' : ''} onClick={() => setSurfaceMountOpen(false)}>
+                  <CheckCircle size={16} />
+                  Completed
+                </Link>
+                <Link to="/issues" className={isActive('/issues') ? 'active' : ''} onClick={() => setSurfaceMountOpen(false)}>
+                  <AlertTriangle size={16} />
+                  Issues
+                </Link>
+                <Link to="/progress" className={isActive('/progress') ? 'active' : ''} onClick={() => setSurfaceMountOpen(false)}>
+                  <BarChart3 size={16} />
+                  Progress
+                </Link>
+              </div>
+            )}
+          </div>
 
           <div className="nav-dropdown" ref={wireHarnessRef}>
             <button
