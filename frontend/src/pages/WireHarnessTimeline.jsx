@@ -369,105 +369,12 @@ export default function WireHarnessTimeline() {
     }
   }
 
-  // Calculate position and dimensions for a job block within a day
-  const getJobPositionInDay = (job, day, allDayJobs, jobIndex) => {
-    const timeRange = getJobTimeRangeForDay(job, day)
-    
-    // Work day: 7:30 AM (7.5 hours = 450 minutes from midnight) to 4:30 PM (16.5 hours = 990 minutes)
+  // Calculate row assignments for all jobs in a day (called once per day)
+  const calculateJobRowsForDay = (allDayJobs, day) => {
     const workDayStartMinutes = 7 * 60 + 30 // 7:30 AM = 450 minutes
     const workDayEndMinutes = 16 * 60 + 30 // 4:30 PM = 990 minutes
-    const workDayDurationMinutes = workDayEndMinutes - workDayStartMinutes // 540 minutes (9 hours)
     
-    // Handle jobs without specific times - they take full day
-    if (!timeRange.startTime || !timeRange.endTime) {
-      // For jobs without times, create a time range that spans the full work day
-      const fullDayStart = new Date(day.getTime() + workDayStartMinutes * 60 * 1000)
-      const fullDayEnd = new Date(day.getTime() + workDayEndMinutes * 60 * 1000)
-      
-      // Build list of ALL jobs (including those without times) for proper stacking
-      const allJobsWithRanges = allDayJobs.map((j, idx) => {
-        const range = getJobTimeRangeForDay(j, day)
-        if (!range.startTime || !range.endTime) {
-          // Jobs without times span full work day
-          return {
-            job: j,
-            index: idx,
-            start: fullDayStart.getTime(),
-            end: fullDayEnd.getTime(),
-            hasNoTime: true
-          }
-        }
-        return {
-          job: j,
-          index: idx,
-          start: range.startTime.getTime(),
-          end: range.endTime.getTime(),
-          hasNoTime: false
-        }
-      })
-      
-      // Sort by start time, then by original index
-      allJobsWithRanges.sort((a, b) => {
-        if (a.start !== b.start) return a.start - b.start
-        return a.index - b.index
-      })
-      
-      // Find current job index
-      const currentJobIndex = allJobsWithRanges.findIndex(j => j.job === job)
-      
-      // Assign rows using greedy algorithm for ALL jobs
-      const rows = []
-      for (let i = 0; i <= currentJobIndex; i++) {
-        const jobToPlace = allJobsWithRanges[i]
-        let placed = false
-        
-        for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
-          const row = rows[rowIdx]
-          const overlaps = row.some(existingJob => {
-            return !(existingJob.end <= jobToPlace.start || existingJob.start >= jobToPlace.end)
-          })
-          
-          if (!overlaps) {
-            row.push(jobToPlace)
-            placed = true
-            break
-          }
-        }
-        
-        if (!placed) {
-          rows.push([jobToPlace])
-        }
-      }
-      
-      // Find which row the current job is in
-      let rowIndex = 0
-      for (let i = 0; i < rows.length; i++) {
-        if (rows[i].some(j => j.job === job)) {
-          rowIndex = i
-          break
-        }
-      }
-      
-      return {
-        left: '0%',
-        width: '100%',
-        top: `${rowIndex * 28}px`,
-        zIndex: 2
-      }
-    }
-    
-    // Jobs with specific times
-    const jobStartMinutes = timeRange.startTime.getHours() * 60 + timeRange.startTime.getMinutes()
-    const jobEndMinutes = timeRange.endTime.getHours() * 60 + timeRange.endTime.getMinutes()
-    
-    // Position relative to work day start
-    const jobStartOffset = Math.max(0, jobStartMinutes - workDayStartMinutes)
-    const jobDuration = Math.min(workDayDurationMinutes, jobEndMinutes - workDayStartMinutes) - jobStartOffset
-    
-    const leftPercent = (jobStartOffset / workDayDurationMinutes) * 100
-    const widthPercent = (jobDuration / workDayDurationMinutes) * 100
-    
-    // Build list of ALL jobs (including those without times) for proper stacking
+    // Build list of ALL jobs with their time ranges
     const allJobsWithRanges = allDayJobs.map((j, idx) => {
       const range = getJobTimeRangeForDay(j, day)
       if (!range.startTime || !range.endTime) {
@@ -497,12 +404,9 @@ export default function WireHarnessTimeline() {
       return a.index - b.index
     })
     
-    // Find current job index
-    const currentJobIndex = allJobsWithRanges.findIndex(j => j.job === job)
-    
     // Assign rows using greedy algorithm for ALL jobs
     const rows = []
-    for (let i = 0; i <= currentJobIndex; i++) {
+    for (let i = 0; i < allJobsWithRanges.length; i++) {
       const jobToPlace = allJobsWithRanges[i]
       let placed = false
       
@@ -524,14 +428,49 @@ export default function WireHarnessTimeline() {
       }
     }
     
-    // Find which row the current job is in
-    let rowIndex = 0
+    // Create a map from job to row index
+    const jobToRowMap = new Map()
     for (let i = 0; i < rows.length; i++) {
-      if (rows[i].some(j => j.job === job)) {
-        rowIndex = i
-        break
+      for (const jobRange of rows[i]) {
+        jobToRowMap.set(jobRange.job, i)
       }
     }
+    
+    return jobToRowMap
+  }
+
+  // Calculate position and dimensions for a job block within a day
+  const getJobPositionInDay = (job, day, allDayJobs, jobIndex, jobToRowMap) => {
+    const timeRange = getJobTimeRangeForDay(job, day)
+    
+    // Work day: 7:30 AM (7.5 hours = 450 minutes from midnight) to 4:30 PM (16.5 hours = 990 minutes)
+    const workDayStartMinutes = 7 * 60 + 30 // 7:30 AM = 450 minutes
+    const workDayEndMinutes = 16 * 60 + 30 // 4:30 PM = 990 minutes
+    const workDayDurationMinutes = workDayEndMinutes - workDayStartMinutes // 540 minutes (9 hours)
+    
+    // Get row index from the pre-calculated map
+    const rowIndex = jobToRowMap.get(job) ?? jobIndex
+    
+    // Handle jobs without specific times - they take full day
+    if (!timeRange.startTime || !timeRange.endTime) {
+      return {
+        left: '0%',
+        width: '100%',
+        top: `${rowIndex * 28}px`,
+        zIndex: 2
+      }
+    }
+    
+    // Jobs with specific times
+    const jobStartMinutes = timeRange.startTime.getHours() * 60 + timeRange.startTime.getMinutes()
+    const jobEndMinutes = timeRange.endTime.getHours() * 60 + timeRange.endTime.getMinutes()
+    
+    // Position relative to work day start
+    const jobStartOffset = Math.max(0, jobStartMinutes - workDayStartMinutes)
+    const jobDuration = Math.min(workDayDurationMinutes, jobEndMinutes - workDayStartMinutes) - jobStartOffset
+    
+    const leftPercent = (jobStartOffset / workDayDurationMinutes) * 100
+    const widthPercent = (jobDuration / workDayDurationMinutes) * 100
     
     return {
       left: `${Math.max(0, leftPercent)}%`,
@@ -1168,10 +1107,15 @@ export default function WireHarnessTimeline() {
                               marginTop: zoomLevel === 'day' ? '20px' : '0',
                               minHeight: `${Math.max(100, sortedDayJobs.length * 28 + 20)}px` // Dynamic height based on number of jobs
                             }}>
-                              {sortedDayJobs.map((job, jobIdx) => {
-                                const jobKey = `${job.orderNumber}-${job.operation}-${dayIdx}`
-                                const position = getJobPositionInDay(job, day, sortedDayJobs, jobIdx)
-                                const timeRange = getJobTimeRangeForDay(job, day)
+                              {(() => {
+                                // Calculate row assignments once for all jobs in this day
+                                const jobToRowMap = calculateJobRowsForDay(sortedDayJobs, day)
+                                const maxRow = Math.max(...Array.from(jobToRowMap.values()), -1)
+                                
+                                return sortedDayJobs.map((job, jobIdx) => {
+                                  const jobKey = `${job.orderNumber}-${job.operation}-${dayIdx}`
+                                  const position = getJobPositionInDay(job, day, sortedDayJobs, jobIdx, jobToRowMap)
+                                  const timeRange = getJobTimeRangeForDay(job, day)
                                 
                                 return (
                                   <div
