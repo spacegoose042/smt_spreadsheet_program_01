@@ -2013,6 +2013,7 @@ def get_metabase_dashboard(
 ):
     """
     Get dashboard details including all cards/questions on it
+    If direct dashboard access fails, try alternative approaches
     """
     try:
         url = f"{METABASE_CONFIG['base_url']}/api/dashboard/{dashboard_id}"
@@ -2025,6 +2026,51 @@ def get_metabase_dashboard(
         
         print(f"   Response status: {response.status_code}")
         print(f"   Response headers: {dict(response.headers)}")
+        
+        if response.status_code == 401:
+            # API key doesn't have dashboard permissions - try alternative approach
+            print(f"   ⚠️  Dashboard endpoint returned 401 - API key may lack permissions")
+            print(f"   🔄 Trying alternative: List all dashboards to find {dashboard_id}")
+            
+            # Try listing all dashboards first
+            list_url = f"{METABASE_CONFIG['base_url']}/api/dashboard"
+            list_response = requests.get(list_url, headers=headers, timeout=30)
+            
+            if list_response.status_code == 200:
+                try:
+                    dashboards = list_response.json()
+                    # Find the specific dashboard in the list
+                    dashboard = None
+                    if isinstance(dashboards, list):
+                        dashboard = next((d for d in dashboards if d.get('id') == dashboard_id), None)
+                    elif isinstance(dashboards, dict) and 'data' in dashboards:
+                        dashboard = next((d for d in dashboards['data'] if d.get('id') == dashboard_id), None)
+                    
+                    if dashboard:
+                        print(f"   ✅ Found dashboard {dashboard_id} in list")
+                        # Try to get cards from the dashboard object or fetch them separately
+                        card_ids = []
+                        if 'ordered_cards' in dashboard:
+                            for card in dashboard['ordered_cards']:
+                                if 'card' in card and 'id' in card['card']:
+                                    card_ids.append(card['card']['id'])
+                        
+                        return {
+                            "success": True,
+                            "dashboard_id": dashboard_id,
+                            "dashboard": dashboard,
+                            "card_ids": card_ids,
+                            "note": "Retrieved via dashboard list (direct access not permitted)"
+                        }
+                except Exception as e:
+                    print(f"   ⚠️  Could not parse dashboard list: {str(e)}")
+            
+            # If listing also fails, return helpful error
+            error_text = response.text[:500] if response.text else "No error message"
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"Metabase API returned {response.status_code}: {error_text}. The API key may not have permissions to access dashboards. Please check the API key's group permissions in Metabase."
+            )
         
         if response.status_code != 200:
             error_text = response.text[:500] if response.text else "No error message"

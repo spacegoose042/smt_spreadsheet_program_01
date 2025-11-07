@@ -500,6 +500,41 @@ export default function MetabaseDashboardExplorer() {
                   <strong>Working Format:</strong> {connectionTest.working_format || 'Unknown'}<br />
                   <strong>Status Code:</strong> {connectionTest.status_code}
                 </div>
+                {connectionTest.endpoint_tests && connectionTest.endpoint_tests.length > 0 && (
+                  <div style={{ marginTop: '1rem' }}>
+                    <strong>Endpoint Access Test:</strong>
+                    <table style={{ width: '100%', marginTop: '0.5rem', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#e9ecef' }}>
+                          <th style={{ padding: '0.5rem', textAlign: 'left', border: '1px solid #dee2e6' }}>Endpoint</th>
+                          <th style={{ padding: '0.5rem', textAlign: 'left', border: '1px solid #dee2e6' }}>Status</th>
+                          <th style={{ padding: '0.5rem', textAlign: 'left', border: '1px solid #dee2e6' }}>Result</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {connectionTest.endpoint_tests.map((test, idx) => (
+                          <tr key={idx}>
+                            <td style={{ padding: '0.5rem', border: '1px solid #dee2e6' }}>{test.endpoint}</td>
+                            <td style={{ padding: '0.5rem', border: '1px solid #dee2e6' }}>
+                              {test.success ? (
+                                <span style={{ color: '#28a745', fontWeight: 'bold' }}>✅ {test.status_code}</span>
+                              ) : (
+                                <span style={{ color: '#dc3545', fontWeight: 'bold' }}>❌ {test.status_code || 'Error'}</span>
+                              )}
+                            </td>
+                            <td style={{ padding: '0.5rem', border: '1px solid #dee2e6', fontSize: '0.85rem' }}>
+                              {test.success ? (
+                                <span>{test.message || 'Success'}{test.count !== undefined ? ` (${test.count} items)` : ''}</span>
+                              ) : (
+                                <span>{test.message || test.error || 'Failed'}</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
                 {connectionTest.tested_formats && (
                   <details style={{ marginTop: '1rem' }}>
                     <summary style={{ cursor: 'pointer', fontWeight: 500 }}>All Tested Formats</summary>
@@ -515,6 +550,19 @@ export default function MetabaseDashboardExplorer() {
                     </pre>
                   </details>
                 )}
+                <details style={{ marginTop: '1rem' }}>
+                  <summary style={{ cursor: 'pointer', fontSize: '0.85rem' }}>Full Test Results (JSON)</summary>
+                  <pre style={{ 
+                    marginTop: '0.5rem', 
+                    padding: '1rem', 
+                    backgroundColor: '#f8f9fa', 
+                    borderRadius: '6px',
+                    overflow: 'auto',
+                    fontSize: '0.8rem'
+                  }}>
+                    {JSON.stringify(connectionTest, null, 2)}
+                  </pre>
+                </details>
               </div>
             ) : (
               <div style={{ padding: '1rem', backgroundColor: '#fff3cd', borderRadius: '6px', border: '1px solid #ffc107' }}>
