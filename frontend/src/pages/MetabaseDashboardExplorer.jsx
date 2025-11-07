@@ -171,6 +171,13 @@ export default function MetabaseDashboardExplorer() {
               )}
             </button>
             <button
+              onClick={() => setShowLogin(!showLogin)}
+              className="btn btn-secondary"
+              style={{ marginTop: '1.5rem', marginLeft: '0.5rem' }}
+            >
+              {showLogin ? 'Hide' : 'Show'} Login
+            </button>
+            <button
               onClick={() => {
                 setHasRequested(true)
                 // Small delay to ensure state is set before query runs
@@ -479,6 +486,88 @@ export default function MetabaseDashboardExplorer() {
               <div style={{ color: '#dc3545' }}>
                 <XCircle size={20} style={{ marginRight: '0.5rem' }} />
                 Failed to execute dashboard
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Metabase Login Form */}
+      {showLogin && (
+        <div className="card" style={{ marginBottom: '2rem' }}>
+          <div className="card-body">
+            <h3 style={{ marginBottom: '1rem' }}>Metabase Session Login</h3>
+            <p style={{ marginBottom: '1rem', fontSize: '0.9rem', color: '#6c757d' }}>
+              The API key has limited permissions. Use session login to access dashboards, cards, and databases.
+            </p>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1, minWidth: '200px' }}>
+                <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Metabase Username</span>
+                <input
+                  type="text"
+                  value={metabaseUsername}
+                  onChange={(e) => setMetabaseUsername(e.target.value)}
+                  placeholder="your@email.com"
+                  style={{
+                    padding: '0.5rem',
+                    borderRadius: '6px',
+                    border: '1px solid #ced4da',
+                    fontSize: '1rem'
+                  }}
+                />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1, minWidth: '200px' }}>
+                <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Metabase Password</span>
+                <input
+                  type="password"
+                  value={metabasePassword}
+                  onChange={(e) => setMetabasePassword(e.target.value)}
+                  placeholder="password"
+                  style={{
+                    padding: '0.5rem',
+                    borderRadius: '6px',
+                    border: '1px solid #ced4da',
+                    fontSize: '1rem'
+                  }}
+                />
+              </label>
+              <button
+                onClick={async () => {
+                  try {
+                    setLoginStatus({ loading: true })
+                    const response = await metabaseLogin(metabaseUsername, metabasePassword)
+                    setLoginStatus({ success: true, message: response.data?.message || 'Login successful!' })
+                    setMetabasePassword('')
+                  } catch (error) {
+                    setLoginStatus({ 
+                      success: false, 
+                      message: error.response?.data?.detail || error.message || 'Login failed' 
+                    })
+                  }
+                }}
+                disabled={!metabaseUsername || !metabasePassword || loginStatus?.loading}
+                className="btn btn-primary"
+              >
+                {loginStatus?.loading ? (
+                  <>
+                    <Loader2 size={18} style={{ marginRight: '0.5rem', animation: 'spin 1s linear infinite' }} />
+                    Logging in...
+                  </>
+                ) : (
+                  'Login to Metabase'
+                )}
+              </button>
+            </div>
+            {loginStatus && !loginStatus.loading && (
+              <div style={{ 
+                marginTop: '1rem', 
+                padding: '0.75rem', 
+                borderRadius: '6px',
+                backgroundColor: loginStatus.success ? '#d4edda' : '#f8d7da',
+                color: loginStatus.success ? '#155724' : '#721c24'
+              }}>
+                {loginStatus.success ? '✅ ' : '❌ '}
+                {loginStatus.message}
               </div>
             )}
           </div>
