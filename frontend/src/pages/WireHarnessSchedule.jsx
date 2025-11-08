@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getWireHarnessSchedule } from '../api'
 import { Calendar, Clock, Package, AlertCircle, RefreshCw, Loader2, TrendingUp, MapPin, Wrench, FileText, Filter, X } from 'lucide-react'
@@ -238,6 +238,11 @@ export default function WireHarnessSchedule() {
 
   // Apply filters to workcenters
   const filteredWorkcenters = useMemo(() => {
+    const rawFilterStart = dateFilterStart ? startOfDay(parseISO(dateFilterStart)) : null
+    const rawFilterEnd = dateFilterEnd ? endOfDay(parseISO(dateFilterEnd)) : null
+    const effectiveFilterStart = rawFilterStart ?? (!includePastDue ? startOfDay(new Date()) : null)
+    const effectiveFilterEnd = rawFilterEnd
+
     let filtered = workcenters
 
     // Filter by workcenter
@@ -256,31 +261,30 @@ export default function WireHarnessSchedule() {
           }
         }
 
-        // Date filter
-        if (dateFilterStart || dateFilterEnd) {
+        if (effectiveFilterStart || effectiveFilterEnd) {
           const baseStartDate = parseDateValue(job.calculated_start_datetime || job.min_start_date || job.scheduled_start_date || job.cetec_ship_date)
           const baseEndDate = parseDateValue(job.calculated_end_datetime || job.scheduled_end_date || job.cetec_ship_date) || baseStartDate
           const jobStart = baseStartDate ? startOfDay(baseStartDate) : null
           const jobEnd = baseEndDate ? endOfDay(baseEndDate) : null
-          const filterStart = dateFilterStart ? startOfDay(parseISO(dateFilterStart)) : null
-          const filterEnd = dateFilterEnd ? endOfDay(parseISO(dateFilterEnd)) : null
 
           if (jobStart || jobEnd) {
             const effectiveStart = jobStart || jobEnd
             const effectiveEnd = jobEnd || jobStart
 
-            if (filterStart && effectiveEnd && effectiveEnd < filterStart) {
-              if (!(includePastDue && filterStart)) {
+            if (effectiveFilterStart && effectiveEnd && effectiveEnd < effectiveFilterStart) {
+              if (!(includePastDue && jobEnd && jobEnd < effectiveFilterStart)) {
                 return false
               }
             }
 
-            if (filterEnd && effectiveStart && effectiveStart > filterEnd) {
+            if (effectiveFilterEnd && effectiveStart && effectiveStart > effectiveFilterEnd) {
               return false
             }
           } else if (!includePastDue) {
-            // Job has no scheduling dates and we're applying filters without past-due toggle
-            return false
+            const todayStart = startOfDay(new Date())
+            if (effectiveFilterStart && effectiveFilterStart > todayStart) {
+              return false
+            }
           }
         }
 
@@ -488,14 +492,6 @@ export default function WireHarnessSchedule() {
       </div>
     )
   }
-
-  useEffect(() => {
-    if (!includePastDue && !dateFilterStart && !dateFilterEnd) {
-      const today = format(new Date(), 'yyyy-MM-dd')
-      setDateFilterStart(today)
-      setDateFilterEnd(today)
-    }
-  }, [includePastDue, dateFilterStart, dateFilterEnd])
 
   return (
     <div className="container">
