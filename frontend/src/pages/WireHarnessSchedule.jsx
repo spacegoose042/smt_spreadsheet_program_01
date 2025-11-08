@@ -15,16 +15,16 @@ const PREFERRED_WIRE_HARNESS_WORKCENTERS = [
 ]
 
 const WORKCENTER_COLOR_MAP = {
-  'WH WIRE AND CABLE PROCESSING': '#ffffff',
+  'WH WIRE AND CABLE PROCESSING': '#fde68a',
   'WH TERMINATING': '#bbf7d0',
-  'WH SMALL ASSEMBLY': '#fef08a',
+  'WH SMALL ASSEMBLY': '#bfdbfe',
   'WH LARGE ASSEMBLY': '#fdba74',
-  'WH ULTRA SONIC SPLICING': '#bfdbfe',
-  'WH OVERMOLDING': '#fca5a5',
-  'WH QUALITY CONTROL': '#e9d5ff'
+  'WH ULTRA SONIC SPLICING': '#fca5a5',
+  'WH OVERMOLDING': '#c4b5fd',
+  'WH QUALITY CONTROL': '#fbcfe8'
 }
 
-const hexToRgba = (hex, alpha = 0.24) => {
+const hexToRgba = (hex, alpha = 0.32) => {
   if (!hex) return null
   const sanitized = hex.replace('#', '')
   const expand = sanitized.length === 3
@@ -258,26 +258,29 @@ export default function WireHarnessSchedule() {
 
         // Date filter
         if (dateFilterStart || dateFilterEnd) {
-          const jobStartDate = parseDateValue(job.calculated_start_datetime || job.min_start_date || job.scheduled_start_date || job.cetec_ship_date)
-          const jobEndDate = parseDateValue(job.calculated_end_datetime || job.scheduled_end_date || job.cetec_ship_date)
-          const jobStart = jobStartDate ? startOfDay(jobStartDate) : null
-          const jobEnd = jobEndDate ? endOfDay(jobEndDate) : null
+          const baseStartDate = parseDateValue(job.calculated_start_datetime || job.min_start_date || job.scheduled_start_date || job.cetec_ship_date)
+          const baseEndDate = parseDateValue(job.calculated_end_datetime || job.scheduled_end_date || job.cetec_ship_date) || baseStartDate
+          const jobStart = baseStartDate ? startOfDay(baseStartDate) : null
+          const jobEnd = baseEndDate ? endOfDay(baseEndDate) : null
           const filterStart = dateFilterStart ? startOfDay(parseISO(dateFilterStart)) : null
           const filterEnd = dateFilterEnd ? endOfDay(parseISO(dateFilterEnd)) : null
 
-          let overlaps = true
+          if (jobStart || jobEnd) {
+            const effectiveStart = jobStart || jobEnd
+            const effectiveEnd = jobEnd || jobStart
 
-          if (jobStart && jobEnd) {
-            if (filterStart && jobEnd < filterStart) overlaps = false
-            if (filterEnd && jobStart > filterEnd) overlaps = false
-          } else if (filterStart || filterEnd) {
-            overlaps = false
-          }
+            if (filterStart && effectiveEnd && effectiveEnd < filterStart) {
+              if (!(includePastDue && filterStart)) {
+                return false
+              }
+            }
 
-          if (!overlaps) {
-            if (!(includePastDue && filterStart && jobEnd && jobEnd < filterStart)) {
+            if (filterEnd && effectiveStart && effectiveStart > filterEnd) {
               return false
             }
+          } else if (!includePastDue) {
+            // Job has no scheduling dates and we're applying filters without past-due toggle
+            return false
           }
         }
 
