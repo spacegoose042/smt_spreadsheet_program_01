@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 
 const PREFERRED_WIRE_HARNESS_WORKCENTERS = [
   'WH WIRE AND CABLE PROCESSING',
@@ -39,6 +39,16 @@ export default function WireHarnessTimeline() {
   const [zoomLevel, setZoomLevel] = useState('week') // 'day', 'week', 'month'
   const [weekOffset, setWeekOffset] = useState(0)
   const [dayOffset, setDayOffset] = useState(0)
+  const [toastInfo, setToastInfo] = useState(null)
+  const toastTimeoutRef = useRef(null)
+
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current)
+      }
+    }
+  }, [])
 
   // Fetch schedule data - try question 984 first (detailed), fallback to dashboard 64
   const { data: scheduleDetailData, isLoading: isLoadingDetail, error: errorDetail, refetch: refetchDetail } = useQuery({
@@ -76,6 +86,29 @@ export default function WireHarnessTimeline() {
     } else {
       await refetchFallback()
     }
+  }
+
+  const closeToast = () => {
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current)
+      toastTimeoutRef.current = null
+    }
+    setToastInfo(null)
+  }
+
+  const showJobToast = (job, context = {}) => {
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current)
+    }
+    setToastInfo({
+      job,
+      ...context,
+      timestamp: Date.now()
+    })
+    toastTimeoutRef.current = setTimeout(() => {
+      setToastInfo(null)
+      toastTimeoutRef.current = null
+    }, 6000)
   }
 
   // Process and group data by workcenter - handle both question 984 and dashboard 64 formats
@@ -846,6 +879,26 @@ export default function WireHarnessTimeline() {
     )
   }
 
+  const toastJob = toastInfo?.job
+  const toastWorkcenter = toastInfo?.workcenter
+  const toastDayLabel = toastInfo?.day ? format(toastInfo.day, 'MMM d, yyyy') : null
+  const toastTimelineRange = toastInfo?.timelineStart
+    ? `${format(toastInfo.timelineStart, 'MMM d')} - ${format(addDays(toastInfo.timelineStart, (toastInfo.timelineDays || 1) - 1), 'MMM d')}`
+    : null
+  const toastTimeRange = toastInfo?.timeRange
+    ? `${toastInfo.timeRange.start} – ${toastInfo.timeRange.end}`
+    : null
+  const toastStartLabel = toastJob?.startDateTime
+    ? format(toastJob.startDateTime, 'MMM d, yyyy h:mm a')
+    : toastJob?.startDate
+      ? format(toastJob.startDate, 'MMM d, yyyy')
+      : null
+  const toastEndLabel = toastJob?.endDateTime
+    ? format(toastJob.endDateTime, 'MMM d, yyyy h:mm a')
+    : toastJob?.endDate
+      ? format(toastJob.endDate, 'MMM d, yyyy')
+      : null
+
   return (
     <div className="container">
       <div className="page-header">
@@ -1492,9 +1545,9 @@ export default function WireHarnessTimeline() {
                                         left: position.left,
                                         width: position.width,
                                         top: position.top,
-                                        height: '22px',
+                                        height: '28px',
                                         zIndex: position.zIndex || 2,
-                                        minWidth: '40px'
+                                        minWidth: '44px'
                                       }}
                                     >
                                     <div
@@ -1502,37 +1555,34 @@ export default function WireHarnessTimeline() {
                                         height: '100%',
                                         backgroundColor: getStatusColor(job.prodStatus),
                                         color: 'white',
-                                        borderRadius: '4px',
-                                        padding: '0.25rem 0.4rem',
-                                        fontSize: '0.7rem',
+                                        borderRadius: '5px',
+                                        padding: '0.3rem 0.45rem',
+                                        fontSize: '0.72rem',
                                         fontWeight: 600,
-                                        border: '1px solid rgba(0,0,0,0.1)',
-                                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                                        border: '1px solid rgba(0,0,0,0.12)',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.12)',
                                         cursor: 'pointer',
                                         transition: 'all 0.2s',
                                         display: 'flex',
                                         alignItems: 'center',
                                         overflow: 'hidden'
                                       }}
-                                      title={`${job.orderDisplay} - ${job.part}
-Build Operation: ${job.operation || 'N/A'}
-Ordline Status: ${job.currentLocation || 'N/A'}
-Status: ${job.prodStatus || 'N/A'}
-Hours: ${parseFloat(job.hours || 0).toFixed(2)}h
-${job.startDateTime ? `Start: ${format(job.startDateTime, 'MMM d, yyyy h:mm a')}` : (job.startDate ? `Start: ${format(job.startDate, 'MMM d, yyyy')}` : '')}
-${job.endDateTime ? `End: ${format(job.endDateTime, 'MMM d, yyyy h:mm a')}` : (job.endDate ? `End: ${format(job.endDate, 'MMM d, yyyy')}` : '')}
-${job.notes ? `Notes: ${job.notes}` : ''}
-${timeRange.start && timeRange.end ? `Scheduled: ${timeRange.start} - ${timeRange.end}` : 'Work Hours: 7:30 AM - 4:30 PM'}`}
                                       onMouseEnter={(e) => {
                                         e.currentTarget.style.transform = 'scale(1.05)'
                                         e.currentTarget.style.zIndex = '10'
-                                        e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)'
+                                        e.currentTarget.style.boxShadow = '0 5px 10px rgba(0,0,0,0.2)'
                                       }}
                                       onMouseLeave={(e) => {
                                         e.currentTarget.style.transform = 'scale(1)'
                                         e.currentTarget.style.zIndex = position.zIndex
-                                        e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)'
+                                        e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.12)'
                                       }}
+                                      onClick={() => showJobToast(job, {
+                                        workcenter: workcenter.name,
+                                        day,
+                                        timeRange,
+                                        view: 'day'
+                                      })}
                                     >
                                       <div style={{ 
                                         overflow: 'hidden', 
@@ -1540,25 +1590,25 @@ ${timeRange.start && timeRange.end ? `Scheduled: ${timeRange.start} - ${timeRang
                                         whiteSpace: 'nowrap',
                                         flex: 1
                                       }}>
-                                        <div style={{ fontWeight: 700, fontSize: '0.7rem' }}>
+                                        <div style={{ fontWeight: 700, fontSize: '0.72rem' }}>
                                           {job.orderDisplay}
                                         </div>
-                                        {job.operation && blockWidth > 15 && (
-                                          <div style={{ fontSize: '0.6rem', opacity: 0.9, marginTop: '0.05rem' }}>
+                                        {job.operation && blockWidth > 18 && (
+                                          <div style={{ fontSize: '0.62rem', opacity: 0.9, marginTop: '0.05rem' }}>
                                             {job.operation}
                                           </div>
                                         )}
-                                      {job.currentLocation && blockWidth > 30 && (
-                                          <div style={{ fontSize: '0.55rem', opacity: 0.75, marginTop: '0.05rem' }}>
+                                      {job.currentLocation && blockWidth > 34 && (
+                                          <div style={{ fontSize: '0.58rem', opacity: 0.75, marginTop: '0.05rem' }}>
                                             {job.currentLocation}
                                           </div>
                                         )}
                                       </div>
-                                      {blockWidth > 20 && (
+                                      {blockWidth > 22 && (
                                         <div style={{ 
                                           fontSize: '0.6rem', 
                                           opacity: 0.9,
-                                          marginLeft: '0.25rem',
+                                          marginLeft: '0.3rem',
                                           whiteSpace: 'nowrap'
                                         }}>
                                           {timeRange.start}-{timeRange.end}
@@ -1659,9 +1709,9 @@ ${timeRange.start && timeRange.end ? `Scheduled: ${timeRange.start} - ${timeRang
                                   left: position.left,
                                   width: position.width,
                                   top: position.top,
-                                  height: '22px',
+                                  height: '28px',
                                   zIndex: position.zIndex || 2,
-                                  minWidth: '40px'
+                                  minWidth: '44px'
                                 }}
                               >
                                 <div
@@ -1669,8 +1719,8 @@ ${timeRange.start && timeRange.end ? `Scheduled: ${timeRange.start} - ${timeRang
                                     height: '100%',
                                     backgroundColor: getStatusColor(job.prodStatus),
                                     color: 'white',
-                                    borderRadius: '4px',
-                                    padding: '0.25rem 0.4rem',
+                                    borderRadius: '5px',
+                                    padding: '0.3rem 0.45rem',
                                     fontSize: '0.7rem',
                                     fontWeight: 600,
                                     border: '1px solid rgba(0,0,0,0.1)',
@@ -1681,14 +1731,6 @@ ${timeRange.start && timeRange.end ? `Scheduled: ${timeRange.start} - ${timeRang
                                     alignItems: 'center',
                                     overflow: 'hidden'
                                   }}
-                                  title={`${job.orderDisplay} - ${job.part}
-Build Operation: ${job.operation || 'N/A'}
-Ordline Status: ${job.currentLocation || 'N/A'}
-Status: ${job.prodStatus || 'N/A'}
-Hours: ${parseFloat(job.hours || 0).toFixed(2)}h
-${job.startDateTime ? `Start: ${format(job.startDateTime, 'MMM d, yyyy h:mm a')}` : (job.startDate ? `Start: ${format(job.startDate, 'MMM d, yyyy')}` : '')}
-${job.endDateTime ? `End: ${format(job.endDateTime, 'MMM d, yyyy h:mm a')}` : (job.endDate ? `End: ${format(job.endDate, 'MMM d, yyyy')}` : '')}
-${job.notes ? `Notes: ${job.notes}` : ''}`}
                                   onMouseEnter={(e) => {
                                     e.currentTarget.style.transform = 'scale(1.05)'
                                     e.currentTarget.style.zIndex = '10'
@@ -1699,6 +1741,12 @@ ${job.notes ? `Notes: ${job.notes}` : ''}`}
                                     e.currentTarget.style.zIndex = position.zIndex || 2
                                     e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)'
                                   }}
+                                  onClick={() => showJobToast(job, {
+                                    workcenter: workcenter.name,
+                                    timelineStart,
+                                    timelineDays,
+                                    view: zoomLevel
+                                  })}
                                 >
                                   <div style={{ 
                                     overflow: 'hidden', 
@@ -1709,12 +1757,12 @@ ${job.notes ? `Notes: ${job.notes}` : ''}`}
                                     <div style={{ fontWeight: 700, fontSize: '0.7rem' }}>
                                       {job.orderDisplay}
                                     </div>
-                                    {job.operation && blockWidth > 15 && (
+                                    {job.operation && blockWidth > 18 && (
                                       <div style={{ fontSize: '0.6rem', opacity: 0.9, marginTop: '0.05rem' }}>
                                         {job.operation}
                                       </div>
                                     )}
-                                    {job.currentLocation && blockWidth > 30 && (
+                                    {job.currentLocation && blockWidth > 34 && (
                                       <div style={{ fontSize: '0.55rem', opacity: 0.75, marginTop: '0.05rem' }}>
                                         {job.currentLocation}
                                       </div>
@@ -1731,6 +1779,63 @@ ${job.notes ? `Notes: ${job.notes}` : ''}`}
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {toastJob && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '24px',
+            right: '24px',
+            zIndex: 9999,
+            maxWidth: '320px',
+            backgroundColor: '#0f172a',
+            color: 'white',
+            borderRadius: '10px',
+            boxShadow: '0 10px 25px rgba(15,23,42,0.25)',
+            padding: '1rem 1.25rem',
+            display: 'grid',
+            gap: '0.5rem'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem' }}>
+            <div>
+              <div style={{ fontSize: '0.78rem', letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.6 }}>
+                {toastWorkcenter || 'Wire Harness'}
+              </div>
+              <div style={{ fontWeight: 700, fontSize: '1rem', marginTop: '0.1rem' }}>
+                {toastJob.orderDisplay || toastJob.order}
+              </div>
+            </div>
+            <button
+              onClick={closeToast}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '1.15rem',
+                lineHeight: 1
+              }}
+              aria-label="Dismiss details"
+            >
+              ×
+            </button>
+          </div>
+
+          <div style={{ display: 'grid', gap: '0.25rem', fontSize: '0.8rem', lineHeight: 1.35 }}>
+            {toastJob.part && <div><strong>Part:</strong> {toastJob.part}</div>}
+            {toastJob.operation && <div><strong>Operation:</strong> {toastJob.operation}</div>}
+            {toastJob.currentLocation && <div><strong>Location:</strong> {toastJob.currentLocation}</div>}
+            {toastJob.prodStatus && <div><strong>Status:</strong> {toastJob.prodStatus}</div>}
+            {toastTimeRange && <div><strong>Shift:</strong> {toastTimeRange}</div>}
+            {toastDayLabel && <div><strong>Day:</strong> {toastDayLabel}</div>}
+            {toastTimelineRange && <div><strong>Range:</strong> {toastTimelineRange}</div>}
+            {toastStartLabel && <div><strong>Starts:</strong> {toastStartLabel}</div>}
+            {toastEndLabel && <div><strong>Ends:</strong> {toastEndLabel}</div>}
+            {toastJob.notes && <div style={{ opacity: 0.85 }}><strong>Notes:</strong> {toastJob.notes}</div>}
           </div>
         </div>
       )}
