@@ -1053,7 +1053,7 @@ export default function WireHarnessSchedule() {
                           </div>
                         </div>
                       </div>
-                    )
+                    );
                   })}
                 </div>
               </div>
