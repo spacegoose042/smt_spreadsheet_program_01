@@ -1787,37 +1787,40 @@ export default function WireHarnessTimeline() {
         <div
           style={{
             position: 'fixed',
-            bottom: '24px',
-            right: '24px',
+            bottom: '28px',
+            right: '28px',
             zIndex: 9999,
-            maxWidth: '320px',
+            maxWidth: '380px',
             backgroundColor: '#0f172a',
             color: 'white',
-            borderRadius: '10px',
-            boxShadow: '0 10px 25px rgba(15,23,42,0.25)',
-            padding: '1rem 1.25rem',
+            borderRadius: '12px',
+            boxShadow: '0 18px 40px rgba(15,23,42,0.35)',
+            padding: '1.25rem 1.5rem',
             display: 'grid',
-            gap: '0.5rem'
+            gap: '0.65rem'
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
             <div>
-              <div style={{ fontSize: '0.78rem', letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.6 }}>
+              <div style={{ fontSize: '0.82rem', letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.55 }}>
                 {toastWorkcenter || 'Wire Harness'}
               </div>
-              <div style={{ fontWeight: 700, fontSize: '1rem', marginTop: '0.1rem' }}>
+              <div style={{ fontWeight: 700, fontSize: '1.2rem', marginTop: '0.2rem' }}>
                 {toastJob.orderDisplay || toastJob.order}
               </div>
             </div>
             <button
               onClick={closeToast}
               style={{
-                background: 'transparent',
+                background: 'rgba(255,255,255,0.12)',
                 border: 'none',
                 color: 'white',
                 cursor: 'pointer',
-                fontSize: '1.15rem',
-                lineHeight: 1
+                fontSize: '1.2rem',
+                lineHeight: 1,
+                borderRadius: '999px',
+                width: '28px',
+                height: '28px'
               }}
               aria-label="Dismiss details"
             >
@@ -1825,7 +1828,7 @@ export default function WireHarnessTimeline() {
             </button>
           </div>
 
-          <div style={{ display: 'grid', gap: '0.25rem', fontSize: '0.8rem', lineHeight: 1.35 }}>
+          <div style={{ display: 'grid', gap: '0.35rem', fontSize: '0.86rem', lineHeight: 1.45 }}>
             {toastJob.part && <div><strong>Part:</strong> {toastJob.part}</div>}
             {toastJob.operation && <div><strong>Operation:</strong> {toastJob.operation}</div>}
             {toastJob.currentLocation && <div><strong>Location:</strong> {toastJob.currentLocation}</div>}

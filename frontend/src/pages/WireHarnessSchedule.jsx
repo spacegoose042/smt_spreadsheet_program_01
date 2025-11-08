@@ -41,6 +41,16 @@ const hexToRgba = (hex, alpha = 0.24) => {
 const getWorkcenterAccent = (name) => WORKCENTER_COLOR_MAP[name] || '#d1d5db'
 const getWorkcenterBackground = (name) => hexToRgba(getWorkcenterAccent(name), 0.18) || '#f5f5f5'
 
+const parseDateValue = (value) => {
+  if (!value) return null
+  if (value instanceof Date) return value
+  if (typeof value === 'string') {
+    const parsed = parseISO(value)
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+  }
+  return null
+}
+
 const WORKCENTER_ORDER_MAP = PREFERRED_WIRE_HARNESS_WORKCENTERS.reduce((acc, name, index) => {
   acc[name] = index
   return acc
@@ -54,6 +64,7 @@ export default function WireHarnessSchedule() {
   const [dateFilterStart, setDateFilterStart] = useState('')
   const [dateFilterEnd, setDateFilterEnd] = useState('')
   const [showFilters, setShowFilters] = useState(false)
+  const [includePastDue, setIncludePastDue] = useState(false)
 
   // Fetch schedule data with auto-refresh every 5 minutes
   const { data: scheduleData, isLoading, error, refetch } = useQuery({
@@ -247,26 +258,26 @@ export default function WireHarnessSchedule() {
 
         // Date filter
         if (dateFilterStart || dateFilterEnd) {
-          const jobStart = job.startDate ? startOfDay(job.startDate) : null
-          const jobEnd = job.endDate ? endOfDay(job.endDate) : null
+          const jobStartDate = parseDateValue(job.calculated_start_datetime || job.min_start_date || job.scheduled_start_date || job.cetec_ship_date)
+          const jobEndDate = parseDateValue(job.calculated_end_datetime || job.scheduled_end_date || job.cetec_ship_date)
+          const jobStart = jobStartDate ? startOfDay(jobStartDate) : null
+          const jobEnd = jobEndDate ? endOfDay(jobEndDate) : null
           const filterStart = dateFilterStart ? startOfDay(parseISO(dateFilterStart)) : null
           const filterEnd = dateFilterEnd ? endOfDay(parseISO(dateFilterEnd)) : null
 
-          // Job must overlap with filter range
+          let overlaps = true
+
           if (jobStart && jobEnd) {
-            if (filterStart && filterEnd) {
-              // Both dates set - check overlap
-              return !(jobEnd < filterStart || jobStart > filterEnd)
-            } else if (filterStart) {
-              // Only start date - job must start on or after
-              return jobStart >= filterStart
-            } else if (filterEnd) {
-              // Only end date - job must end on or before
-              return jobEnd <= filterEnd
-            }
+            if (filterStart && jobEnd < filterStart) overlaps = false
+            if (filterEnd && jobStart > filterEnd) overlaps = false
           } else if (filterStart || filterEnd) {
-            // Job has no dates but filter is set - exclude it
-            return false
+            overlaps = false
+          }
+
+          if (!overlaps) {
+            if (!(includePastDue && filterStart && jobEnd && jobEnd < filterStart)) {
+              return false
+            }
           }
         }
 
@@ -275,7 +286,7 @@ export default function WireHarnessSchedule() {
     })).filter(wc => wc.jobs.length > 0) // Remove workcenters with no jobs after filtering
 
     return filtered
-  }, [workcenters, selectedWorkcenters, selectedProdStatuses, dateFilterStart, dateFilterEnd])
+  }, [workcenters, selectedWorkcenters, selectedProdStatuses, dateFilterStart, dateFilterEnd, includePastDue])
 
   // Calculate date range for timeline
   const dateRange = useMemo(() => {
@@ -362,8 +373,8 @@ export default function WireHarnessSchedule() {
         break
     }
 
-    setDateFilterStart(start.toISOString().slice(0, 10))
-    setDateFilterEnd(end.toISOString().slice(0, 10))
+    setDateFilterStart(format(start, 'yyyy-MM-dd'))
+    setDateFilterEnd(format(end, 'yyyy-MM-dd'))
   }
 
   const quickButtonStyle = (active) => ({
@@ -390,6 +401,7 @@ export default function WireHarnessSchedule() {
     setSelectedProdStatuses([])
     setDateFilterStart('')
     setDateFilterEnd('')
+    setIncludePastDue(false)
   }
 
   const toggleWorkcenter = (workcenter) => {
@@ -583,6 +595,9 @@ export default function WireHarnessSchedule() {
 
           const isActive = (() => {
             if (!dateFilterStart || !dateFilterEnd) return false
+            const currentStart = parseDateValue(dateFilterStart)
+            const currentEnd = parseDateValue(dateFilterEnd)
+            if (!currentStart || !currentEnd) return false
             const today = new Date()
             const start = new Date(today)
             const end = new Date(today)
@@ -616,9 +631,8 @@ export default function WireHarnessSchedule() {
               default:
                 break
             }
-            const currentStart = new Date(dateFilterStart)
-            const currentEnd = new Date(dateFilterEnd)
-            return currentStart.toDateString() === start.toDateString() && currentEnd.toDateString() === end.toDateString()
+            return format(currentStart, 'yyyy-MM-dd') === format(start, 'yyyy-MM-dd') &&
+              format(currentEnd, 'yyyy-MM-dd') === format(end, 'yyyy-MM-dd')
           })()
 
           return (
@@ -632,11 +646,18 @@ export default function WireHarnessSchedule() {
             </button>
           )
         })}
+        <button
+          type='button'
+          style={quickButtonStyle(includePastDue)}
+          onClick={() => setIncludePastDue((prev) => !prev)}
+        >
+          {includePastDue ? 'Past Due Included' : 'Include Past Due'}
+        </button>
         {(dateFilterStart || dateFilterEnd) && (
           <button
             type='button'
             style={dateButtonStyle(false)}
-            onClick={() => { setDateFilterStart(''); setDateFilterEnd('') }}
+            onClick={() => { setDateFilterStart(''); setDateFilterEnd(''); setIncludePastDue(false) }}
           >
             Clear Dates
           </button>
