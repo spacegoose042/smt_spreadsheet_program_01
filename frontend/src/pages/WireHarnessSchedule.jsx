@@ -14,6 +14,33 @@ const PREFERRED_WIRE_HARNESS_WORKCENTERS = [
   'WH QUALITY CONTROL'
 ]
 
+const WORKCENTER_COLOR_MAP = {
+  'WH WIRE AND CABLE PROCESSING': '#ffffff',
+  'WH TERMINATING': '#bbf7d0',
+  'WH SMALL ASSEMBLY': '#fef08a',
+  'WH LARGE ASSEMBLY': '#fdba74',
+  'WH ULTRA SONIC SPLICING': '#bfdbfe',
+  'WH OVERMOLDING': '#fca5a5',
+  'WH QUALITY CONTROL': '#e9d5ff'
+}
+
+const hexToRgba = (hex, alpha = 0.2) => {
+  if (!hex) return null
+  const sanitized = hex.replace('#', '')
+  const expand = sanitized.length === 3
+    ? sanitized.split('').map(char => char + char).join('')
+    : sanitized
+  if (expand.length !== 6) return null
+  const bigint = parseInt(expand, 16)
+  const r = (bigint >> 16) & 255
+  const g = (bigint >> 8) & 255
+  const b = bigint & 255
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+const getWorkcenterAccent = (name) => WORKCENTER_COLOR_MAP[name] || '#d1d5db'
+const getWorkcenterBackground = (name) => hexToRgba(getWorkcenterAccent(name), 0.24) || '#f5f5f5'
+
 const WORKCENTER_ORDER_MAP = PREFERRED_WIRE_HARNESS_WORKCENTERS.reduce((acc, name, index) => {
   acc[name] = index
   return acc
@@ -838,34 +865,47 @@ export default function WireHarnessSchedule() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-          {filteredWorkcenters.map((workcenter, wcIdx) => (
-            <div key={wcIdx} className="card" style={{ 
-              borderLeft: '4px solid #3b82f6',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-            }}>
-              <div className="card-body">
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
+          {filteredWorkcenters.map((workcenter, wcIdx) => {
+            const accentColor = getWorkcenterAccent(workcenter.name)
+            const accentBorderColor = accentColor === '#ffffff' ? '#d1d5db' : accentColor
+            const backgroundTint = getWorkcenterBackground(workcenter.name)
+
+            return (
+              <div
+                key={wcIdx}
+                className="card"
+                style={{
+                  borderLeft: `6px solid ${accentBorderColor}`,
+                  boxShadow: '0 2px 6px rgba(15,23,42,0.08)',
+                  background: backgroundTint
+                }}
+              >
+                <div
+                  className="card-body"
+                  style={{ padding: '1rem 1.15rem 1.25rem', background: '#ffffffd9', borderRadius: '10px' }}
+                >
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
                   alignItems: 'center',
-                  marginBottom: '1.5rem',
-                  paddingBottom: '1rem',
-                  borderBottom: '2px solid #e5e7eb'
+                  marginBottom: '1rem',
+                  paddingBottom: '0.85rem',
+                  borderBottom: `1px solid ${hexToRgba(accentColor, 0.35)}`
                 }}>
                   <div>
                     <h2 style={{ 
                       margin: 0, 
-                      fontSize: '1.5rem', 
+                      fontSize: '1.35rem',
                       fontWeight: 600,
-                      color: '#1f2937',
+                      color: '#0f172a',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '0.5rem'
+                      gap: '0.45rem'
                     }}>
-                      <MapPin size={24} style={{ color: '#3b82f6' }} />
+                      <MapPin size={22} style={{ color: accentColor }} />
                       {workcenter.name}
                     </h2>
-                    <p style={{ margin: '0.25rem 0 0 0', color: '#6c757d', fontSize: '0.9rem' }}>
+                    <p style={{ margin: '0.25rem 0 0 0', color: '#4b5563', fontSize: '0.85rem' }}>
                       {workcenter.jobs.length} job{workcenter.jobs.length !== 1 ? 's' : ''} scheduled
                     </p>
                   </div>
@@ -885,149 +925,128 @@ export default function WireHarnessSchedule() {
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                   {workcenter.jobs.map((job, jobIdx) => {
                     const daysDiff = job.startDate && job.endDate 
                       ? differenceInDays(job.endDate, job.startDate) + 1 
                       : 0
+                    const statusColor = getStatusColor(job.prodStatus)
+                    const hoursValue = parseFloat(job.hours || 0)
                     
                     return (
                       <div
                         key={jobIdx}
                         style={{
-                          padding: '1rem',
-                          backgroundColor: '#f9fafb',
-                          borderRadius: '8px',
-                          border: '1px solid #e5e7eb',
-                          borderLeft: `4px solid ${getStatusColor(job.prodStatus)}`,
-                          transition: 'all 0.2s',
-                          cursor: 'pointer'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = '#f3f4f6'
-                          e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)'
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = '#f9fafb'
-                          e.currentTarget.style.boxShadow = 'none'
+                          padding: '0.75rem 0.9rem',
+                          backgroundColor: '#ffffff',
+                          borderRadius: '10px',
+                          border: `1px solid ${hexToRgba(accentBorderColor, 0.45)}`,
+                          borderLeft: `6px solid ${statusColor}`,
+                          boxShadow: '0 1px 2px rgba(15,23,42,0.08)',
+                          display: 'grid',
+                          gap: '0.65rem',
+                          touchAction: 'manipulation'
                         }}
                       >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-                              <span style={{ 
-                                fontWeight: 600, 
-                                fontSize: '1.1rem',
-                                color: '#1f2937'
-                              }}>
+                        <div
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'minmax(0, 1fr) minmax(120px, auto)',
+                            gap: '0.75rem',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <div style={{ display: 'grid', gap: '0.35rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                              <span style={{ fontWeight: 600, fontSize: '1rem', color: '#111827' }}>
                                 {job.order}.{job.line}
                               </span>
                               {job.priority > 0 && (
                                 <span style={{
-                                  padding: '0.125rem 0.5rem',
-                                  borderRadius: '4px',
-                                  fontSize: '0.75rem',
+                                  padding: '0.1rem 0.45rem',
+                                  borderRadius: '999px',
+                                  fontSize: '0.7rem',
                                   fontWeight: 600,
-                                  backgroundColor: getPriorityColor(job.priority) + '20',
+                                  backgroundColor: getPriorityColor(job.priority) + '26',
                                   color: getPriorityColor(job.priority),
-                                  border: `1px solid ${getPriorityColor(job.priority)}`
+                                  border: `1px solid ${hexToRgba(getPriorityColor(job.priority), 0.5)}`
                                 }}>
                                   Priority {job.priority}
                                 </span>
                               )}
                               {job.buildOrder !== null && (
                                 <span style={{
-                                  padding: '0.125rem 0.5rem',
-                                  borderRadius: '4px',
-                                  fontSize: '0.75rem',
+                                  padding: '0.1rem 0.45rem',
+                                  borderRadius: '999px',
+                                  fontSize: '0.7rem',
                                   fontWeight: 600,
-                                  backgroundColor: '#3b82f6' + '20',
-                                  color: '#3b82f6',
-                                  border: '1px solid #3b82f6'
+                                  backgroundColor: '#2563eb26',
+                                  color: '#1d4ed8',
+                                  border: '1px solid rgba(37,99,235,0.4)'
                                 }}>
-                                  Build Order: {job.buildOrder}
+                                  Build Order {job.buildOrder}
                                 </span>
                               )}
                             </div>
-                            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.9rem', color: '#6c757d' }}>
-                                <Package size={14} />
-                                <span><strong>Part:</strong> {job.part}</span>
+
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', color: '#4b5563' }}>
+                                <Package size={13} />
+                                <span>{job.part}</span>
                               </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.9rem', color: '#6c757d' }}>
-                                <Wrench size={14} />
-                                <span><strong>Operation:</strong> {job.operation}</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', color: '#4b5563' }}>
+                                <Wrench size={13} />
+                                <span>{job.operation}</span>
                               </div>
                             </div>
+
                             {job.notes && (
-                              <div style={{ 
-                                display: 'flex', 
-                                alignItems: 'flex-start', 
-                                gap: '0.25rem', 
-                                fontSize: '0.85rem', 
-                                color: '#6c757d',
-                                marginTop: '0.5rem',
-                                fontStyle: 'italic'
+                              <div style={{
+                                display: 'flex',
+                                gap: '0.35rem',
+                                fontSize: '0.78rem',
+                                color: '#6b7280',
+                                backgroundColor: '#f9fafb',
+                                borderRadius: '8px',
+                                padding: '0.4rem 0.55rem'
                               }}>
-                                <FileText size={14} style={{ marginTop: '2px', flexShrink: 0 }} />
+                                <FileText size={13} style={{ flexShrink: 0, marginTop: '0.15rem' }} />
                                 <span>{job.notes}</span>
                               </div>
                             )}
                           </div>
-                          <div style={{ 
-                            display: 'flex', 
-                            flexDirection: 'column', 
-                            alignItems: 'flex-end',
-                            gap: '0.25rem',
-                            minWidth: '200px'
-                          }}>
+
+                          <div style={{ display: 'grid', justifyItems: 'end', gap: '0.3rem' }}>
                             {job.startDate && job.endDate && (
-                              <div style={{ 
-                                textAlign: 'right',
-                                fontSize: '0.85rem',
-                                color: '#6c757d'
-                              }}>
+                              <div style={{ textAlign: 'right', fontSize: '0.78rem', color: '#475569' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', justifyContent: 'flex-end' }}>
-                                  <Calendar size={14} />
-                                  <span>
-                                    {format(job.startDate, 'MMM d')} - {format(job.endDate, 'MMM d')}
-                                  </span>
+                                  <Calendar size={13} />
+                                  <span>{format(job.startDate, 'MMM d')} - {format(job.endDate, 'MMM d')}</span>
                                 </div>
-                                <div style={{ fontSize: '0.75rem', marginTop: '0.125rem' }}>
+                                <div style={{ fontSize: '0.7rem', marginTop: '0.1rem', color: '#64748b' }}>
                                   {daysDiff} day{daysDiff !== 1 ? 's' : ''}
                                 </div>
                               </div>
                             )}
-                            <div style={{ 
-                              display: 'flex', 
-                              alignItems: 'center', 
-                              gap: '0.25rem',
-                              fontSize: '0.85rem',
-                              color: '#6c757d'
-                            }}>
-                              <Clock size={14} />
-                              <span><strong>{parseFloat(job.hours || 0).toFixed(2)}</strong> hrs</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.8rem', color: '#1f2937' }}>
+                              <Clock size={13} />
+                              <span><strong>{hoursValue.toFixed(1)}</strong> hrs</span>
                             </div>
                             {job.prodStatus && (
                               <span style={{
-                                padding: '0.125rem 0.5rem',
-                                borderRadius: '4px',
-                                fontSize: '0.75rem',
+                                padding: '0.1rem 0.5rem',
+                                borderRadius: '999px',
+                                fontSize: '0.7rem',
                                 fontWeight: 600,
-                                backgroundColor: getStatusColor(job.prodStatus) + '20',
-                                color: getStatusColor(job.prodStatus),
-                                border: `1px solid ${getStatusColor(job.prodStatus)}`,
-                                marginTop: '0.25rem'
+                                backgroundColor: hexToRgba(statusColor, 0.18),
+                                color: statusColor,
+                                border: `1px solid ${hexToRgba(statusColor, 0.5)}`
                               }}>
                                 {job.prodStatus}
                               </span>
                             )}
                             {job.currentLocation && job.currentLocation !== workcenter.name && (
-                              <div style={{ 
-                                fontSize: '0.75rem', 
-                                color: '#9ca3af',
-                                marginTop: '0.25rem'
-                              }}>
+                              <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
                                 Current: {job.currentLocation}
                               </div>
                             )}
