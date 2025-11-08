@@ -392,6 +392,23 @@ export default function WireHarnessSchedule() {
     setDateFilterEnd('')
   }
 
+  const getStatusColor = (status) => {
+    if (!status) return '#6c757d'
+    const statusLower = status.toLowerCase()
+    if (statusLower.includes('missing')) return '#f59e0b'
+    if (statusLower.includes('in-process')) return '#10b981'
+    if (statusLower.includes('waiting')) return '#f59e0b'
+    if (statusLower.includes('ready')) return '#3b82f6'
+    return '#6c757d'
+  }
+
+  const getPriorityColor = (priority) => {
+    if (priority === 3) return '#ef4444'
+    if (priority === 2) return '#f59e0b'
+    if (priority === 1) return '#3b82f6'
+    return '#6c757d'
+  }
+
   const workcenterSections = filteredWorkcenters.map((workcenter, wcIdx) => {
     const accentColor = getWorkcenterAccent(workcenter.name)
     const accentBorderColor = accentColor === '#ffffff' ? '#d1d5db' : accentColor
@@ -608,23 +625,6 @@ export default function WireHarnessSchedule() {
 
   const handleManualRefresh = () => {
     refetch()
-  }
-
-  const getStatusColor = (status) => {
-    if (!status) return '#6c757d'
-    const statusLower = status.toLowerCase()
-    if (statusLower.includes('missing')) return '#f59e0b'
-    if (statusLower.includes('in-process')) return '#10b981'
-    if (statusLower.includes('waiting')) return '#f59e0b'
-    if (statusLower.includes('ready')) return '#3b82f6'
-    return '#6c757d'
-  }
-
-  const getPriorityColor = (priority) => {
-    if (priority === 3) return '#ef4444'
-    if (priority === 2) return '#f59e0b'
-    if (priority === 1) return '#3b82f6'
-    return '#6c757d'
   }
 
   if (isLoading && !scheduleData) {
