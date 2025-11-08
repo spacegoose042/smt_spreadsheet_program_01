@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getWireHarnessSchedule } from '../api'
 import { Calendar, Clock, Package, AlertCircle, RefreshCw, Loader2, TrendingUp, MapPin, Wrench, FileText, Filter, X } from 'lucide-react'
@@ -489,6 +489,14 @@ export default function WireHarnessSchedule() {
     )
   }
 
+  useEffect(() => {
+    if (!includePastDue && !dateFilterStart && !dateFilterEnd) {
+      const today = format(new Date(), 'yyyy-MM-dd')
+      setDateFilterStart(today)
+      setDateFilterEnd(today)
+    }
+  }, [includePastDue, dateFilterStart, dateFilterEnd])
+
   return (
     <div className="container">
       <div className="page-header">
@@ -912,171 +920,171 @@ export default function WireHarnessSchedule() {
                     borderRadius: '10px'
                   }}
                 >
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
                     marginBottom: '0.85rem',
                     paddingBottom: '0.7rem',
                     borderBottom: `1px solid ${hexToRgba(accentBorderColor, 0.5)}`
-                  }}>
-                    <div>
-                      <h2 style={{
-                        margin: 0,
+                }}>
+                  <div>
+                    <h2 style={{ 
+                      margin: 0, 
                         fontSize: '1.25rem',
-                        fontWeight: 600,
+                      fontWeight: 600,
                         color: '#0f172a',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.4rem'
-                      }}>
-                        <MapPin size={22} style={{ color: accentBorderColor }} />
-                        {workcenter.name}
-                      </h2>
-                      <p style={{ margin: '0.25rem 0 0 0', color: '#475569', fontSize: '0.8rem' }}>
-                        {workcenter.jobs.length} job{workcenter.jobs.length !== 1 ? 's' : ''} scheduled
-                      </p>
-                    </div>
-                    <div style={{
                       display: 'flex',
-                      gap: '0.75rem',
                       alignItems: 'center',
+                        gap: '0.4rem'
+                    }}>
+                        <MapPin size={22} style={{ color: accentBorderColor }} />
+                      {workcenter.name}
+                    </h2>
+                      <p style={{ margin: '0.25rem 0 0 0', color: '#475569', fontSize: '0.8rem' }}>
+                      {workcenter.jobs.length} job{workcenter.jobs.length !== 1 ? 's' : ''} scheduled
+                    </p>
+                  </div>
+                  <div style={{ 
+                    display: 'flex', 
+                      gap: '0.75rem',
+                    alignItems: 'center',
                       fontSize: '0.8rem',
                       color: '#64748b'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                         <Clock size={15} />
-                        <span>
-                          {workcenter.jobs.reduce((sum, job) => sum + (parseFloat(job.hours) || 0), 0).toFixed(1)} hrs
-                        </span>
-                      </div>
+                      <span>
+                        {workcenter.jobs.reduce((sum, job) => sum + (parseFloat(job.hours) || 0), 0).toFixed(1)} hrs
+                      </span>
                     </div>
                   </div>
+                </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    {workcenter.jobs.map((job, jobIdx) => {
-                      const daysDiff = job.startDate && job.endDate
-                        ? differenceInDays(job.endDate, job.startDate) + 1
-                        : 0
-
-                      return (
-                        <div
-                          key={jobIdx}
-                          style={{
+                  {workcenter.jobs.map((job, jobIdx) => {
+                    const daysDiff = job.startDate && job.endDate 
+                      ? differenceInDays(job.endDate, job.startDate) + 1 
+                      : 0
+                    
+                    return (
+                      <div
+                        key={jobIdx}
+                        style={{
                             padding: '0.65rem 0.75rem',
                             backgroundColor: '#ffffff',
-                            borderRadius: '8px',
+                          borderRadius: '8px',
                             border: `1px solid ${hexToRgba(accentBorderColor, 0.4)}`,
                             borderLeft: `5px solid ${getStatusColor(job.prodStatus)}`,
-                            transition: 'all 0.2s',
+                          transition: 'all 0.2s',
                             display: 'grid',
                             gap: '0.5rem',
                             touchAction: 'manipulation'
-                          }}
-                        >
+                        }}
+                      >
                           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(120px, auto)', gap: '0.6rem', alignItems: 'flex-start' }}>
                             <div style={{ display: 'grid', gap: '0.3rem' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
                                 <span style={{ fontWeight: 600, fontSize: '0.95rem', color: '#111827' }}>
-                                  {job.order}.{job.line}
-                                </span>
-                                {job.priority > 0 && (
-                                  <span style={{
+                                {job.order}.{job.line}
+                              </span>
+                              {job.priority > 0 && (
+                                <span style={{
                                     padding: '0.1rem 0.45rem',
                                     borderRadius: '999px',
                                     fontSize: '0.65rem',
-                                    fontWeight: 600,
+                                  fontWeight: 600,
                                     backgroundColor: `${getPriorityColor(job.priority)}26`,
-                                    color: getPriorityColor(job.priority),
+                                  color: getPriorityColor(job.priority),
                                     border: `1px solid ${hexToRgba(getPriorityColor(job.priority), 0.45)}`
-                                  }}>
-                                    Priority {job.priority}
-                                  </span>
-                                )}
-                                {job.buildOrder !== null && (
-                                  <span style={{
+                                }}>
+                                  Priority {job.priority}
+                                </span>
+                              )}
+                              {job.buildOrder !== null && (
+                                <span style={{
                                     padding: '0.1rem 0.45rem',
                                     borderRadius: '999px',
                                     fontSize: '0.65rem',
-                                    fontWeight: 600,
+                                  fontWeight: 600,
                                     backgroundColor: '#2563eb1f',
                                     color: '#1d4ed8',
                                     border: '1px solid rgba(37,99,235,0.35)'
-                                  }}>
+                                }}>
                                     Build {job.buildOrder}
-                                  </span>
-                                )}
-                              </div>
+                                </span>
+                              )}
+                            </div>
 
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem', color: '#4b5563' }}>
                                   <Package size={12} />
                                   <span>{job.part}</span>
-                                </div>
+                              </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem', color: '#4b5563' }}>
                                   <Wrench size={12} />
                                   <span>{job.operation}</span>
-                                </div>
                               </div>
+                            </div>
 
-                              {job.notes && (
-                                <div style={{
-                                  display: 'flex',
+                            {job.notes && (
+                              <div style={{ 
+                                display: 'flex', 
                                   gap: '0.3rem',
                                   fontSize: '0.72rem',
                                   color: '#6b7280',
                                   backgroundColor: '#f8fafc',
                                   borderRadius: '6px',
                                   padding: '0.35rem 0.5rem'
-                                }}>
+                              }}>
                                   <FileText size={12} style={{ flexShrink: 0, marginTop: '0.15rem' }} />
-                                  <span>{job.notes}</span>
-                                </div>
-                              )}
-                            </div>
+                                <span>{job.notes}</span>
+                              </div>
+                            )}
+                          </div>
 
                             <div style={{ display: 'grid', justifyItems: 'end', gap: '0.25rem' }}>
-                              {job.startDate && job.endDate && (
+                            {job.startDate && job.endDate && (
                                 <div style={{ textAlign: 'right', fontSize: '0.75rem', color: '#475569' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', justifyContent: 'flex-end' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', justifyContent: 'flex-end' }}>
                                     <Calendar size={12} />
                                     <span>{format(job.startDate, 'MMM d')} - {format(job.endDate, 'MMM d')}</span>
-                                  </div>
-                                  <div style={{ fontSize: '0.68rem', marginTop: '0.08rem', color: '#64748b' }}>
-                                    {daysDiff} day{daysDiff !== 1 ? 's' : ''}
-                                  </div>
                                 </div>
-                              )}
+                                  <div style={{ fontSize: '0.68rem', marginTop: '0.08rem', color: '#64748b' }}>
+                                  {daysDiff} day{daysDiff !== 1 ? 's' : ''}
+                                </div>
+                              </div>
+                            )}
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.78rem', color: '#1f2937' }}>
                                 <Clock size={12} />
                                 <span><strong>{parseFloat(job.hours || 0).toFixed(1)}</strong> hrs</span>
-                              </div>
-                              {job.prodStatus && (
-                                <span style={{
+                            </div>
+                            {job.prodStatus && (
+                              <span style={{
                                   padding: '0.1rem 0.45rem',
                                   borderRadius: '999px',
                                   fontSize: '0.65rem',
-                                  fontWeight: 600,
+                                fontWeight: 600,
                                   backgroundColor: `${getStatusColor(job.prodStatus)}26`,
-                                  color: getStatusColor(job.prodStatus),
+                                color: getStatusColor(job.prodStatus),
                                   border: `1px solid ${hexToRgba(getStatusColor(job.prodStatus), 0.45)}`
-                                }}>
-                                  {job.prodStatus}
-                                </span>
-                              )}
-                              {job.currentLocation && job.currentLocation !== workcenter.name && (
+                              }}>
+                                {job.prodStatus}
+                              </span>
+                            )}
+                            {job.currentLocation && job.currentLocation !== workcenter.name && (
                                 <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>
-                                  Current: {job.currentLocation}
-                                </div>
-                              )}
-                            </div>
+                                Current: {job.currentLocation}
+                              </div>
+                            )}
                           </div>
                         </div>
-                      )
-                    })}
-                  </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
+            </div>
             )
           })}
         </div>
