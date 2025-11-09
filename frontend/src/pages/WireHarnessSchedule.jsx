@@ -240,8 +240,13 @@ export default function WireHarnessSchedule() {
   const filteredWorkcenters = useMemo(() => {
     const rawFilterStart = dateFilterStart ? startOfDay(parseISO(dateFilterStart)) : null
     const rawFilterEnd = dateFilterEnd ? endOfDay(parseISO(dateFilterEnd)) : null
-    const effectiveFilterStart = rawFilterStart ?? (!includePastDue ? startOfDay(new Date()) : null)
-    const effectiveFilterEnd = rawFilterEnd
+    const noDateFilters = !rawFilterStart && !rawFilterEnd
+    const effectiveFilterStart = noDateFilters && !includePastDue
+      ? startOfDay(new Date())
+      : rawFilterStart
+    const effectiveFilterEnd = noDateFilters && !includePastDue
+      ? endOfDay(new Date())
+      : rawFilterEnd
 
     let filtered = workcenters
 
@@ -261,23 +266,23 @@ export default function WireHarnessSchedule() {
           }
         }
 
-        if (effectiveFilterStart || effectiveFilterEnd) {
-          const baseStartDate = parseDateValue(job.calculated_start_datetime || job.min_start_date || job.scheduled_start_date || job.cetec_ship_date)
-          const baseEndDate = parseDateValue(job.calculated_end_datetime || job.scheduled_end_date || job.cetec_ship_date) || baseStartDate
+        if (effectiveFilterStart !== null || effectiveFilterEnd !== null) {
+          const baseStartDate = parseDateValue(job.calculated_start_datetime) || job.startDate || parseDateValue(job.min_start_date) || parseDateValue(job.scheduled_start_date) || parseDateValue(job.cetec_ship_date)
+          const baseEndDate = parseDateValue(job.calculated_end_datetime) || job.endDate || parseDateValue(job.scheduled_end_date) || baseStartDate
           const jobStart = baseStartDate ? startOfDay(baseStartDate) : null
           const jobEnd = baseEndDate ? endOfDay(baseEndDate) : null
 
           if (jobStart || jobEnd) {
-            const effectiveStart = jobStart || jobEnd
-            const effectiveEnd = jobEnd || jobStart
+            const effectiveJobStart = jobStart || jobEnd
+            const effectiveJobEnd = jobEnd || jobStart
 
-            if (effectiveFilterStart && effectiveEnd && effectiveEnd < effectiveFilterStart) {
-              if (!(includePastDue && jobEnd && jobEnd < effectiveFilterStart)) {
+            if (effectiveFilterStart && effectiveJobEnd && effectiveJobEnd < effectiveFilterStart) {
+              if (!(includePastDue && effectiveJobEnd < effectiveFilterStart)) {
                 return false
               }
             }
 
-            if (effectiveFilterEnd && effectiveStart && effectiveStart > effectiveFilterEnd) {
+            if (effectiveFilterEnd && effectiveJobStart && effectiveJobStart > effectiveFilterEnd) {
               return false
             }
           } else if (!includePastDue) {
