@@ -4,16 +4,18 @@ Main FastAPI application - CRITICAL FIX FOR PRODUCTION
 - Import ALL work orders regardless of location
 - Railway deployment issue - forcing new deployment
 """
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date, timedelta, datetime
 import requests
+import base64
+from cryptography.fernet import Fernet
 
-from database import engine, get_db, Base
-from models import WorkOrder, SMTLine, CompletedWorkOrder, WorkOrderStatus, Priority, User, UserRole, CapacityOverride, Shift, ShiftBreak, LineConfiguration, Status, IssueType, Issue, IssueSeverity, IssueStatus, ResolutionType, CetecSyncLog
+from database import engine, get_db, Base, SessionLocal
+from models import WorkOrder, SMTLine, CompletedWorkOrder, WorkOrderStatus, Priority, User, UserRole, CapacityOverride, Shift, ShiftBreak, LineConfiguration, Status, IssueType, Issue, IssueSeverity, IssueStatus, ResolutionType, CetecSyncLog, Settings
 import schemas
 import scheduler as sched
 import time_scheduler as time_sched
@@ -37,6 +39,14 @@ def startup_event():
     try:
         from seed_data import main as seed_main
         seed_main()
+        
+        # Load Metabase credentials after database is ready
+        print("🔑 Loading Metabase credentials...")
+        try:
+            db = next(get_db())
+            load_metabase_credentials(db)
+        except Exception as e:
+            print(f"⚠️  Could not load Metabase credentials: {e}")
     except Exception as e:
         print(f"❌ Error during startup migration: {e}")
         print("⚠️  Application will continue, but database may be incomplete.")
@@ -313,6 +323,7 @@ def get_work_orders(
     priority: Optional[Priority] = None,
     include_complete: bool = False,
     include_completed_work: bool = False,
+    include_doc_control: bool = False,
     db: Session = Depends(get_db)
 ):
     """Get all work orders with optional filters"""
@@ -347,6 +358,23 @@ def get_work_orders(
         query = query.filter(WorkOrder.priority == priority)
     
     work_orders = query.order_by(WorkOrder.line_position).all()
+
+    if include_completed_work and not include_doc_control:
+        original_count = len(work_orders)
+
+        def is_doc_control(location: Optional[str]) -> bool:
+            if not location:
+                return False
+            normalized = location.upper()
+            return "DOC CONTROL" in normalized or "UNRELEASED" in normalized
+
+        work_orders = [wo for wo in work_orders if not is_doc_control(wo.current_location)]
+
+        filtered_count = len(work_orders)
+        if original_count != filtered_count:
+            print(
+                f"📦 Progress API: filtered out {original_count - filtered_count} DOC CONTROL work orders"
+            )
     
     # Calculate dates AND times for each line
     line_dates = {}
@@ -1661,6 +1689,1701 @@ CETEC_CONFIG = {
     "token": "123matthatesbrant123"
 }
 
+METABASE_CONFIG = {
+    "base_url": "https://sandy-metabase.cetecerp.com",
+    "api_key": "mb_UfMbPhr9R640GAR5wLpUPMcSSxb98weRladg5TUvWLs=",
+    # Session-based auth (alternative to API key)
+    "use_session_auth": False,  # Set to True to use session auth instead
+    "session_token": None  # Will be set after login
+}
+
+# ============================================================================
+# METABASE API INTEGRATION
+# ============================================================================
+
+def get_encryption_key():
+    """Generate a Fernet key from SECRET_KEY"""
+    secret_key = config_settings.SECRET_KEY.encode()
+    # Fernet requires 32-byte key, so we'll hash the SECRET_KEY
+    from hashlib import sha256
+    key = sha256(secret_key).digest()
+    return base64.urlsafe_b64encode(key)
+
+def encrypt_password(password: str) -> str:
+    """Encrypt a password using Fernet"""
+    key = get_encryption_key()
+    f = Fernet(key)
+    return f.encrypt(password.encode()).decode()
+
+def decrypt_password(encrypted_password: str) -> str:
+    """Decrypt a password using Fernet"""
+    try:
+        key = get_encryption_key()
+        f = Fernet(key)
+        return f.decrypt(encrypted_password.encode()).decode()
+    except Exception as e:
+        print(f"❌ Error decrypting password: {e}")
+        return ""
+
+def get_metabase_setting(db: Session, key: str) -> Optional[str]:
+    """Get a Metabase setting from the database"""
+    setting = db.query(Settings).filter(Settings.key == key).first()
+    return setting.value if setting else None
+
+def set_metabase_setting(db: Session, key: str, value: str, description: str = None):
+    """Set a Metabase setting in the database"""
+    setting = db.query(Settings).filter(Settings.key == key).first()
+    if setting:
+        setting.value = value
+        if description:
+            setting.description = description
+        setting.updated_at = datetime.utcnow()
+    else:
+        setting = Settings(
+            key=key,
+            value=value,
+            description=description
+        )
+        db.add(setting)
+    db.commit()
+    return setting
+
+def load_metabase_credentials(db: Session):
+    """Load Metabase credentials from database and attempt auto-login"""
+    try:
+        session_token = get_metabase_setting(db, "metabase_session_token")
+        username = get_metabase_setting(db, "metabase_username")
+        encrypted_password = get_metabase_setting(db, "metabase_password")
+        
+        # If we have a session token, try to use it
+        if session_token:
+            print(f"🔑 Loading stored Metabase session token...")
+            METABASE_CONFIG["session_token"] = session_token
+            METABASE_CONFIG["use_session_auth"] = True
+            
+            # Validate the token by making a test request
+            try:
+                headers = {
+                    "X-Metabase-Session": session_token,
+                    "Content-Type": "application/json"
+                }
+                test_url = f"{METABASE_CONFIG['base_url']}/api/session/properties"
+                response = requests.get(test_url, headers=headers, timeout=10)
+                if response.status_code == 200:
+                    print(f"   ✅ Stored session token is valid")
+                    return True
+                else:
+                    print(f"   ⚠️  Stored session token is invalid (status {response.status_code}), attempting auto-login...")
+            except Exception as e:
+                print(f"   ⚠️  Error validating session token: {e}, attempting auto-login...")
+        
+        # If no valid session token, try auto-login with stored credentials
+        if username and encrypted_password:
+            password = decrypt_password(encrypted_password)
+            if password:
+                print(f"🔑 Attempting auto-login with stored credentials...")
+                try:
+                    url = f"{METABASE_CONFIG['base_url']}/api/session"
+                    headers = {"Content-Type": "application/json"}
+                    response = requests.post(
+                        url,
+                        headers=headers,
+                        json={"username": username, "password": password},
+                        timeout=30
+                    )
+                    if response.status_code == 200:
+                        data = response.json()
+                        session_token = data.get('id')
+                        if session_token:
+                            METABASE_CONFIG["session_token"] = session_token
+                            METABASE_CONFIG["use_session_auth"] = True
+                            # Save the new session token
+                            set_metabase_setting(db, "metabase_session_token", session_token, "Metabase session token")
+                            print(f"   ✅ Auto-login successful! Session token saved.")
+                            return True
+                except Exception as e:
+                    print(f"   ❌ Auto-login failed: {e}")
+        
+        print(f"   ℹ️  No stored credentials found or auto-login failed. Manual login required.")
+        return False
+        
+    except Exception as e:
+        print(f"❌ Error loading Metabase credentials: {e}")
+        return False
+
+def get_metabase_headers():
+    """Get headers for Metabase API requests"""
+    # Use session token if available, otherwise use API key
+    use_session = METABASE_CONFIG.get("use_session_auth", False)
+    session_token = METABASE_CONFIG.get("session_token")
+    
+    print(f"🔑 Auth check: use_session={use_session}, has_token={bool(session_token)}")
+    
+    if use_session and session_token:
+        print(f"   ✅ Using session token: {session_token[:20]}...")
+        return {
+            "X-Metabase-Session": session_token,
+            "Content-Type": "application/json"
+        }
+
+    # Attempt to load or refresh session automatically using stored credentials
+    if ensure_metabase_session():
+        session_token = METABASE_CONFIG.get("session_token")
+        if session_token:
+            print(f"   ✅ Session token refreshed: {session_token[:20]}...")
+            return {
+                "X-Metabase-Session": session_token,
+                "Content-Type": "application/json"
+            }
+
+    print(f"   ⚠️  Using API key (session not available)")
+    return {
+        "X-Metabase-Api-Key": METABASE_CONFIG["api_key"],
+        "Content-Type": "application/json"
+    }
+
+@app.post("/api/metabase/login")
+def metabase_login(
+    credentials: dict,
+    current_user: User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Login to Metabase and get a session token
+    This allows access to endpoints that the API key cannot access
+    Credentials are saved to the database for automatic login on next startup
+    """
+    try:
+        url = f"{METABASE_CONFIG['base_url']}/api/session"
+        headers = {"Content-Type": "application/json"}
+        
+        print(f"🔍 Logging into Metabase: {url}")
+        
+        username = credentials.get('username')
+        password = credentials.get('password')
+        save_credentials = credentials.get('save_credentials', True)  # Default to saving
+        
+        if not username or not password:
+            raise HTTPException(
+                status_code=400,
+                detail="Username and password are required"
+            )
+        
+        response = requests.post(
+            url, 
+            headers=headers, 
+            json={"username": username, "password": password},
+            timeout=30
+        )
+        
+        print(f"   Response status: {response.status_code}")
+        
+        if response.status_code == 200:
+            data = response.json()
+            session_token = data.get('id')
+            
+            if session_token:
+                METABASE_CONFIG["session_token"] = session_token
+                METABASE_CONFIG["use_session_auth"] = True
+                print(f"   ✅ Session token obtained: {session_token[:20]}...")
+                print(f"   ✅ Session auth enabled: {METABASE_CONFIG['use_session_auth']}")
+                
+                # Save credentials to database for future auto-login
+                if save_credentials:
+                    try:
+                        set_metabase_setting(db, "metabase_session_token", session_token, "Metabase session token")
+                        set_metabase_setting(db, "metabase_username", username, "Metabase username for auto-login")
+                        encrypted_password = encrypt_password(password)
+                        set_metabase_setting(db, "metabase_password", encrypted_password, "Metabase password (encrypted) for auto-login")
+                        print(f"   ✅ Credentials saved to database for auto-login")
+                    except Exception as e:
+                        print(f"   ⚠️  Could not save credentials: {e}")
+                
+                return {
+                    "success": True,
+                    "message": "Successfully logged into Metabase. Session token is now active for all API calls." + 
+                               (" Credentials saved for automatic login." if save_credentials else ""),
+                    "session_token_preview": session_token[:20] + "...",
+                    "credentials_saved": save_credentials
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": "Login successful but no session token in response",
+                    "response": data
+                }
+        else:
+            error_text = response.text[:500] if response.text else "No error message"
+            print(f"   ❌ Login failed: {error_text}")
+            return {
+                "success": False,
+                "status_code": response.status_code,
+                "message": f"Login failed: {error_text}"
+            }
+            
+    except requests.exceptions.RequestException as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ Metabase login error: {str(e)}")
+        print(f"   Traceback: {error_trace}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to login to Metabase: {str(e)}"
+        )
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ Unexpected error: {str(e)}")
+        print(f"   Traceback: {error_trace}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error: {str(e)}"
+        )
+
+@app.get("/api/metabase/test")
+def test_metabase_connection(
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Test connection to Metabase API - tries multiple authentication formats and endpoints
+    """
+    base_url = METABASE_CONFIG['base_url']
+    api_key = METABASE_CONFIG['api_key']
+    
+    # Try different authentication formats
+    auth_formats = [
+        {
+            "name": "X-Metabase-Api-Key",
+            "headers": {
+                "X-Metabase-Api-Key": api_key,
+                "Content-Type": "application/json"
+            }
+        },
+        {
+            "name": "Authorization Bearer",
+            "headers": {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+        }
+    ]
+    
+    # Test different endpoints to see what the API key can access
+    test_endpoints = [
+        {"name": "Session Properties", "url": f"{base_url}/api/session/properties", "method": "GET"},
+        {"name": "Databases", "url": f"{base_url}/api/database", "method": "GET"},
+        {"name": "Cards", "url": f"{base_url}/api/card", "method": "GET"},
+        {"name": "Dashboards", "url": f"{base_url}/api/dashboard", "method": "GET"},
+        {"name": "Dashboard 64", "url": f"{base_url}/api/dashboard/64", "method": "GET"},
+    ]
+    
+    results = []
+    working_format = None
+    
+    # First, find which auth format works
+    for auth_format in auth_formats:
+        try:
+            url = f"{base_url}/api/session/properties"
+            print(f"🔍 Testing auth format {auth_format['name']}: {url}")
+            
+            response = requests.get(url, headers=auth_format['headers'], timeout=30)
+            
+            if response.status_code == 200:
+                working_format = auth_format['name']
+                print(f"   ✅ {auth_format['name']} works!")
+                break
+        except:
+            continue
+    
+    if not working_format:
+        return {
+            "success": False,
+            "message": "None of the authentication formats worked",
+            "api_key_preview": api_key[:10] + "...",
+        }
+    
+    # Use the working format to test endpoints
+    headers = auth_formats[0]['headers'] if working_format == "X-Metabase-Api-Key" else auth_formats[1]['headers']
+    
+    endpoint_results = []
+    for endpoint in test_endpoints:
+        try:
+            print(f"🔍 Testing endpoint: {endpoint['name']}")
+            if endpoint['method'] == 'GET':
+                response = requests.get(endpoint['url'], headers=headers, timeout=30)
+            else:
+                response = requests.post(endpoint['url'], headers=headers, timeout=30)
+            
+            result = {
+                "endpoint": endpoint['name'],
+                "url": endpoint['url'],
+                "status_code": response.status_code,
+                "success": response.status_code == 200
+            }
+            
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                    result["message"] = "Success"
+                    if isinstance(data, list):
+                        result["count"] = len(data)
+                    elif isinstance(data, dict) and 'data' in data:
+                        result["count"] = len(data.get('data', []))
+                except:
+                    result["message"] = "Success (non-JSON response)"
+            else:
+                error_text = response.text[:200] if response.text else "No error message"
+                result["message"] = f"Status {response.status_code}: {error_text}"
+                result["error"] = error_text
+            
+            endpoint_results.append(result)
+            print(f"   {'✅' if result['success'] else '❌'} {endpoint['name']}: {response.status_code}")
+            
+        except Exception as e:
+            endpoint_results.append({
+                "endpoint": endpoint['name'],
+                "url": endpoint['url'],
+                "success": False,
+                "error": str(e)
+            })
+            print(f"   ❌ {endpoint['name']}: {str(e)}")
+    
+    return {
+        "success": True,
+        "working_format": working_format,
+        "message": f"Connection successful using {working_format}",
+        "endpoint_tests": endpoint_results
+    }
+
+@app.get("/api/metabase/databases")
+def get_metabase_databases(
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Get list of databases available in Metabase
+    """
+    try:
+        url = f"{METABASE_CONFIG['base_url']}/api/database"
+        headers = get_metabase_headers()
+        
+        print(f"🔍 Fetching Metabase databases: {url}")
+        
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+        
+        databases = response.json()
+        
+        print(f"   ✅ Found {len(databases.get('data', []))} databases")
+        
+        return {
+            "success": True,
+            "count": len(databases.get('data', [])),
+            "databases": databases.get('data', [])
+        }
+        
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Metabase API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch databases from Metabase: {str(e)}"
+        )
+
+@app.get("/api/metabase/database/{database_id}/tables")
+def get_metabase_tables(
+    database_id: int,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Get list of tables in a specific database
+    """
+    try:
+        url = f"{METABASE_CONFIG['base_url']}/api/database/{database_id}/metadata"
+        headers = get_metabase_headers()
+        
+        print(f"🔍 Fetching tables for database {database_id}: {url}")
+        
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+        
+        metadata = response.json()
+        tables = metadata.get('tables', [])
+        
+        print(f"   ✅ Found {len(tables)} tables")
+        
+        return {
+            "success": True,
+            "database_id": database_id,
+            "count": len(tables),
+            "tables": tables
+        }
+        
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Metabase API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch tables from Metabase: {str(e)}"
+        )
+
+@app.get("/api/metabase/database/{database_id}/table/{table_id}/fields")
+def get_metabase_table_fields(
+    database_id: int,
+    table_id: int,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Get fields/columns for a specific table
+    """
+    try:
+        url = f"{METABASE_CONFIG['base_url']}/api/table/{table_id}/query_metadata"
+        headers = get_metabase_headers()
+        
+        print(f"🔍 Fetching fields for table {table_id}: {url}")
+        
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+        
+        metadata = response.json()
+        fields = metadata.get('fields', [])
+        
+        print(f"   ✅ Found {len(fields)} fields")
+        
+        return {
+            "success": True,
+            "database_id": database_id,
+            "table_id": table_id,
+            "count": len(fields),
+            "fields": fields
+        }
+        
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Metabase API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch fields from Metabase: {str(e)}"
+        )
+
+@app.post("/api/metabase/database/{database_id}/query")
+def execute_metabase_query(
+    database_id: int,
+    query: dict,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Execute a native SQL query or query builder query against a Metabase database
+    """
+    try:
+        url = f"{METABASE_CONFIG['base_url']}/api/database/{database_id}/query"
+        headers = get_metabase_headers()
+        
+        print(f"🔍 Executing query on database {database_id}: {url}")
+        print(f"   Query: {query}")
+        
+        response = requests.post(url, headers=headers, json=query, timeout=60)
+        response.raise_for_status()
+        
+        result = response.json()
+        
+        print(f"   ✅ Query executed successfully")
+        
+        return {
+            "success": True,
+            "database_id": database_id,
+            "result": result
+        }
+        
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Metabase API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to execute query: {str(e)}"
+        )
+
+@app.get("/api/metabase/cards")
+def get_metabase_cards(
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Get list of saved questions/cards in Metabase
+    """
+    try:
+        url = f"{METABASE_CONFIG['base_url']}/api/card"
+        headers = get_metabase_headers()
+        
+        print(f"🔍 Fetching Metabase cards: {url}")
+        
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+        
+        cards = response.json()
+        
+        print(f"   ✅ Found {len(cards)} cards")
+        
+        return {
+            "success": True,
+            "count": len(cards),
+            "cards": cards
+        }
+        
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Metabase API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch cards from Metabase: {str(e)}"
+        )
+
+@app.post("/api/metabase/card/{card_id}/query")
+def execute_metabase_card(
+    card_id: int,
+    parameters: Optional[dict] = Body(None),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Execute a saved Metabase card/question
+    Can pass parameters to filter the query (e.g., {"prodline": "300"})
+    """
+    try:
+        url = f"{METABASE_CONFIG['base_url']}/api/card/{card_id}/query"
+        headers = get_metabase_headers()
+        
+        # Build parameters for the query
+        query_params = parameters if parameters else {}
+        
+        print(f"🔍 Executing card {card_id}: {url}")
+        print(f"   Parameters: {query_params}")
+        
+        response = requests.post(url, headers=headers, json=query_params, timeout=60)
+        response.raise_for_status()
+        
+        result = response.json()
+        
+        print(f"   ✅ Card executed successfully")
+        
+        return {
+            "success": True,
+            "card_id": card_id,
+            "parameters": query_params,
+            "result": result
+        }
+        
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Metabase API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to execute card: {str(e)}"
+        )
+
+@app.get("/api/metabase/dashboard/{dashboard_id}")
+def get_metabase_dashboard(
+    dashboard_id: int,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Get dashboard details including all cards/questions on it
+    If direct dashboard access fails, try alternative approaches
+    """
+    try:
+        url = f"{METABASE_CONFIG['base_url']}/api/dashboard/{dashboard_id}"
+        headers = get_metabase_headers()
+        
+        print(f"🔍 Fetching dashboard {dashboard_id}: {url}")
+        print(f"   Using auth: {'Session' if 'X-Metabase-Session' in headers else 'API Key'}")
+        # Don't print full headers with tokens for security
+        header_keys = list(headers.keys())
+        print(f"   Header keys: {header_keys}")
+        
+        response = requests.get(url, headers=headers, timeout=30)
+        
+        print(f"   Response status: {response.status_code}")
+        print(f"   Response headers: {dict(response.headers)}")
+        
+        if response.status_code == 401:
+            # API key doesn't have dashboard permissions - try alternative approach
+            print(f"   ⚠️  Dashboard endpoint returned 401 - API key may lack permissions")
+            print(f"   🔄 Trying alternative: List all dashboards to find {dashboard_id}")
+            
+            # Try listing all dashboards first
+            list_url = f"{METABASE_CONFIG['base_url']}/api/dashboard"
+            list_response = requests.get(list_url, headers=headers, timeout=30)
+            
+            if list_response.status_code == 200:
+                try:
+                    dashboards = list_response.json()
+                    # Find the specific dashboard in the list
+                    dashboard = None
+                    if isinstance(dashboards, list):
+                        dashboard = next((d for d in dashboards if d.get('id') == dashboard_id), None)
+                    elif isinstance(dashboards, dict) and 'data' in dashboards:
+                        dashboard = next((d for d in dashboards['data'] if d.get('id') == dashboard_id), None)
+                    
+                    if dashboard:
+                        print(f"   ✅ Found dashboard {dashboard_id} in list")
+                        # Try to get cards from the dashboard object or fetch them separately
+                        card_ids = []
+                        dashcards_info = []
+                        
+                        if 'dashcards' in dashboard:
+                            for dashcard in dashboard['dashcards']:
+                                if 'card' in dashcard and 'id' in dashcard['card']:
+                                    card_id = dashcard['card']['id']
+                                    card_ids.append(card_id)
+                                    dashcards_info.append({
+                                        "dashcard_id": dashcard.get('id'),
+                                        "card_id": card_id,
+                                        "card_name": dashcard['card'].get('name', 'Unknown')
+                                    })
+                        elif 'ordered_cards' in dashboard:
+                            for card in dashboard['ordered_cards']:
+                                if 'card' in card and 'id' in card['card']:
+                                    card_id = card['card']['id']
+                                    card_ids.append(card_id)
+                                    dashcards_info.append({
+                                        "card_id": card_id,
+                                        "card_name": card['card'].get('name', 'Unknown')
+                                    })
+                        
+                        return {
+                            "success": True,
+                            "dashboard_id": dashboard_id,
+                            "dashboard": dashboard,
+                            "card_ids": card_ids,
+                            "dashcards": dashcards_info,
+                            "note": "Retrieved via dashboard list (direct access not permitted)"
+                        }
+                except Exception as e:
+                    print(f"   ⚠️  Could not parse dashboard list: {str(e)}")
+            
+            # If listing also fails, return helpful error
+            error_text = response.text[:500] if response.text else "No error message"
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"Metabase API returned {response.status_code}: {error_text}. The API key may not have permissions to access dashboards. Please check the API key's group permissions in Metabase."
+            )
+        
+        if response.status_code != 200:
+            error_text = response.text[:500] if response.text else "No error message"
+            print(f"   ❌ Error response: {error_text}")
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"Metabase API returned {response.status_code}: {error_text}"
+            )
+        
+        try:
+            dashboard = response.json()
+        except ValueError as e:
+            print(f"   ❌ JSON parse error: {str(e)}")
+            print(f"   Response text: {response.text[:500]}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to parse Metabase response as JSON: {str(e)}"
+            )
+        
+        # Extract card IDs from dashboard
+        # Metabase uses 'dashcards' (not 'ordered_cards') for the cards on a dashboard
+        card_ids = []
+        dashcards_info = []
+        
+        if 'dashcards' in dashboard:
+            for dashcard in dashboard['dashcards']:
+                if 'card' in dashcard and 'id' in dashcard['card']:
+                    card_id = dashcard['card']['id']
+                    card_ids.append(card_id)
+                    dashcards_info.append({
+                        "dashcard_id": dashcard.get('id'),
+                        "card_id": card_id,
+                        "card_name": dashcard['card'].get('name', 'Unknown'),
+                        "row": dashcard.get('row'),
+                        "col": dashcard.get('col'),
+                        "size_x": dashcard.get('size_x'),
+                        "size_y": dashcard.get('size_y')
+                    })
+        elif 'ordered_cards' in dashboard:
+            # Fallback for older Metabase versions
+            for card in dashboard['ordered_cards']:
+                if 'card' in card and 'id' in card['card']:
+                    card_id = card['card']['id']
+                    card_ids.append(card_id)
+                    dashcards_info.append({
+                        "card_id": card_id,
+                        "card_name": card['card'].get('name', 'Unknown')
+                    })
+        
+        print(f"   ✅ Found dashboard with {len(card_ids)} cards")
+        if card_ids:
+            print(f"   📊 Card IDs: {card_ids}")
+        
+        return {
+            "success": True,
+            "dashboard_id": dashboard_id,
+            "dashboard": dashboard,
+            "card_ids": card_ids,
+            "dashcards": dashcards_info
+        }
+        
+    except HTTPException:
+        raise
+    except requests.exceptions.RequestException as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ Metabase API request error: {str(e)}")
+        print(f"   Traceback: {error_trace}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch dashboard: {str(e)}"
+        )
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ Unexpected error: {str(e)}")
+        print(f"   Traceback: {error_trace}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error: {str(e)}"
+        )
+
+@app.get("/api/metabase/dashboard/{dashboard_id}/query")
+def execute_dashboard_with_params(
+    dashboard_id: int,
+    prodline: Optional[str] = None,
+    build_operation: Optional[str] = None,
+    order_number: Optional[str] = None,
+    ordline_status: Optional[str] = None,
+    prc_part_partial: Optional[str] = None,
+    prod_status: Optional[str] = None,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Execute all cards on a dashboard with filter parameters
+    This mimics what happens when you view a dashboard with URL parameters
+    """
+    try:
+        # First get the dashboard to find its cards
+        dashboard_url = f"{METABASE_CONFIG['base_url']}/api/dashboard/{dashboard_id}"
+        headers = get_metabase_headers()
+        
+        print(f"🔍 Fetching dashboard {dashboard_id} for execution")
+        print(f"   URL: {dashboard_url}")
+        print(f"   Headers: {headers}")
+        
+        dashboard_response = requests.get(dashboard_url, headers=headers, timeout=30)
+        
+        print(f"   Dashboard response status: {dashboard_response.status_code}")
+        
+        if dashboard_response.status_code != 200:
+            error_text = dashboard_response.text[:500] if dashboard_response.text else "No error message"
+            print(f"   ❌ Error response: {error_text}")
+            raise HTTPException(
+                status_code=dashboard_response.status_code,
+                detail=f"Metabase API returned {dashboard_response.status_code}: {error_text}"
+            )
+        
+        try:
+            dashboard = dashboard_response.json()
+        except ValueError as e:
+            print(f"   ❌ JSON parse error: {str(e)}")
+            print(f"   Response text: {dashboard_response.text[:500]}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to parse Metabase response as JSON: {str(e)}"
+            )
+        
+        # Build parameters dict from query params
+        parameters = {}
+        if prodline:
+            parameters['prodline'] = prodline
+        if build_operation:
+            parameters['build_operation'] = build_operation
+        if order_number:
+            parameters['order_number'] = order_number
+        if ordline_status:
+            parameters['ordline_status'] = ordline_status
+        if prc_part_partial:
+            parameters['prc_part_partial'] = prc_part_partial
+        if prod_status:
+            parameters['prod_status'] = prod_status
+        
+        # Extract and execute each card
+        # Metabase uses 'dashcards' (not 'ordered_cards')
+        results = []
+        cards_to_execute = []
+        
+        if 'dashcards' in dashboard:
+            cards_to_execute = dashboard['dashcards']
+        elif 'ordered_cards' in dashboard:
+            cards_to_execute = dashboard['ordered_cards']
+        
+        # Build parameter mappings from dashboard parameters
+        # Metabase expects parameters in format: {"parameter_id": "value"}
+        # Dashboard parameters have slugs (like "prodline") and IDs (like "cf976df3")
+        dashboard_params = dashboard.get('parameters', [])
+        param_slug_to_id = {}
+        param_id_to_type = {}
+        for param in dashboard_params:
+            slug = param.get('slug')
+            param_id = param.get('id')
+            param_type = param.get('type')
+            if slug and param_id:
+                param_slug_to_id[slug] = param_id
+            if param_id:
+                param_id_to_type[param_id] = param_type
+        
+        print(f"   🔍 Dashboard parameters found: {len(dashboard_params)}")
+        for param in dashboard_params:
+            print(f"      - {param.get('slug')} (ID: {param.get('id')}, Type: {param.get('type')})")
+        
+        # Convert our query params to Metabase parameter format
+        # Metabase expects: {"parameter_id": "value"} or {"parameter_id": ["value"]} for multi-select
+        metabase_params = {}
+        if prodline and 'prodline' in param_slug_to_id:
+            param_id = param_slug_to_id['prodline']
+            metabase_params[param_id] = prodline
+        if build_operation and 'build_operation' in param_slug_to_id:
+            param_id = param_slug_to_id['build_operation']
+            metabase_params[param_id] = build_operation
+        if order_number and 'order_number' in param_slug_to_id:
+            param_id = param_slug_to_id['order_number']
+            metabase_params[param_id] = order_number
+        if ordline_status and 'ordline_status' in param_slug_to_id:
+            param_id = param_slug_to_id['ordline_status']
+            metabase_params[param_id] = ordline_status
+        if prc_part_partial and 'prc_part_partial' in param_slug_to_id:
+            param_id = param_slug_to_id['prc_part_partial']
+            metabase_params[param_id] = prc_part_partial
+        if prod_status and 'prod_status' in param_slug_to_id:
+            param_id = param_slug_to_id['prod_status']
+            metabase_params[param_id] = prod_status
+        
+        print(f"   📊 Found {len(cards_to_execute)} cards to execute")
+        print(f"   🔧 Parameter mapping: {metabase_params}")
+        
+        for card_item in cards_to_execute:
+            # Handle both dashcards and ordered_cards formats
+            card_obj = card_item.get('card') if 'card' in card_item else card_item
+            if not card_obj:
+                continue
+                
+            card_id = card_obj.get('id')
+            if not card_id:
+                continue
+                
+            card_name = card_obj.get('name', f'Card {card_id}')
+            
+            print(f"   📊 Executing card {card_id}: {card_name}")
+            
+            try:
+                # Execute the card with parameters
+                # Metabase expects parameters in the request body
+                card_query_url = f"{METABASE_CONFIG['base_url']}/api/card/{card_id}/query"
+                request_body = metabase_params if metabase_params else {}
+                
+                print(f"      Request body: {request_body}")
+                
+                card_response = requests.post(
+                    card_query_url, 
+                    headers=headers, 
+                    json=request_body,
+                    timeout=60
+                )
+                
+                print(f"      Response status: {card_response.status_code}")
+                
+                # Metabase can return 200 (OK) or 202 (Accepted) with valid data
+                # 202 means the request was accepted and is being processed, but may return data immediately
+                if card_response.status_code not in [200, 202]:
+                    error_text = card_response.text[:1000] if card_response.text else "No error message"
+                    print(f"      ❌ Error (status {card_response.status_code}): {error_text}")
+                    try:
+                        error_json = card_response.json()
+                        error_message = error_json.get('message', error_json.get('error', str(error_json)))
+                        print(f"      Parsed error: {error_message}")
+                    except:
+                        error_message = error_text
+                    
+                    results.append({
+                        "card_id": card_id,
+                        "card_name": card_name,
+                        "success": False,
+                        "error": f"Status {card_response.status_code}: {error_message}",
+                        "error_details": error_text[:500] if len(error_text) > 500 else error_text
+                    })
+                    continue
+                
+                # For 202, check if response contains data (some Metabase queries return 202 with data)
+                try:
+                    card_result = card_response.json()
+                    # If status is 202, check if we have actual data or just an acceptance message
+                    if card_response.status_code == 202:
+                        # Check if this looks like a valid query result (has 'data' key with 'rows')
+                        if 'data' in card_result and 'rows' in card_result.get('data', {}):
+                            print(f"      ⚠️  Status 202 but contains data - treating as success")
+                        else:
+                            # 202 without data might mean async processing - but we'll still try to parse it
+                            print(f"      ⚠️  Status 202 - response: {str(card_result)[:200]}")
+                except ValueError as e:
+                    # If we can't parse JSON, it's definitely an error
+                    error_text = card_response.text[:1000] if card_response.text else "No error message"
+                    print(f"      ❌ JSON parse error: {str(e)}")
+                    results.append({
+                        "card_id": card_id,
+                        "card_name": card_name,
+                        "success": False,
+                        "error": f"Failed to parse response as JSON: {str(e)}",
+                        "error_details": error_text[:500] if len(error_text) > 500 else error_text
+                    })
+                    continue
+                
+                # Extract data rows if available
+                data_rows = []
+                if 'data' in card_result and 'rows' in card_result['data']:
+                    data_rows = card_result['data']['rows']
+                
+                results.append({
+                    "card_id": card_id,
+                    "card_name": card_name,
+                    "success": True,
+                    "row_count": len(data_rows),
+                    "data": card_result
+                })
+                
+                print(f"      ✅ Card {card_id} returned {len(data_rows)} rows")
+                
+            except Exception as e:
+                import traceback
+                error_trace = traceback.format_exc()
+                print(f"      ❌ Error executing card {card_id}: {str(e)}")
+                print(f"      Traceback: {error_trace}")
+                results.append({
+                    "card_id": card_id,
+                    "card_name": card_name,
+                    "success": False,
+                    "error": str(e)
+                })
+        
+        # Check if any card succeeded
+        successful_cards = [r for r in results if r.get('success', False)]
+        all_failed = len(results) > 0 and len(successful_cards) == 0
+        
+        return {
+            "success": not all_failed,  # False if all cards failed
+            "dashboard_id": dashboard_id,
+            "dashboard_name": dashboard.get('name', 'Unknown'),
+            "parameters": parameters,
+            "metabase_parameters": metabase_params,  # Include the mapped parameters for debugging
+            "cards_executed": len(results),
+            "cards_succeeded": len(successful_cards),
+            "cards_failed": len(results) - len(successful_cards),
+            "results": results
+        }
+        
+    except HTTPException:
+        raise
+    except requests.exceptions.RequestException as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ Metabase API request error: {str(e)}")
+        print(f"   Traceback: {error_trace}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to execute dashboard: {str(e)}"
+        )
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ Unexpected error: {str(e)}")
+        print(f"   Traceback: {error_trace}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error: {str(e)}"
+        )
+
+@app.get("/api/metabase/explore/prodline/{prodline}")
+def explore_prodline_in_metabase(
+    prodline: str,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Explore Metabase to find data related to a production line
+    This will search through databases, tables, and fields to find prodline-related data
+    """
+    try:
+        results = {
+            "prodline": prodline,
+            "databases": [],
+            "tables_with_prodline": [],
+            "sample_queries": []
+        }
+        
+        # Get all databases
+        url = f"{METABASE_CONFIG['base_url']}/api/database"
+        headers = get_metabase_headers()
+        
+        print(f"🔍 Exploring Metabase for prodline {prodline}")
+        
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+        databases = response.json().get('data', [])
+        
+        print(f"   Found {len(databases)} databases")
+        
+        for db in databases:
+            db_id = db.get('id')
+            db_name = db.get('name', 'Unknown')
+            
+            results["databases"].append({
+                "id": db_id,
+                "name": db_name,
+                "engine": db.get('engine', 'Unknown')
+            })
+            
+            # Get tables for this database
+            try:
+                meta_url = f"{METABASE_CONFIG['base_url']}/api/database/{db_id}/metadata"
+                meta_response = requests.get(meta_url, headers=headers, timeout=30)
+                meta_response.raise_for_status()
+                metadata = meta_response.json()
+                tables = metadata.get('tables', [])
+                
+                print(f"   Database {db_name}: {len(tables)} tables")
+                
+                for table in tables:
+                    table_id = table.get('id')
+                    table_name = table.get('name', 'Unknown')
+                    
+                    # Get fields for this table
+                    try:
+                        fields_url = f"{METABASE_CONFIG['base_url']}/api/table/{table_id}/query_metadata"
+                        fields_response = requests.get(fields_url, headers=headers, timeout=30)
+                        fields_response.raise_for_status()
+                        fields_meta = fields_response.json()
+                        fields = fields_meta.get('fields', [])
+                        
+                        # Check if any field name contains "prodline", "prod_line", "production_line", etc.
+                        prodline_fields = []
+                        for field in fields:
+                            field_name = field.get('name', '').lower()
+                            if 'prodline' in field_name or 'prod_line' in field_name or 'production_line' in field_name or 'line' in field_name:
+                                prodline_fields.append(field)
+                        
+                        if prodline_fields:
+                            results["tables_with_prodline"].append({
+                                "database_id": db_id,
+                                "database_name": db_name,
+                                "table_id": table_id,
+                                "table_name": table_name,
+                                "fields": prodline_fields
+                            })
+                            
+                            # Try a sample query
+                            try:
+                                query = {
+                                    "type": "native",
+                                    "native": {
+                                        "query": f"SELECT * FROM {table_name} WHERE prodline = '{prodline}' OR prod_line = '{prodline}' LIMIT 10"
+                                    }
+                                }
+                                
+                                query_url = f"{METABASE_CONFIG['base_url']}/api/database/{db_id}/query"
+                                query_response = requests.post(query_url, headers=headers, json=query, timeout=60)
+                                
+                                if query_response.status_code == 200:
+                                    results["sample_queries"].append({
+                                        "database_id": db_id,
+                                        "table_name": table_name,
+                                        "query": query["native"]["query"],
+                                        "result_count": len(query_response.json().get('data', {}).get('rows', []))
+                                    })
+                            except Exception as e:
+                                print(f"   ⚠️  Could not execute sample query for {table_name}: {str(e)}")
+                                
+                    except Exception as e:
+                        print(f"   ⚠️  Could not fetch fields for table {table_name}: {str(e)}")
+                        continue
+                        
+            except Exception as e:
+                print(f"   ⚠️  Could not fetch metadata for database {db_name}: {str(e)}")
+                continue
+        
+        return {
+            "success": True,
+            "results": results
+        }
+        
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Metabase API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to explore Metabase: {str(e)}"
+        )
+
+# ============================================================================
+# PROD LINE 300 (WIRE HARNESS) SCHEDULE EXPLORATION
+# ============================================================================
+
+@app.get("/api/cetec/prodline/{prodline}/diagnose")
+def diagnose_prodline_data(
+    prodline: str,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Diagnostic endpoint to see what production line data actually exists in Cetec.
+    Returns sample order lines and their production line field values.
+    """
+    diagnostics = {
+        "api_calls": [],
+        "raw_responses": {},
+        "response_analysis": {}
+    }
+    
+    try:
+        # Try multiple API endpoint variations
+        endpoint_variations = [
+            {
+                "name": "Standard /ordlines/list",
+                "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines/list",
+                "params": {
+                    "preshared_token": CETEC_CONFIG["token"],
+                    "format": "json"
+                }
+            },
+            {
+                "name": "With rows parameter",
+                "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines/list",
+                "params": {
+                    "preshared_token": CETEC_CONFIG["token"],
+                    "format": "json",
+                    "rows": "1000"
+                }
+            },
+            {
+                "name": "Without format",
+                "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines/list",
+                "params": {
+                    "preshared_token": CETEC_CONFIG["token"]
+                }
+            },
+            {
+                "name": "Alternative endpoint",
+                "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines",
+                "params": {
+                    "preshared_token": CETEC_CONFIG["token"],
+                    "format": "json"
+                }
+            }
+        ]
+        
+        all_ordlines = []
+        successful_endpoint = None
+        
+        for endpoint in endpoint_variations:
+            try:
+                print(f"🔍 Testing endpoint: {endpoint['name']}")
+                print(f"   URL: {endpoint['url']}")
+                print(f"   Params: {endpoint['params']}")
+                
+                response = requests.get(endpoint['url'], params=endpoint['params'], timeout=30)
+                
+                print(f"   ✅ Response received: Status {response.status_code}, Size: {len(response.text)} bytes")
+                
+                api_call_info = {
+                    "endpoint_name": endpoint['name'],
+                    "url": endpoint['url'],
+                    "params": endpoint['params'],
+                    "status_code": response.status_code,
+                    "response_size": len(response.text),
+                    "content_type": response.headers.get('content-type', 'unknown'),
+                    "success": response.status_code == 200
+                }
+                
+                diagnostics["api_calls"].append(api_call_info)
+                
+                if response.status_code == 200:
+                    print(f"   📦 Parsing JSON response...")
+                    try:
+                        data = response.json()
+                        print(f"   ✅ JSON parsed successfully: Type={type(data).__name__}, Length={len(data) if isinstance(data, list) else 'N/A'}")
+                        
+                        diagnostics["raw_responses"][endpoint['name']] = {
+                            "type": type(data).__name__,
+                            "sample": str(data)[:500] if isinstance(data, (dict, list)) else str(data),
+                            "keys": list(data.keys())[:20] if isinstance(data, dict) else None,
+                            "length": len(data) if isinstance(data, list) else "N/A"
+                        }
+                        
+                        # Try to extract order lines from various response shapes
+                        if isinstance(data, list):
+                            print(f"   ✅ Found list with {len(data)} items")
+                            if len(data) > 0:
+                                print(f"   📋 First item keys: {list(data[0].keys())[:10] if isinstance(data[0], dict) else 'Not a dict'}")
+                            all_ordlines = data
+                            successful_endpoint = endpoint['name']
+                            if len(all_ordlines) > 0:
+                                print(f"   ✅ Using this endpoint - found {len(all_ordlines)} order lines")
+                                break
+                            else:
+                                print(f"   ⚠️  List is empty, continuing to next endpoint...")
+                        elif isinstance(data, dict):
+                            print(f"   📦 Found dict with keys: {list(data.keys())[:10]}")
+                            # Try common keys
+                            for key in ['data', 'ordlines', 'rows', 'results', 'items']:
+                                if key in data and isinstance(data[key], list):
+                                    print(f"   ✅ Found list in key '{key}' with {len(data[key])} items")
+                                    all_ordlines = data[key]
+                                    successful_endpoint = endpoint['name']
+                                    if len(all_ordlines) > 0:
+                                        print(f"   ✅ Using this endpoint - found {len(all_ordlines)} order lines")
+                                        break
+                            if all_ordlines and len(all_ordlines) > 0:
+                                break
+                            
+                            # If no nested list, store the whole dict for inspection
+                            print(f"   ⚠️  No list found in dict, storing structure for inspection")
+                            diagnostics["raw_responses"][endpoint['name']]["full_structure"] = str(data)[:1000]
+                            diagnostics["raw_responses"][endpoint['name']]["all_keys"] = list(data.keys())
+                    except Exception as e:
+                        print(f"   ❌ JSON parse error: {str(e)}")
+                        print(f"   📄 Response preview: {response.text[:200]}")
+                        api_call_info["json_error"] = str(e)
+                        api_call_info["response_preview"] = response.text[:500]
+                        diagnostics["raw_responses"][endpoint['name']] = {
+                            "error": "Failed to parse JSON",
+                            "error_message": str(e),
+                            "response_preview": response.text[:500]
+                        }
+                else:
+                    print(f"   ❌ HTTP {response.status_code}: {response.text[:200] if response.text else 'No error message'}")
+                    api_call_info["error"] = response.text[:200] if response.text else "No error message"
+                    diagnostics["raw_responses"][endpoint['name']] = {
+                        "error": f"HTTP {response.status_code}",
+                        "error_message": response.text[:500] if response.text else "No response body"
+                    }
+                    
+            except Exception as e:
+                print(f"   ❌ Exception: {str(e)}")
+                import traceback
+                print(f"   📋 Traceback: {traceback.format_exc()}")
+                api_call_info = {
+                    "endpoint_name": endpoint['name'],
+                    "url": endpoint['url'],
+                    "error": str(e),
+                    "success": False,
+                    "traceback": traceback.format_exc()
+                }
+                diagnostics["api_calls"].append(api_call_info)
+        
+        print(f"\n📊 Summary: Tested {len(endpoint_variations)} endpoints, found {len(all_ordlines)} order lines")
+        if successful_endpoint:
+            print(f"   ✅ Successful endpoint: {successful_endpoint}")
+        else:
+            print(f"   ⚠️  No successful endpoint found")
+        
+        # Analyze what we got
+        diagnostics["response_analysis"] = {
+            "total_ordlines_found": len(all_ordlines),
+            "successful_endpoint": successful_endpoint,
+            "first_order_line_keys": list(all_ordlines[0].keys()) if all_ordlines else None,
+            "first_order_line_sample": dict(list(all_ordlines[0].items())[:10]) if all_ordlines else None
+        }
+        
+        if not all_ordlines:
+            return {
+                "error": "No order lines found in any endpoint",
+                "requested_prodline": prodline,
+                "diagnostics": diagnostics,
+                "message": "Check the 'diagnostics' section to see what each API endpoint returned"
+            }
+        
+        # Collect all unique production line values
+        prodline_values = set()
+        prodline_fields = {}
+        
+        # Sample of order lines with their prodline-related fields
+        sample_lines = []
+        for line in all_ordlines[:100]:  # Check first 100
+            # Look for any field that might contain production line info
+            line_prodline_info = {}
+            for key, value in line.items():
+                key_lower = str(key).lower()
+                if 'prod' in key_lower or 'line' in key_lower or '300' in str(value) or '200' in str(value) or '100' in str(value):
+                    line_prodline_info[key] = value
+                    if value:
+                        prodline_values.add(str(value))
+            
+            if line_prodline_info:
+                sample_lines.append({
+                    "ordline_id": line.get("ordline_id"),
+                    "wo_number": f"{line.get('ordernum')}-{line.get('lineitem')}",
+                    "prodline_fields": line_prodline_info,
+                    "all_keys": list(line.keys())[:20]  # First 20 keys for reference
+                })
+        
+        # Count occurrences of each prodline value
+        prodline_counts = {}
+        for line in all_ordlines:
+            for key, value in line.items():
+                key_lower = str(key).lower()
+                if 'production_line' in key_lower or 'prodline' in key_lower:
+                    val_str = str(value) if value else "None"
+                    prodline_counts[val_str] = prodline_counts.get(val_str, 0) + 1
+        
+        return {
+            "total_ordlines": len(all_ordlines),
+            "requested_prodline": prodline,
+            "unique_prodline_values_found": list(prodline_values)[:20],
+            "prodline_value_counts": prodline_counts,
+            "sample_lines_with_prodline_info": sample_lines[:10],
+            "all_field_names": list(all_ordlines[0].keys()) if all_ordlines else [],
+            "diagnostics": diagnostics,
+            "successful_endpoint": successful_endpoint
+        }
+        
+    except Exception as e:
+        import traceback
+        return {
+            "error": f"Failed to fetch order lines: {str(e)}",
+            "traceback": traceback.format_exc(),
+            "diagnostics": diagnostics
+        }
+
+
+def ensure_metabase_session():
+    """Ensure we have a valid Metabase session token using stored credentials"""
+    use_session = METABASE_CONFIG.get("use_session_auth", False)
+    session_token = METABASE_CONFIG.get("session_token")
+    if use_session and session_token:
+        return True
+
+    db = None
+    try:
+        db = SessionLocal()
+        if load_metabase_credentials(db):
+            return True
+    except Exception as e:
+        print(f"❌ Failed to ensure Metabase session: {e}")
+    finally:
+        if db is not None:
+            try:
+                db.close()
+            except Exception:
+                pass
+    return False
+
+@app.get("/api/cetec/prodline/{prodline}/test-endpoints")
+def test_cetec_schedule_endpoints(
+    prodline: str,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Test various Cetec API endpoints to find schedule/labor/routing data for a production line.
+    Returns results from all endpoints that respond successfully.
+    """
+    results = {
+        "prodline": prodline,
+        "tested_endpoints": [],
+        "successful_endpoints": [],
+        "failed_endpoints": [],
+        "sample_data": {}
+    }
+    
+    # First, get some order lines for this prodline to use as test data
+    try:
+        ordlines_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines/list"
+        ordlines_params = {
+            "preshared_token": CETEC_CONFIG["token"],
+            "format": "json"
+        }
+        ordlines_response = requests.get(ordlines_url, params=ordlines_params, timeout=30)
+        ordlines_response.raise_for_status()
+        all_ordlines = ordlines_response.json() or []
+        
+        # Try multiple possible field names and values for prodline
+        prodline_ordlines = []
+        for line in all_ordlines:
+            # Try different field names
+            prodline_field = (
+                line.get("production_line_description") or 
+                line.get("production_line") or 
+                line.get("prodline") or 
+                line.get("prod_line") or
+                line.get("productionline_description") or
+                line.get("line_description")
+            )
+            
+            # Try matching as string or number
+            if str(prodline_field) == str(prodline) or prodline_field == int(prodline) if prodline.isdigit() else None:
+                prodline_ordlines.append(line)
+        
+        # If still no matches, get first few order lines for testing anyway
+        if not prodline_ordlines and all_ordlines:
+            results["warning"] = f"No exact matches for prodline '{prodline}', using first available order lines for testing"
+            prodline_ordlines = all_ordlines[:5]
+        
+        results["total_ordlines"] = len(all_ordlines)
+        results["total_ordlines_found"] = len(prodline_ordlines)
+        results["sample_ordline_ids"] = [line.get("ordline_id") for line in prodline_ordlines[:5] if line.get("ordline_id")]
+        
+        if not results["sample_ordline_ids"]:
+            return {
+                **results,
+                "error": f"No order lines found. Total in Cetec: {len(all_ordlines)}",
+                "message": "Cannot test endpoints without sample order line IDs. Try the /diagnose endpoint to see available data."
+            }
+        
+        test_ordline_id = results["sample_ordline_ids"][0]
+        results["test_ordline_id"] = test_ordline_id
+        
+        # Include sample order line data for debugging
+        if prodline_ordlines:
+            sample_line = prodline_ordlines[0]
+            results["sample_order_line"] = {
+                "ordline_id": sample_line.get("ordline_id"),
+                "wo_number": f"{sample_line.get('ordernum')}-{sample_line.get('lineitem')}",
+                "production_line_fields": {
+                    k: v for k, v in sample_line.items() 
+                    if 'prod' in str(k).lower() or 'line' in str(k).lower()
+                }
+            }
+        
+    except Exception as e:
+        return {
+            **results,
+            "error": f"Failed to fetch order lines: {str(e)}"
+        }
+    
+    # Test endpoints that might contain schedule data
+    test_endpoints = [
+        # Labor planning endpoints
+        {
+            "name": "Labor Plan List",
+            "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/laborplan/list",
+            "params": {"preshared_token": CETEC_CONFIG["token"]},
+            "type": "list"
+        },
+        {
+            "name": "Labor Plan (per ordline)",
+            "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{test_ordline_id}/laborplan",
+            "params": {"preshared_token": CETEC_CONFIG["token"]},
+            "type": "detail"
+        },
+        {
+            "name": "Labor Plan (alt)",
+            "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/labor/plan",
+            "params": {"preshared_token": CETEC_CONFIG["token"], "ordline_id": test_ordline_id},
+            "type": "detail"
+        },
+        {
+            "name": "Labor List",
+            "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/labor/list",
+            "params": {"preshared_token": CETEC_CONFIG["token"], "ordline_id": test_ordline_id},
+            "type": "list"
+        },
+        {
+            "name": "Order Lines Labor",
+            "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines/labor",
+            "params": {"preshared_token": CETEC_CONFIG["token"], "prodline": prodline},
+            "type": "list"
+        },
+        # Routing endpoints
+        {
+            "name": "Routing List",
+            "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/routing/list",
+            "params": {"preshared_token": CETEC_CONFIG["token"]},
+            "type": "list"
+        },
+        {
+            "name": "Routing (per ordline)",
+            "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{test_ordline_id}/routing",
+            "params": {"preshared_token": CETEC_CONFIG["token"]},
+            "type": "detail"
+        },
+        # Operations endpoints
+        {
+            "name": "Operations List",
+            "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/operations/list",
+            "params": {"preshared_token": CETEC_CONFIG["token"]},
+            "type": "list"
+        },
+        # Schedule/Assignment endpoints (guesses)
+        {
+            "name": "Schedule List",
+            "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/schedule/list",
+            "params": {"preshared_token": CETEC_CONFIG["token"], "prodline": prodline},
+            "type": "list"
+        },
+        {
+            "name": "Schedule (per ordline)",
+            "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{test_ordline_id}/schedule",
+            "params": {"preshared_token": CETEC_CONFIG["token"]},
+            "type": "detail"
+        },
+        {
+            "name": "Assignment List",
+            "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/assignment/list",
+            "params": {"preshared_token": CETEC_CONFIG["token"], "prodline": prodline},
+            "type": "list"
+        },
+        {
+            "name": "Work Plan",
+            "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/workplan/list",
+            "params": {"preshared_token": CETEC_CONFIG["token"], "prodline": prodline},
+            "type": "list"
+        },
+    ]
+    
+    # Test each endpoint
+    for endpoint in test_endpoints:
+        endpoint_name = endpoint["name"]
+        results["tested_endpoints"].append(endpoint_name)
+        
+        try:
+            response = requests.get(endpoint["url"], params=endpoint["params"], timeout=10)
+            
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                    results["successful_endpoints"].append({
+                        "name": endpoint_name,
+                        "url": endpoint["url"],
+                        "status_code": response.status_code,
+                        "response_type": type(data).__name__,
+                        "response_size": len(str(data)),
+                        "sample_keys": list(data.keys())[:10] if isinstance(data, dict) else "list",
+                        "sample_data": str(data)[:500] if len(str(data)) > 500 else data
+                    })
+                    results["sample_data"][endpoint_name] = data
+                except:
+                    results["successful_endpoints"].append({
+                        "name": endpoint_name,
+                        "url": endpoint["url"],
+                        "status_code": response.status_code,
+                        "response_type": "text",
+                        "response_preview": response.text[:500]
+                    })
+            else:
+                results["failed_endpoints"].append({
+                    "name": endpoint_name,
+                    "url": endpoint["url"],
+                    "status_code": response.status_code,
+                    "error": response.text[:200] if response.text else "No error message"
+                })
+        except requests.exceptions.RequestException as e:
+            results["failed_endpoints"].append({
+                "name": endpoint_name,
+                "url": endpoint["url"],
+                "error": str(e)
+            })
+    
+    return results
+
+
+@app.get("/api/cetec/prodline/{prodline}/scheduled-work")
+def get_scheduled_work_for_prodline(
+    prodline: str,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Get all scheduled work orders for a production line (e.g., "300" for Wire Harness).
+    Returns work orders with their locations and operations.
+    """
+    try:
+        # Step 1: Get all order lines for this prodline
+        ordlines_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines/list"
+        ordlines_params = {
+            "preshared_token": CETEC_CONFIG["token"],
+            "format": "json"
+        }
+        
+        ordlines_response = requests.get(ordlines_url, params=ordlines_params, timeout=30)
+        ordlines_response.raise_for_status()
+        all_ordlines = ordlines_response.json() or []
+        
+        # Filter by prodline
+        prodline_ordlines = [
+            line for line in all_ordlines 
+            if line.get("production_line_description") == prodline
+        ]
+        
+        if not prodline_ordlines:
+            return {
+                "prodline": prodline,
+                "work_orders": [],
+                "message": f"No order lines found for production line {prodline}"
+            }
+        
+        # Step 2: For each order line, get location maps and operations
+        scheduled_work = []
+        
+        for order_line in prodline_ordlines[:50]:  # Limit to first 50 for now
+            ordline_id = order_line.get("ordline_id")
+            if not ordline_id:
+                continue
+            
+            try:
+                # Get location maps
+                location_maps_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/location_maps"
+                location_params = {
+                    "preshared_token": CETEC_CONFIG["token"],
+                    "include_children": "true"
+                }
+                
+                location_response = requests.get(location_maps_url, params=location_params, timeout=30)
+                location_response.raise_for_status()
+                location_maps = location_response.json() or []
+                
+                # Extract all locations and operations
+                locations = []
+                for loc_map in location_maps:
+                    location_info = {
+                        "location_id": loc_map.get("id"),
+                        "location_name": loc_map.get("name") or loc_map.get("description"),
+                        "operations": []
+                    }
+                    
+                    # Get operations for this location
+                    operations = loc_map.get("operations", [])
+                    for op in operations:
+                        location_info["operations"].append({
+                            "operation_id": op.get("id"),
+                            "operation_name": op.get("name"),
+                            "sequence": op.get("sequence") or op.get("step") or op.get("build_order"),
+                            "estimated_time": op.get("estimated_time") or op.get("time_minutes"),
+                            "status": op.get("status")
+                        })
+                    
+                    locations.append(location_info)
+                
+                # Build work order summary
+                wo_number = f"{order_line.get('ordernum')}-{order_line.get('lineitem')}"
+                scheduled_work.append({
+                    "ordline_id": ordline_id,
+                    "wo_number": wo_number,
+                    "customer": order_line.get("customer"),
+                    "assembly": order_line.get("prcpart"),
+                    "revision": order_line.get("revision"),
+                    "quantity": order_line.get("oorderqty") or order_line.get("quantity"),
+                    "balance_due": order_line.get("balancedue") or order_line.get("balance_due"),
+                    "ship_date": order_line.get("shipdate") or order_line.get("ship_date"),
+                    "current_location": order_line.get("work_location") or order_line.get("current_location"),
+                    "locations": locations,
+                    "total_locations": len(locations),
+                    "total_operations": sum(len(loc["operations"]) for loc in locations)
+                })
+                
+            except Exception as e:
+                print(f"Error processing ordline {ordline_id}: {str(e)}")
+                continue
+        
+        return {
+            "prodline": prodline,
+            "total_found": len(prodline_ordlines),
+            "processed": len(scheduled_work),
+            "work_orders": scheduled_work
+        }
+        
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch from Cetec: {str(e)}"
+        )
+
 @app.get("/api/cetec/ordline/{ordline_id}/location_maps")
 def get_cetec_location_maps(
     ordline_id: int,
@@ -2226,6 +3949,50 @@ def get_cetec_sync_logs(
     return logs
 
 
+@app.get("/api/cetec/health", response_model=schemas.CetecHealthResponse)
+def get_cetec_health(
+    stale_threshold_minutes: int = 360,
+    error_window_hours: int = 24,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """Return high-level Cetec sync health metrics for dashboard banners."""
+    from sqlalchemy import func
+
+    latest_sync = db.query(func.max(WorkOrder.last_cetec_sync)).scalar()
+    now = datetime.utcnow()
+    stale_minutes = None
+    is_stale = False
+    if latest_sync:
+        delta = now - latest_sync
+        stale_minutes = int(delta.total_seconds() // 60)
+        is_stale = stale_minutes > stale_threshold_minutes
+    else:
+        is_stale = True
+
+    error_window_start = now - timedelta(hours=error_window_hours)
+
+    recent_error_count = db.query(func.count(CetecSyncLog.id)).filter(
+        CetecSyncLog.change_type == "error",
+        CetecSyncLog.sync_date >= error_window_start
+    ).scalar() or 0
+
+    last_error_entry = db.query(CetecSyncLog).filter(
+        CetecSyncLog.change_type == "error"
+    ).order_by(CetecSyncLog.sync_date.desc()).first()
+
+    return schemas.CetecHealthResponse(
+        latest_sync=latest_sync,
+        stale_minutes=stale_minutes,
+        stale_threshold_minutes=stale_threshold_minutes,
+        is_stale=is_stale,
+        recent_error_count=recent_error_count,
+        recent_error_window_hours=error_window_hours,
+        last_error_at=last_error_entry.sync_date if last_error_entry else None,
+        last_error_message=last_error_entry.new_value if last_error_entry else None
+    )
+
+
 @app.post("/api/cetec/import", response_model=schemas.CetecImportResponse)
 def import_from_cetec(
     request: schemas.CetecImportRequest,
@@ -2580,6 +4347,15 @@ def import_from_cetec(
                 print(f"Error processing ordline {ordline_id}: {str(e)}")
                 print(f"Full traceback:")
                 traceback.print_exc()
+                changes.append(CetecSyncLog(
+                    sync_date=sync_time,
+                    wo_number=wo_number,
+                    change_type="error",
+                    field_name="exception",
+                    old_value=None,
+                    new_value=str(e),
+                    cetec_ordline_id=ordline_id
+                ))
                 error_count += 1
                 continue
         

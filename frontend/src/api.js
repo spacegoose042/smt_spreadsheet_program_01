@@ -22,13 +22,25 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Check if this is a Metabase API endpoint
+    const url = error.config?.url || ''
+    const isMetabaseEndpoint = url.includes('/api/metabase/')
+    
+    if (isMetabaseEndpoint) {
+      // For Metabase endpoints, never redirect - always let the component handle errors
+      const status = error.response?.status
+      console.error(`❌ Metabase API error (${status || 'unknown'}). Error will be displayed on page.`, error)
+      return Promise.reject(error)
+    }
+    
+    // For other endpoints, handle 401 by redirecting to login
     if (error.response?.status === 401) {
-      // Token expired or invalid
       console.error('❌ Authentication failed (401). Redirecting to login...')
       localStorage.removeItem('token')
       localStorage.removeItem('user')
       window.location.href = '/login'
     }
+    
     return Promise.reject(error)
   }
 )
@@ -139,6 +151,49 @@ export const runCetecImport = (data) =>
   api.post('/api/cetec/import', data)
 export const getCetecSyncLogs = (days = 30) =>
   api.get('/api/cetec/sync-logs', { params: { days } })
+export const getCetecHealth = () => api.get('/api/cetec/health')
+export const testCetecScheduleEndpoints = (prodline) =>
+  api.get(`/api/cetec/prodline/${prodline}/test-endpoints`)
+export const getScheduledWorkForProdline = (prodline) =>
+  api.get(`/api/cetec/prodline/${prodline}/scheduled-work`)
+export const diagnoseProdlineData = (prodline) =>
+  api.get(`/api/cetec/prodline/${prodline}/diagnose`)
+
+// Metabase API Integration
+export const testMetabaseConnection = () =>
+  api.get('/api/metabase/test')
+export const metabaseLogin = (username, password) =>
+  api.post('/api/metabase/login', { username, password })
+export const getMetabaseDatabases = () =>
+  api.get('/api/metabase/databases')
+export const getMetabaseTables = (databaseId) =>
+  api.get(`/api/metabase/database/${databaseId}/tables`)
+export const getMetabaseTableFields = (databaseId, tableId) =>
+  api.get(`/api/metabase/database/${databaseId}/table/${tableId}/fields`)
+export const executeMetabaseQuery = (databaseId, query) =>
+  api.post(`/api/metabase/database/${databaseId}/query`, query)
+export const getMetabaseCards = () =>
+  api.get('/api/metabase/cards')
+export const executeMetabaseCard = (cardId, parameters = {}) =>
+  api.post(`/api/metabase/card/${cardId}/query`, parameters)
+export const getMetabaseDashboard = (dashboardId) =>
+  api.get(`/api/metabase/dashboard/${dashboardId}`)
+export const executeDashboardWithParams = (dashboardId, params = {}) =>
+  api.get(`/api/metabase/dashboard/${dashboardId}/query`, { params })
+export const exploreProdlineInMetabase = (prodline) =>
+  api.get(`/api/metabase/explore/prodline/${prodline}`)
+
+// Wire Harness Schedule - fetch schedule data for prodline 300
+export const getWireHarnessSchedule = (prodline = '300') =>
+  api.get(`/api/metabase/dashboard/64/query`, { 
+    params: { prodline } 
+  })
+
+// Wire Harness Schedule Detail - fetch detailed schedule from question 984
+export const getWireHarnessScheduleDetail = (prodline = '300') =>
+  api.post(`/api/metabase/card/984/query`, {
+    prodline: prodline
+  })
 
 export default api
 
