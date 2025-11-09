@@ -27,7 +27,9 @@ import WireHarnessSchedule from './pages/WireHarnessSchedule'
 import WireHarnessTimeline from './pages/WireHarnessTimeline'
 import './App.css'
 
-function ProtectedRoute({ children, requireAuth = true }) {
+const SETTINGS_ROLES = ['admin', 'manager', 'scheduler']
+
+function ProtectedRoute({ children, requireAuth = true, allowedRoles }) {
   const { user, loading } = useAuth()
 
   if (loading) {
@@ -36,6 +38,10 @@ function ProtectedRoute({ children, requireAuth = true }) {
 
   if (requireAuth && !user) {
     return <Navigate to="/login" />
+  }
+
+  if (allowedRoles && (!user || !allowedRoles.includes(user.role))) {
+    return <Navigate to="/" replace />
   }
 
   return children
@@ -56,7 +62,8 @@ function Navigation() {
   const wireHarnessPaths = ['/wire-harness-dashboard', '/wire-harness', '/wire-harness-timeline']
   const isSurfaceMountActive = surfaceMountPaths.includes(location.pathname)
   const isWireHarnessActive = wireHarnessPaths.includes(location.pathname)
-  const isSettingsActive = ['/capacity', '/shifts', '/users', '/statuses', '/issue-types', '/resolution-types', '/cetec-import', '/cetec-sync-report', '/prodline-explorer', '/metabase-explorer', '/settings', '/change-password'].includes(location.pathname)
+  const isSettingsActive = ['/capacity', '/shifts', '/users', '/statuses', '/issue-types', '/resolution-types', '/cetec-import', '/cetec-sync-report', '/prodline-explorer', '/metabase-explorer', '/settings'].includes(location.pathname)
+  const canAccessSettings = user && SETTINGS_ROLES.includes(user.role)
   
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -190,129 +197,131 @@ function Navigation() {
             )}
           </div>
           
-          {/* Settings Dropdown */}
-          <div className="nav-dropdown" ref={settingsRef}>
-            <button
-              className={`nav-dropdown-trigger ${isSettingsActive ? 'active' : ''}`}
-              onClick={() => setSettingsOpen(!settingsOpen)}
-            >
-              <Settings size={18} />
-              Settings
-              <ChevronDown size={16} style={{ 
-                transform: settingsOpen ? 'rotate(180deg)' : 'rotate(0)',
-                transition: 'transform 0.2s'
-              }} />
-            </button>
-            
-            {settingsOpen && (
-              <div className="nav-dropdown-menu">
-                <Link 
-                  to="/capacity" 
-                  className={isActive('/capacity') ? 'active' : ''}
-                  onClick={() => setSettingsOpen(false)}
-                >
-                  <Clock size={16} />
-                  Capacity Calendar
-                </Link>
-                <Link 
-                  to="/shifts" 
-                  className={isActive('/shifts') ? 'active' : ''}
-                  onClick={() => setSettingsOpen(false)}
-                >
-                  <Timer size={16} />
-                  Shift Configuration
-                </Link>
-                <Link 
-                  to="/cetec-import" 
-                  className={isActive('/cetec-import') ? 'active' : ''}
-                  onClick={() => setSettingsOpen(false)}
-                >
-                  <Database size={16} />
-                  Cetec Import Test
-                </Link>
-                <Link 
-                  to="/cetec-sync-report" 
-                  className={isActive('/cetec-sync-report') ? 'active' : ''}
-                  onClick={() => setSettingsOpen(false)}
-                >
-                  <RefreshCw size={16} />
-                  Cetec Sync Report
-                </Link>
-                <Link 
-                  to="/prodline-explorer" 
-                  className={isActive('/prodline-explorer') ? 'active' : ''}
-                  onClick={() => setSettingsOpen(false)}
-                >
-                  <Database size={16} />
-                  Prod Line Schedule Explorer
-                </Link>
-                <Link
-                  to="/metabase-explorer"
-                  className={isSettingsActive && location.pathname === '/metabase-explorer' ? 'active' : ''}
-                  onClick={() => setSettingsOpen(false)}
-                >
-                  <Database size={16} />
-                  Metabase Dashboard Explorer
-                </Link>
-                {isAdmin && (
-                  <>
-                    <div className="nav-dropdown-divider" />
-                    <Link 
-                      to="/users" 
-                      className={isActive('/users') ? 'active' : ''}
-                      onClick={() => setSettingsOpen(false)}
-                    >
-                      <Users size={16} />
-                      User Management
-                    </Link>
-                    <Link 
-                      to="/statuses" 
-                      className={isActive('/statuses') ? 'active' : ''}
-                      onClick={() => setSettingsOpen(false)}
-                    >
-                      <Tag size={16} />
-                      Status Management
-                    </Link>
-                    <Link 
-                      to="/issue-types" 
-                      className={isActive('/issue-types') ? 'active' : ''}
-                      onClick={() => setSettingsOpen(false)}
-                    >
-                      <AlertTriangle size={16} />
-                      Issue Types
-                    </Link>
-                    <Link 
-                      to="/resolution-types" 
-                      className={isActive('/resolution-types') ? 'active' : ''}
-                      onClick={() => setSettingsOpen(false)}
-                    >
-                      <CheckCircle size={16} />
-                      Resolution Types
-                    </Link>
-                    <div className="nav-dropdown-divider" />
-                  </>
-                )}
-                <Link 
-                  to="/change-password" 
-                  className={isActive('/change-password') ? 'active' : ''}
-                  onClick={() => setSettingsOpen(false)}
-                >
-                  <Key size={16} />
-                  Change Password
-                </Link>
-                <Link 
-                  to="/settings" 
-                  className={isActive('/settings') ? 'active' : ''}
-                  onClick={() => setSettingsOpen(false)}
-                >
-                  <Settings size={16} />
-                  General Settings
-                </Link>
-              </div>
-            )}
-          </div>
+          {canAccessSettings && (
+            <div className="nav-dropdown" ref={settingsRef}>
+              <button
+                className={`nav-dropdown-trigger ${isSettingsActive ? 'active' : ''}`}
+                onClick={() => setSettingsOpen(!settingsOpen)}
+              >
+                <Settings size={18} />
+                Settings
+                <ChevronDown size={16} style={{ 
+                  transform: settingsOpen ? 'rotate(180deg)' : 'rotate(0)',
+                  transition: 'transform 0.2s'
+                }} />
+              </button>
+              
+              {settingsOpen && (
+                <div className="nav-dropdown-menu">
+                  <Link 
+                    to="/capacity" 
+                    className={isActive('/capacity') ? 'active' : ''}
+                    onClick={() => setSettingsOpen(false)}
+                  >
+                    <Clock size={16} />
+                    Capacity Calendar
+                  </Link>
+                  <Link 
+                    to="/shifts" 
+                    className={isActive('/shifts') ? 'active' : ''}
+                    onClick={() => setSettingsOpen(false)}
+                  >
+                    <Timer size={16} />
+                    Shift Configuration
+                  </Link>
+                  <Link 
+                    to="/cetec-import" 
+                    className={isActive('/cetec-import') ? 'active' : ''}
+                    onClick={() => setSettingsOpen(false)}
+                  >
+                    <Database size={16} />
+                    Cetec Import Test
+                  </Link>
+                  <Link 
+                    to="/cetec-sync-report" 
+                    className={isActive('/cetec-sync-report') ? 'active' : ''}
+                    onClick={() => setSettingsOpen(false)}
+                  >
+                    <RefreshCw size={16} />
+                    Cetec Sync Report
+                  </Link>
+                  <Link 
+                    to="/prodline-explorer" 
+                    className={isActive('/prodline-explorer') ? 'active' : ''}
+                    onClick={() => setSettingsOpen(false)}
+                  >
+                    <Database size={16} />
+                    Prod Line Schedule Explorer
+                  </Link>
+                  <Link
+                    to="/metabase-explorer"
+                    className={isSettingsActive && location.pathname === '/metabase-explorer' ? 'active' : ''}
+                    onClick={() => setSettingsOpen(false)}
+                  >
+                    <Database size={16} />
+                    Metabase Dashboard Explorer
+                  </Link>
+                  {isAdmin && (
+                    <>
+                      <div className="nav-dropdown-divider" />
+                      <Link 
+                        to="/users" 
+                        className={isActive('/users') ? 'active' : ''}
+                        onClick={() => setSettingsOpen(false)}
+                      >
+                        <Users size={16} />
+                        User Management
+                      </Link>
+                      <Link 
+                        to="/statuses" 
+                        className={isActive('/statuses') ? 'active' : ''}
+                        onClick={() => setSettingsOpen(false)}
+                      >
+                        <Tag size={16} />
+                        Status Management
+                      </Link>
+                      <Link 
+                        to="/issue-types" 
+                        className={isActive('/issue-types') ? 'active' : ''}
+                        onClick={() => setSettingsOpen(false)}
+                      >
+                        <AlertTriangle size={16} />
+                        Issue Types
+                      </Link>
+                      <Link 
+                        to="/resolution-types" 
+                        className={isActive('/resolution-types') ? 'active' : ''}
+                        onClick={() => setSettingsOpen(false)}
+                      >
+                        <CheckCircle size={16} />
+                        Resolution Types
+                      </Link>
+                      <div className="nav-dropdown-divider" />
+                    </>
+                  )}
+                  <Link 
+                    to="/settings" 
+                    className={isActive('/settings') ? 'active' : ''}
+                    onClick={() => setSettingsOpen(false)}
+                  >
+                    <Settings size={16} />
+                    General Settings
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <Link
+            to="/change-password"
+            className={`btn btn-sm ${location.pathname === '/change-password' ? 'btn-primary' : 'btn-secondary'}`}
+            title="Change Password"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+          >
+            <Key size={14} />
+            Password
+          </Link>
           <div style={{ 
             fontSize: '0.875rem', 
             color: 'var(--text-secondary)',
@@ -360,18 +369,18 @@ function AppContent() {
           <Route path="/wire-harness/schedule" element={<ProtectedRoute><WireHarnessSchedule /></ProtectedRoute>} />
           <Route path="/wire-harness-timeline" element={<ProtectedRoute><WireHarnessTimeline /></ProtectedRoute>} />
           <Route path="/wire-harness/timeline" element={<ProtectedRoute><WireHarnessTimeline /></ProtectedRoute>} />
-          <Route path="/capacity" element={<ProtectedRoute><CapacityCalendar /></ProtectedRoute>} />
-          <Route path="/shifts" element={<ProtectedRoute><ShiftConfiguration /></ProtectedRoute>} />
-          <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
-          <Route path="/statuses" element={<ProtectedRoute><StatusManagement /></ProtectedRoute>} />
-          <Route path="/issue-types" element={<ProtectedRoute><IssueTypeManagement /></ProtectedRoute>} />
-          <Route path="/resolution-types" element={<ProtectedRoute><ResolutionTypeManagement /></ProtectedRoute>} />
-          <Route path="/cetec-import" element={<ProtectedRoute><CetecImport /></ProtectedRoute>} />
-          <Route path="/cetec-sync-report" element={<ProtectedRoute><CetecSyncReport /></ProtectedRoute>} />
-          <Route path="/prodline-explorer" element={<ProtectedRoute><ProdlineScheduleExplorer /></ProtectedRoute>} />
-          <Route path="/metabase-explorer" element={<ProtectedRoute><MetabaseDashboardExplorer /></ProtectedRoute>} />
+          <Route path="/capacity" element={<ProtectedRoute allowedRoles={SETTINGS_ROLES}><CapacityCalendar /></ProtectedRoute>} />
+          <Route path="/shifts" element={<ProtectedRoute allowedRoles={SETTINGS_ROLES}><ShiftConfiguration /></ProtectedRoute>} />
+          <Route path="/users" element={<ProtectedRoute allowedRoles={['admin']}><UserManagement /></ProtectedRoute>} />
+          <Route path="/statuses" element={<ProtectedRoute allowedRoles={['admin']}><StatusManagement /></ProtectedRoute>} />
+          <Route path="/issue-types" element={<ProtectedRoute allowedRoles={['admin']}><IssueTypeManagement /></ProtectedRoute>} />
+          <Route path="/resolution-types" element={<ProtectedRoute allowedRoles={['admin']}><ResolutionTypeManagement /></ProtectedRoute>} />
+          <Route path="/cetec-import" element={<ProtectedRoute allowedRoles={SETTINGS_ROLES}><CetecImport /></ProtectedRoute>} />
+          <Route path="/cetec-sync-report" element={<ProtectedRoute allowedRoles={SETTINGS_ROLES}><CetecSyncReport /></ProtectedRoute>} />
+          <Route path="/prodline-explorer" element={<ProtectedRoute allowedRoles={SETTINGS_ROLES}><ProdlineScheduleExplorer /></ProtectedRoute>} />
+          <Route path="/metabase-explorer" element={<ProtectedRoute allowedRoles={SETTINGS_ROLES}><MetabaseDashboardExplorer /></ProtectedRoute>} />
           <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
-          <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute allowedRoles={SETTINGS_ROLES}><SettingsPage /></ProtectedRoute>} />
         </Routes>
       </main>
     </div>
