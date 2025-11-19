@@ -182,7 +182,7 @@
             user-select: none;
         }
 
-        .btn-move-next {
+        .btn-move {
             width: 100%;
             padding: 8px 16px;
             background: #3b82f6;
@@ -193,15 +193,78 @@
             font-size: 13px;
             cursor: pointer;
             transition: background 0.2s;
+            position: relative;
         }
 
-        .btn-move-next:hover {
+        .btn-move:hover {
             background: #2563eb;
         }
 
-        .btn-move-next:disabled {
+        .btn-move:disabled {
             background: #d1d5db;
             cursor: not-allowed;
+        }
+
+        .move-dropdown {
+            position: relative;
+            width: 100%;
+        }
+
+        .move-dropdown-menu {
+            position: absolute;
+            bottom: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            margin-bottom: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 10;
+            display: none;
+        }
+
+        .move-dropdown-menu.show {
+            display: block;
+        }
+
+        .move-dropdown-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            transition: background 0.15s;
+            border-bottom: 1px solid #f3f4f6;
+            font-size: 13px;
+            color: #374151;
+        }
+
+        .move-dropdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .move-dropdown-item:hover {
+            background: #f3f4f6;
+        }
+
+        .move-dropdown-item:active {
+            background: #e5e7eb;
+        }
+
+        .move-dropdown-item.disabled {
+            color: #9ca3af;
+            cursor: not-allowed;
+            background: #f9fafb;
+        }
+
+        .move-dropdown-item.disabled:hover {
+            background: #f9fafb;
+        }
+
+        .move-dropdown-item.current {
+            background: #eff6ff;
+            color: #1e40af;
+            font-weight: 500;
         }
 
         .wo-status-badge {
@@ -286,6 +349,54 @@
             user-select: none;
         }
 
+        .wo-list-move-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .wo-list-move-dropdown-menu {
+            position: absolute;
+            bottom: 100%;
+            right: 0;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            margin-bottom: 8px;
+            min-width: 250px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 10;
+            display: none;
+        }
+
+        .wo-list-move-dropdown-menu.show {
+            display: block;
+        }
+
+        .wo-list-move-dropdown-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            transition: background 0.15s;
+            border-bottom: 1px solid #f3f4f6;
+            font-size: 13px;
+            color: #374151;
+        }
+
+        .wo-list-move-dropdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .wo-list-move-dropdown-item:hover {
+            background: #f3f4f6;
+        }
+
+        .wo-list-move-dropdown-item.current {
+            background: #eff6ff;
+            color: #1e40af;
+            font-weight: 500;
+        }
+
         .wo-list-card:hover {
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
@@ -360,7 +471,18 @@
                                 <input type="checkbox" id="complete-12345" checked>
                                 <label for="complete-12345">Complete schedule entry</label>
                             </div>
-                            <button class="btn-move-next">Move to Next →</button>
+                            <div class="move-dropdown">
+                                <button class="btn-move" onclick="toggleDropdown('dropdown-12345')">Move</button>
+                                <div class="move-dropdown-menu" id="dropdown-12345">
+                                    <div class="move-dropdown-item current">WH WIRE AND CABLE PROCESSING (Current)</div>
+                                    <div class="move-dropdown-item">WH TERMINATING</div>
+                                    <div class="move-dropdown-item">WH SMALL ASSEMBLY</div>
+                                    <div class="move-dropdown-item">WH LARGE ASSEMBLY</div>
+                                    <div class="move-dropdown-item">WH ULTRA SONIC SPLICING</div>
+                                    <div class="move-dropdown-item">WH OVERMOLDING</div>
+                                    <div class="move-dropdown-item">WH QUALITY CONTROL</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -385,7 +507,18 @@
                                 <input type="checkbox" id="complete-12346" checked>
                                 <label for="complete-12346">Complete schedule entry</label>
                             </div>
-                            <button class="btn-move-next">Move to Next →</button>
+                            <div class="move-dropdown">
+                                <button class="btn-move" onclick="toggleDropdown('dropdown-12346')">Move</button>
+                                <div class="move-dropdown-menu" id="dropdown-12346">
+                                    <div class="move-dropdown-item current">WH WIRE AND CABLE PROCESSING (Current)</div>
+                                    <div class="move-dropdown-item">WH TERMINATING</div>
+                                    <div class="move-dropdown-item">WH SMALL ASSEMBLY</div>
+                                    <div class="move-dropdown-item">WH LARGE ASSEMBLY</div>
+                                    <div class="move-dropdown-item">WH ULTRA SONIC SPLICING</div>
+                                    <div class="move-dropdown-item">WH OVERMOLDING</div>
+                                    <div class="move-dropdown-item">WH QUALITY CONTROL</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -410,7 +543,18 @@
                                 <input type="checkbox" id="complete-12347" checked>
                                 <label for="complete-12347">Complete schedule entry</label>
                             </div>
-                            <button class="btn-move-next">Move to Next →</button>
+                            <div class="move-dropdown">
+                                <button class="btn-move" onclick="toggleDropdown('dropdown-12347')">Move</button>
+                                <div class="move-dropdown-menu" id="dropdown-12347">
+                                    <div class="move-dropdown-item current">WH WIRE AND CABLE PROCESSING (Current)</div>
+                                    <div class="move-dropdown-item">WH TERMINATING</div>
+                                    <div class="move-dropdown-item">WH SMALL ASSEMBLY</div>
+                                    <div class="move-dropdown-item">WH LARGE ASSEMBLY</div>
+                                    <div class="move-dropdown-item">WH ULTRA SONIC SPLICING</div>
+                                    <div class="move-dropdown-item">WH OVERMOLDING</div>
+                                    <div class="move-dropdown-item">WH QUALITY CONTROL</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -443,7 +587,18 @@
                                 <input type="checkbox" id="complete-12348" checked>
                                 <label for="complete-12348">Complete schedule entry</label>
                             </div>
-                            <button class="btn-move-next">Move to Next →</button>
+                            <div class="move-dropdown">
+                                <button class="btn-move" onclick="toggleDropdown('dropdown-12348')">Move</button>
+                                <div class="move-dropdown-menu" id="dropdown-12348">
+                                    <div class="move-dropdown-item">WH WIRE AND CABLE PROCESSING</div>
+                                    <div class="move-dropdown-item current">WH TERMINATING (Current)</div>
+                                    <div class="move-dropdown-item">WH SMALL ASSEMBLY</div>
+                                    <div class="move-dropdown-item">WH LARGE ASSEMBLY</div>
+                                    <div class="move-dropdown-item">WH ULTRA SONIC SPLICING</div>
+                                    <div class="move-dropdown-item">WH OVERMOLDING</div>
+                                    <div class="move-dropdown-item">WH QUALITY CONTROL</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -476,7 +631,18 @@
                                 <input type="checkbox" id="complete-12349" checked>
                                 <label for="complete-12349">Complete schedule entry</label>
                             </div>
-                            <button class="btn-move-next">Move to Next →</button>
+                            <div class="move-dropdown">
+                                <button class="btn-move" onclick="toggleDropdown('dropdown-12349')">Move</button>
+                                <div class="move-dropdown-menu" id="dropdown-12349">
+                                    <div class="move-dropdown-item">WH WIRE AND CABLE PROCESSING</div>
+                                    <div class="move-dropdown-item">WH TERMINATING</div>
+                                    <div class="move-dropdown-item current">WH SMALL ASSEMBLY (Current)</div>
+                                    <div class="move-dropdown-item">WH LARGE ASSEMBLY</div>
+                                    <div class="move-dropdown-item">WH ULTRA SONIC SPLICING</div>
+                                    <div class="move-dropdown-item">WH OVERMOLDING</div>
+                                    <div class="move-dropdown-item">WH QUALITY CONTROL</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -515,14 +681,29 @@
                             <span class="wo-status-badge status-active">Active</span>
                         </div>
                         <div class="wo-actions">
-                            <button class="btn-move-next" disabled>Complete</button>
+                            <div class="complete-schedule-option">
+                                <input type="checkbox" id="complete-12350" checked>
+                                <label for="complete-12350">Complete schedule entry</label>
+                            </div>
+                            <div class="move-dropdown">
+                                <button class="btn-move" onclick="toggleDropdown('dropdown-12350')">Move</button>
+                                <div class="move-dropdown-menu" id="dropdown-12350">
+                                    <div class="move-dropdown-item">WH WIRE AND CABLE PROCESSING</div>
+                                    <div class="move-dropdown-item">WH TERMINATING</div>
+                                    <div class="move-dropdown-item">WH SMALL ASSEMBLY</div>
+                                    <div class="move-dropdown-item">WH LARGE ASSEMBLY</div>
+                                    <div class="move-dropdown-item">WH ULTRA SONIC SPLICING</div>
+                                    <div class="move-dropdown-item">WH OVERMOLDING</div>
+                                    <div class="move-dropdown-item current">WH QUALITY CONTROL (Current)</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <h2>Option 2: Card-Based List Style (Current Schedule Page Style)</h2>
+        <h2>Card-Based List Style (Preferred Design)</h2>
         <div class="card-list-view">
             <div class="work-center-section">
                 <div class="work-center-header wh-wire">
@@ -541,14 +722,25 @@
                         </div>
                         <div>
                             <span class="wo-status-badge status-active">Active</span>
-                            <div style="margin-top: 4px; font-size: 12px; color: #6b7280;">Next: WH TERMINATING</div>
+                            <div style="margin-top: 4px; font-size: 12px; color: #6b7280;">Current: WH WIRE AND CABLE PROCESSING</div>
                         </div>
                         <div class="wo-list-actions">
                             <div class="wo-list-complete-option">
                                 <input type="checkbox" id="list-complete-12345" checked>
                                 <label for="list-complete-12345">Complete entry</label>
                             </div>
-                            <button class="btn-move-next" style="width: auto; padding: 8px 20px;">Move to Next →</button>
+                            <div class="wo-list-move-dropdown">
+                                <button class="btn-move" style="width: auto; padding: 8px 20px;" onclick="toggleDropdown('list-dropdown-12345')">Move</button>
+                                <div class="wo-list-move-dropdown-menu" id="list-dropdown-12345">
+                                    <div class="wo-list-move-dropdown-item current">WH WIRE AND CABLE PROCESSING (Current)</div>
+                                    <div class="wo-list-move-dropdown-item">WH TERMINATING</div>
+                                    <div class="wo-list-move-dropdown-item">WH SMALL ASSEMBLY</div>
+                                    <div class="wo-list-move-dropdown-item">WH LARGE ASSEMBLY</div>
+                                    <div class="wo-list-move-dropdown-item">WH ULTRA SONIC SPLICING</div>
+                                    <div class="wo-list-move-dropdown-item">WH OVERMOLDING</div>
+                                    <div class="wo-list-move-dropdown-item">WH QUALITY CONTROL</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -563,14 +755,25 @@
                         </div>
                         <div>
                             <span class="wo-status-badge status-hold">Hold</span>
-                            <div style="margin-top: 4px; font-size: 12px; color: #6b7280;">Next: WH TERMINATING</div>
+                            <div style="margin-top: 4px; font-size: 12px; color: #6b7280;">Current: WH WIRE AND CABLE PROCESSING</div>
                         </div>
                         <div class="wo-list-actions">
                             <div class="wo-list-complete-option">
                                 <input type="checkbox" id="list-complete-12346" checked>
                                 <label for="list-complete-12346">Complete entry</label>
                             </div>
-                            <button class="btn-move-next" style="width: auto; padding: 8px 20px;">Move to Next →</button>
+                            <div class="wo-list-move-dropdown">
+                                <button class="btn-move" style="width: auto; padding: 8px 20px;" onclick="toggleDropdown('list-dropdown-12346')">Move</button>
+                                <div class="wo-list-move-dropdown-menu" id="list-dropdown-12346">
+                                    <div class="wo-list-move-dropdown-item current">WH WIRE AND CABLE PROCESSING (Current)</div>
+                                    <div class="wo-list-move-dropdown-item">WH TERMINATING</div>
+                                    <div class="wo-list-move-dropdown-item">WH SMALL ASSEMBLY</div>
+                                    <div class="wo-list-move-dropdown-item">WH LARGE ASSEMBLY</div>
+                                    <div class="wo-list-move-dropdown-item">WH ULTRA SONIC SPLICING</div>
+                                    <div class="wo-list-move-dropdown-item">WH OVERMOLDING</div>
+                                    <div class="wo-list-move-dropdown-item">WH QUALITY CONTROL</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -585,14 +788,25 @@
                         </div>
                         <div>
                             <span class="wo-status-badge status-pending">Pending</span>
-                            <div style="margin-top: 4px; font-size: 12px; color: #6b7280;">Next: WH TERMINATING</div>
+                            <div style="margin-top: 4px; font-size: 12px; color: #6b7280;">Current: WH WIRE AND CABLE PROCESSING</div>
                         </div>
                         <div class="wo-list-actions">
                             <div class="wo-list-complete-option">
                                 <input type="checkbox" id="list-complete-12347" checked>
                                 <label for="list-complete-12347">Complete entry</label>
                             </div>
-                            <button class="btn-move-next" style="width: auto; padding: 8px 20px;">Move to Next →</button>
+                            <div class="wo-list-move-dropdown">
+                                <button class="btn-move" style="width: auto; padding: 8px 20px;" onclick="toggleDropdown('list-dropdown-12347')">Move</button>
+                                <div class="wo-list-move-dropdown-menu" id="list-dropdown-12347">
+                                    <div class="wo-list-move-dropdown-item current">WH WIRE AND CABLE PROCESSING (Current)</div>
+                                    <div class="wo-list-move-dropdown-item">WH TERMINATING</div>
+                                    <div class="wo-list-move-dropdown-item">WH SMALL ASSEMBLY</div>
+                                    <div class="wo-list-move-dropdown-item">WH LARGE ASSEMBLY</div>
+                                    <div class="wo-list-move-dropdown-item">WH ULTRA SONIC SPLICING</div>
+                                    <div class="wo-list-move-dropdown-item">WH OVERMOLDING</div>
+                                    <div class="wo-list-move-dropdown-item">WH QUALITY CONTROL</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -600,17 +814,56 @@
         </div>
 
         <div class="comparison-note">
-            <h3>Design Comparison Notes:</h3>
+            <h3>Design Notes:</h3>
             <ul>
-                <li><strong>Kanban Style:</strong> Visual flow from left to right, shows bottleneck columns easily, great for production floor screens, supports drag-and-drop in future</li>
-                <li><strong>Card List Style:</strong> More compact, easier to scan many work orders, familiar from current schedule page, better for detailed information display</li>
-                <li><strong>Common Features:</strong> Both show current location, next location, priority/status indicators, and "Move to Next" button (disabled when at final step)</li>
+                <li><strong>Card List Style (Preferred):</strong> More compact, easier to scan many work orders, familiar from current schedule page, better for detailed information display</li>
+                <li><strong>Move Functionality:</strong> "Move" button opens a dropdown menu showing all available WH (Wire Harness) locations. User selects destination location to move the work order.</li>
+                <li><strong>Location Filtering:</strong> Dropdown only shows locations beginning with "WH" (Wire Harness work centers). Current location is highlighted in the dropdown.</li>
                 <li><strong>Complete Schedule Option:</strong> Checkbox allows user to choose whether to complete the schedule entry (checked = complete, unchecked = leave open)</li>
-                <li><strong>Move Behavior:</strong> Button click → API call with <code>complete_schedule: true/false</code> based on checkbox → Card moves to next column or disappears if complete → Auto-refresh</li>
+                <li><strong>Move Behavior:</strong> User clicks "Move" → Dropdown appears with WH locations → User selects destination → API call with selected <code>location_id</code> and <code>complete_schedule: true/false</code> → Work order moves to selected location → Auto-refresh</li>
                 <li><strong>User ID:</strong> Automatically pulled from logged-in user's session for audit trail in CETEC</li>
             </ul>
         </div>
     </div>
+
+    <script>
+        // Toggle dropdown menu visibility
+        function toggleDropdown(dropdownId) {
+            const dropdown = document.getElementById(dropdownId);
+            const isShowing = dropdown.classList.contains('show');
+            
+            // Close all other dropdowns
+            document.querySelectorAll('.move-dropdown-menu, .wo-list-move-dropdown-menu').forEach(menu => {
+                menu.classList.remove('show');
+            });
+            
+            // Toggle this dropdown
+            if (!isShowing) {
+                dropdown.classList.add('show');
+            }
+        }
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('.move-dropdown') && !event.target.closest('.wo-list-move-dropdown')) {
+                document.querySelectorAll('.move-dropdown-menu, .wo-list-move-dropdown-menu').forEach(menu => {
+                    menu.classList.remove('show');
+                });
+            }
+        });
+
+        // Handle location selection (mockup only - no actual API call)
+        document.querySelectorAll('.move-dropdown-item, .wo-list-move-dropdown-item').forEach(item => {
+            if (!item.classList.contains('current')) {
+                item.addEventListener('click', function() {
+                    const locationName = this.textContent.trim();
+                    alert(`Move to: ${locationName}\n\nIn production, this would call:\nPATCH /goapis/api/v1/ordline/{id}/move\nwith location_id and complete_schedule value`);
+                    // Close dropdown
+                    this.closest('.move-dropdown-menu, .wo-list-move-dropdown-menu').classList.remove('show');
+                });
+            }
+        });
+    </script>
 </body>
 </html>
 
