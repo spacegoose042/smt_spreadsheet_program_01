@@ -3776,7 +3776,6 @@ def get_wire_harness_ordlines(
     try:
         params = {
             "preshared_token": CETEC_CONFIG["token"],
-            "transcode": "SA,SN",  # Build orders only
             "rows": "1000"
         }
         
