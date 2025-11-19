@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Work Order Move Interface - Mockup</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            margin-bottom: 30px;
+            color: #333;
+        }
+
+        h2 {
+            margin: 40px 0 20px;
+            color: #555;
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 10px;
+        }
+
+        /* KANBAN STYLE */
+        .kanban-board {
+            display: flex;
+            gap: 16px;
+            overflow-x: auto;
+            padding-bottom: 20px;
+            min-height: 600px;
+        }
+
+        .kanban-column {
+            flex: 0 0 320px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            max-height: 85vh;
+        }
+
+        .kanban-column-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px;
+            border-radius: 8px 8px 0 0;
+            font-weight: 600;
+            font-size: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .kanban-column-header.wh-wire { background: linear-gradient(135deg, #fde68a 0%, #f59e0b 100%); }
+        .kanban-column-header.wh-terminating { background: linear-gradient(135deg, #bbf7d0 0%, #10b981 100%); }
+        .kanban-column-header.wh-assembly { background: linear-gradient(135deg, #bfdbfe 0%, #3b82f6 100%); }
+        .kanban-column-header.wh-overmolding { background: linear-gradient(135deg, #e9d5ff 0%, #a78bfa 100%); }
+        .kanban-column-header.wh-qc { background: linear-gradient(135deg, #fca5a5 0%, #ef4444 100%); }
+
+        .kanban-count {
+            background: rgba(255,255,255,0.2);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 14px;
+        }
+
+        .kanban-column-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .wo-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-left: 4px solid #3b82f6;
+            border-radius: 6px;
+            padding: 12px;
+            cursor: move;
+            transition: all 0.2s;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        .wo-card:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }
+
+        .wo-card.priority-high {
+            border-left-color: #ef4444;
+            background: #fef2f2;
+        }
+
+        .wo-card.priority-medium {
+            border-left-color: #f59e0b;
+        }
+
+        .wo-card.past-due {
+            border-left-color: #dc2626;
+            background: #fee2e2;
+        }
+
+        .wo-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 8px;
+        }
+
+        .wo-number {
+            font-weight: 700;
+            font-size: 16px;
+            color: #111;
+        }
+
+        .wo-part {
+            font-size: 13px;
+            color: #6b7280;
+            margin-top: 2px;
+        }
+
+        .wo-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+
+        .wo-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            color: #6b7280;
+        }
+
+        .wo-meta-item strong {
+            color: #374151;
+        }
+
+        .wo-actions {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .btn-move-next {
+            width: 100%;
+            padding: 8px 16px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-move-next:hover {
+            background: #2563eb;
+        }
+
+        .btn-move-next:disabled {
+            background: #d1d5db;
+            cursor: not-allowed;
+        }
+
+        .wo-status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-active { background: #dbeafe; color: #1e40af; }
+        .status-hold { background: #fee2e2; color: #991b1b; }
+        .status-pending { background: #fef3c7; color: #92400e; }
+
+        /* CARD-BASED LIST STYLE */
+        .card-list-view {
+            display: grid;
+            gap: 16px;
+        }
+
+        .work-center-section {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .work-center-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px 20px;
+            font-weight: 600;
+            font-size: 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .work-center-body {
+            padding: 16px;
+            display: grid;
+            gap: 12px;
+        }
+
+        .wo-list-card {
+            display: grid;
+            grid-template-columns: 120px 200px 1fr auto;
+            gap: 16px;
+            align-items: center;
+            padding: 12px 16px;
+            border: 1px solid #e5e7eb;
+            border-left: 4px solid #3b82f6;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .wo-list-card:hover {
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .wo-list-card.priority-high { border-left-color: #ef4444; }
+        .wo-list-card.priority-medium { border-left-color: #f59e0b; }
+
+        .wo-list-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .wo-list-part {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .comparison-note {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 16px;
+            border-radius: 6px;
+            margin-top: 30px;
+        }
+
+        .comparison-note h3 {
+            margin-bottom: 8px;
+            color: #92400e;
+        }
+
+        .comparison-note ul {
+            margin-left: 20px;
+            color: #78350f;
+        }
+
+        .comparison-note li {
+            margin: 4px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Work Order Move Interface - Design Mockup</h1>
+
+        <h2>Option 1: Kanban Board Style (Drag & Drop Ready)</h2>
+        <div class="kanban-board">
+            <div class="kanban-column">
+                <div class="kanban-column-header wh-wire">
+                    <span>WH WIRE AND CABLE PROCESSING</span>
+                    <span class="kanban-count">4</span>
+                </div>
+                <div class="kanban-column-body">
+                    <div class="wo-card priority-high">
+                        <div class="wo-header">
+                            <div>
+                                <div class="wo-number">WO-12345</div>
+                                <div class="wo-part">PART-ABC-001</div>
+                            </div>
+                        </div>
+                        <div class="wo-meta">
+                            <div class="wo-meta-item">
+                                <strong>Due:</strong> Nov 15, 2025
+                            </div>
+                            <div class="wo-meta-item">
+                                <strong>Qty:</strong> 500
+                            </div>
+                            <span class="wo-status-badge status-active">Active</span>
+                        </div>
+                        <div class="wo-actions">
+                            <button class="btn-move-next">Move to Next →</button>
+                        </div>
+                    </div>
+
+                    <div class="wo-card past-due">
+                        <div class="wo-header">
+                            <div>
+                                <div class="wo-number">WO-12346</div>
+                                <div class="wo-part">PART-XYZ-002</div>
+                            </div>
+                        </div>
+                        <div class="wo-meta">
+                            <div class="wo-meta-item">
+                                <strong>Due:</strong> Nov 10, 2025 <span style="color: #dc2626;">(Past Due)</span>
+                            </div>
+                            <div class="wo-meta-item">
+                                <strong>Qty:</strong> 250
+                            </div>
+                            <span class="wo-status-badge status-hold">Hold</span>
+                        </div>
+                        <div class="wo-actions">
+                            <button class="btn-move-next">Move to Next →</button>
+                        </div>
+                    </div>
+
+                    <div class="wo-card">
+                        <div class="wo-header">
+                            <div>
+                                <div class="wo-number">WO-12347</div>
+                                <div class="wo-part">PART-DEF-003</div>
+                            </div>
+                        </div>
+                        <div class="wo-meta">
+                            <div class="wo-meta-item">
+                                <strong>Due:</strong> Nov 18, 2025
+                            </div>
+                            <div class="wo-meta-item">
+                                <strong>Qty:</strong> 1000
+                            </div>
+                            <span class="wo-status-badge status-pending">Pending</span>
+                        </div>
+                        <div class="wo-actions">
+                            <button class="btn-move-next">Move to Next →</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="kanban-column">
+                <div class="kanban-column-header wh-terminating">
+                    <span>WH TERMINATING</span>
+                    <span class="kanban-count">2</span>
+                </div>
+                <div class="kanban-column-body">
+                    <div class="wo-card priority-medium">
+                        <div class="wo-header">
+                            <div>
+                                <div class="wo-number">WO-12348</div>
+                                <div class="wo-part">PART-GHI-004</div>
+                            </div>
+                        </div>
+                        <div class="wo-meta">
+                            <div class="wo-meta-item">
+                                <strong>Due:</strong> Nov 16, 2025
+                            </div>
+                            <div class="wo-meta-item">
+                                <strong>Qty:</strong> 750
+                            </div>
+                            <span class="wo-status-badge status-active">Active</span>
+                        </div>
+                        <div class="wo-actions">
+                            <button class="btn-move-next">Move to Next →</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="kanban-column">
+                <div class="kanban-column-header wh-assembly">
+                    <span>WH SMALL ASSEMBLY</span>
+                    <span class="kanban-count">1</span>
+                </div>
+                <div class="kanban-column-body">
+                    <div class="wo-card">
+                        <div class="wo-header">
+                            <div>
+                                <div class="wo-number">WO-12349</div>
+                                <div class="wo-part">PART-JKL-005</div>
+                            </div>
+                        </div>
+                        <div class="wo-meta">
+                            <div class="wo-meta-item">
+                                <strong>Due:</strong> Nov 17, 2025
+                            </div>
+                            <div class="wo-meta-item">
+                                <strong>Qty:</strong> 300
+                            </div>
+                            <span class="wo-status-badge status-active">Active</span>
+                        </div>
+                        <div class="wo-actions">
+                            <button class="btn-move-next">Move to Next →</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="kanban-column">
+                <div class="kanban-column-header wh-overmolding">
+                    <span>WH OVERMOLDING</span>
+                    <span class="kanban-count">0</span>
+                </div>
+                <div class="kanban-column-body">
+                    <!-- Empty column -->
+                </div>
+            </div>
+
+            <div class="kanban-column">
+                <div class="kanban-column-header wh-qc">
+                    <span>WH QUALITY CONTROL</span>
+                    <span class="kanban-count">1</span>
+                </div>
+                <div class="kanban-column-body">
+                    <div class="wo-card">
+                        <div class="wo-header">
+                            <div>
+                                <div class="wo-number">WO-12350</div>
+                                <div class="wo-part">PART-MNO-006</div>
+                            </div>
+                        </div>
+                        <div class="wo-meta">
+                            <div class="wo-meta-item">
+                                <strong>Due:</strong> Nov 19, 2025
+                            </div>
+                            <div class="wo-meta-item">
+                                <strong>Qty:</strong> 200
+                            </div>
+                            <span class="wo-status-badge status-active">Active</span>
+                        </div>
+                        <div class="wo-actions">
+                            <button class="btn-move-next" disabled>Complete</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h2>Option 2: Card-Based List Style (Current Schedule Page Style)</h2>
+        <div class="card-list-view">
+            <div class="work-center-section">
+                <div class="work-center-header wh-wire">
+                    <span>WH WIRE AND CABLE PROCESSING</span>
+                    <span>4 Work Orders</span>
+                </div>
+                <div class="work-center-body">
+                    <div class="wo-list-card priority-high">
+                        <div class="wo-list-info">
+                            <div class="wo-number">WO-12345</div>
+                            <div class="wo-list-part">PART-ABC-001</div>
+                        </div>
+                        <div>
+                            <div><strong>Due:</strong> Nov 15, 2025</div>
+                            <div><strong>Qty:</strong> 500</div>
+                        </div>
+                        <div>
+                            <span class="wo-status-badge status-active">Active</span>
+                            <div style="margin-top: 4px; font-size: 12px; color: #6b7280;">Next: WH TERMINATING</div>
+                        </div>
+                        <button class="btn-move-next" style="width: auto; padding: 8px 20px;">Move to Next →</button>
+                    </div>
+
+                    <div class="wo-list-card past-due">
+                        <div class="wo-list-info">
+                            <div class="wo-number">WO-12346</div>
+                            <div class="wo-list-part">PART-XYZ-002</div>
+                        </div>
+                        <div>
+                            <div><strong>Due:</strong> Nov 10, 2025 <span style="color: #dc2626;">(Past Due)</span></div>
+                            <div><strong>Qty:</strong> 250</div>
+                        </div>
+                        <div>
+                            <span class="wo-status-badge status-hold">Hold</span>
+                            <div style="margin-top: 4px; font-size: 12px; color: #6b7280;">Next: WH TERMINATING</div>
+                        </div>
+                        <button class="btn-move-next" style="width: auto; padding: 8px 20px;">Move to Next →</button>
+                    </div>
+
+                    <div class="wo-list-card">
+                        <div class="wo-list-info">
+                            <div class="wo-number">WO-12347</div>
+                            <div class="wo-list-part">PART-DEF-003</div>
+                        </div>
+                        <div>
+                            <div><strong>Due:</strong> Nov 18, 2025</div>
+                            <div><strong>Qty:</strong> 1000</div>
+                        </div>
+                        <div>
+                            <span class="wo-status-badge status-pending">Pending</span>
+                            <div style="margin-top: 4px; font-size: 12px; color: #6b7280;">Next: WH TERMINATING</div>
+                        </div>
+                        <button class="btn-move-next" style="width: auto; padding: 8px 20px;">Move to Next →</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="comparison-note">
+            <h3>Design Comparison Notes:</h3>
+            <ul>
+                <li><strong>Kanban Style:</strong> Visual flow from left to right, shows bottleneck columns easily, great for production floor screens, supports drag-and-drop in future</li>
+                <li><strong>Card List Style:</strong> More compact, easier to scan many work orders, familiar from current schedule page, better for detailed information display</li>
+                <li><strong>Common Features:</strong> Both show current location, next location, priority/status indicators, and "Move to Next" button (disabled when at final step)</li>
+                <li><strong>Move Behavior:</strong> Button click → API call with <code>complete_schedule: true</code> → Card moves to next column or disappears if complete → Auto-refresh</li>
+                <li><strong>User ID:</strong> Automatically pulled from logged-in user's session for audit trail in CETEC</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
+
