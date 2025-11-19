@@ -3799,39 +3799,61 @@ def get_wire_harness_ordlines(
                     ordlines = data[key]
                     break
         
+        print(f"Found {len(ordlines)} ordlines from CETEC")
+        
         # Filter to Wire Harness (prodline 300) and map to work orders
         work_orders = []
         for ordline in ordlines:
-            # Check if it's Wire Harness - check prodline, production_line_description, or work_location
-            prodline = str(ordline.get("prodline") or ordline.get("production_line") or "")
-            work_location = str(ordline.get("work_location") or ordline.get("current_location") or "")
-            prod_line_desc = str(ordline.get("production_line_description") or "")
-            
-            # Filter to Wire Harness (300) or WH locations
-            is_wire_harness = (
-                prodline == "300" or
-                work_location.upper().startswith("WH ") or
-                prod_line_desc.upper().startswith("WH ") or
-                "WIRE HARNESS" in prod_line_desc.upper()
-            )
-            
-            if is_wire_harness:
-                # Resolve work_location name if it's an ID
-                work_location_id = ordline.get("work_location") or ordline.get("work_location_id")
-                work_location_name = work_location if not str(work_location).isdigit() else None
+            try:
+                # Check if it's Wire Harness - check prodline, production_line_description, or work_location
+                prodline = str(ordline.get("prodline") or ordline.get("production_line") or "")
+                work_location_raw = ordline.get("work_location") or ordline.get("current_location")
+                work_location = str(work_location_raw) if work_location_raw is not None else ""
+                prod_line_desc = str(ordline.get("production_line_description") or "")
                 
-                work_orders.append({
-                    "ordline_id": ordline.get("ordline_id") or ordline.get("id"),
-                    "order_number": ordline.get("ordernum") or ordline.get("order_number"),
-                    "line_number": ordline.get("lineitem") or ordline.get("line_number") or ordline.get("line_item"),
-                    "part": ordline.get("prcpart") or ordline.get("part"),
-                    "work_location_id": work_location_id,
-                    "work_location": work_location_name or work_location_id,
-                    "current_location": work_location_name or work_location_id,
-                    "prod_status": ordline.get("prod_stats") or ordline.get("prod_status") or ordline.get("production_status"),
-                    "priority_rank": ordline.get("priority_rank") or 0,
-                    "scheduled_location": ordline.get("scheduled_location") or ordline.get("production_line_description"),
-                })
+                # Filter to Wire Harness (300) or WH locations
+                is_wire_harness = (
+                    prodline == "300" or
+                    (work_location and work_location.upper().startswith("WH ")) or
+                    (prod_line_desc and prod_line_desc.upper().startswith("WH ")) or
+                    (prod_line_desc and "WIRE HARNESS" in prod_line_desc.upper())
+                )
+                
+                if is_wire_harness:
+                    ordline_id = ordline.get("ordline_id") or ordline.get("id")
+                    if not ordline_id:
+                        continue  # Skip if no ordline_id
+                    
+                    # Resolve work_location name if it's an ID
+                    work_location_id = ordline.get("work_location") or ordline.get("work_location_id")
+                    
+                    # Check if work_location is an ID (numeric string) or already a name
+                    work_location_name = None
+                    if work_location_id:
+                        work_location_str = str(work_location_id)
+                        if work_location_str.replace("-", "").replace(".", "").isdigit():
+                            # It's an ID, will resolve later
+                            work_location_name = None
+                        else:
+                            # It's already a name
+                            work_location_name = work_location_str
+                    
+                    work_orders.append({
+                        "ordline_id": ordline_id,
+                        "order_number": str(ordline.get("ordernum") or ordline.get("order_number") or ""),
+                        "line_number": str(ordline.get("lineitem") or ordline.get("line_number") or ordline.get("line_item") or ""),
+                        "part": str(ordline.get("prcpart") or ordline.get("part") or ""),
+                        "work_location_id": work_location_id,
+                        "work_location": work_location_name or work_location_id or "",
+                        "current_location": work_location_name or work_location_id or "",
+                        "prod_status": str(ordline.get("prod_stats") or ordline.get("prod_status") or ordline.get("production_status") or ""),
+                        "priority_rank": int(ordline.get("priority_rank") or 0),
+                        "scheduled_location": str(ordline.get("scheduled_location") or ordline.get("production_line_description") or ""),
+                    })
+            except Exception as e:
+                print(f"Error processing ordline: {str(e)}")
+                print(f"Ordline data: {ordline}")
+                continue  # Skip this ordline and continue
         
         # Resolve work_location IDs to names using ordlinestatus list
         try:
@@ -3854,11 +3876,21 @@ def get_wire_harness_ordlines(
                 
                 # Map work_location IDs to names
                 for wo in work_orders:
-                    if wo["work_location_id"] and str(wo["work_location_id"]).isdigit():
-                        location_name = id_to_name.get(int(wo["work_location_id"]))
-                        if location_name:
-                            wo["work_location"] = location_name
-                            wo["current_location"] = location_name
+                    work_loc_id = wo.get("work_location_id")
+                    if work_loc_id:
+                        try:
+                            work_loc_str = str(work_loc_id)
+                            # Check if it's a numeric ID
+                            if work_loc_str.replace("-", "").replace(".", "").isdigit():
+                                location_id = int(float(work_loc_str))
+                                location_name = id_to_name.get(location_id)
+                                if location_name:
+                                    wo["work_location"] = location_name
+                                    wo["current_location"] = location_name
+                        except (ValueError, TypeError) as e:
+                            # Not a numeric ID, might already be a name
+                            print(f"Could not parse work_location_id as int: {work_loc_id}")
+                            continue
         except Exception as e:
             print(f"Error resolving location names: {str(e)}")
         
@@ -3867,10 +3899,26 @@ def get_wire_harness_ordlines(
         return work_orders
         
     except requests.exceptions.RequestException as e:
-        print(f"CETEC API error: {str(e)}")
+        error_msg = str(e)
+        print(f"CETEC API error: {error_msg}")
+        if hasattr(e, 'response') and e.response is not None:
+            try:
+                error_body = e.response.text
+                print(f"CETEC API error response: {error_body}")
+            except:
+                pass
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to fetch from CETEC: {str(e)}"
+            detail=f"Failed to fetch from CETEC: {error_msg}"
+        )
+    except Exception as e:
+        error_msg = str(e)
+        import traceback
+        print(f"Unexpected error in get_wire_harness_ordlines: {error_msg}")
+        print(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {error_msg}"
         )
 
 
