@@ -98,58 +98,93 @@ export default function WorkOrderMove() {
     const cols = scheduleData.results[0].data.data.cols || []
 
     const colMap = {}
+    
+    // Debug: log all columns to help identify the current location field
+    if (cols.length > 0 && process.env.NODE_ENV === 'development') {
+      console.log('Available columns:', cols.map((col, idx) => ({
+        idx,
+        display_name: col.display_name,
+        name: col.name,
+        base_type: col.base_type
+      })))
+    }
+    
     cols.forEach((col, idx) => {
       const displayName = (col.display_name || '').toLowerCase()
       const name = (col.name || '').toLowerCase()
       const combined = `${displayName} ${name}`
 
+      // Ordline ID
       if ((displayName.includes('ordline') || displayName.includes('line')) && name.includes('id') && colMap.ordlineId === undefined) {
         colMap.ordlineId = idx
       }
-      if ((displayName.includes('scheduled location') || displayName.includes('ordline status')) && colMap.workcenter === undefined) {
+      // Workcenter (Scheduled Location) - first description field
+      else if ((displayName.includes('scheduled location') || displayName.includes('ordline status') || 
+               (name.includes('description') && !displayName.includes('current'))) && colMap.workcenter === undefined) {
         colMap.workcenter = idx
       }
-      if (combined.includes('order') && (combined.includes('ordernum') || combined.includes('order num'))) {
+      // Order Number
+      else if (combined.includes('order') && (combined.includes('ordernum') || combined.includes('order num'))) {
         colMap.order = idx
       }
-      if (combined.includes('line') && (combined.includes('lineitem') || combined.includes('line item'))) {
+      // Line Item
+      else if (combined.includes('line') && (combined.includes('lineitem') || combined.includes('line item'))) {
         colMap.line = idx
       }
-      if (combined.includes('prcpart') || combined.includes('prc part')) {
-        colMap.part = idx
+      // Part Number
+      else if (combined.includes('prcpart') || combined.includes('prc part') || combined.includes('part')) {
+        if (colMap.part === undefined) colMap.part = idx
       }
-      if (displayName.includes('current location')) {
+      // Current Location - look for explicit current location field or work_location
+      else if (displayName.includes('current location') || 
+               displayName.includes('work location') ||
+               name === 'work_location' ||
+               (name.includes('description') && colMap.workcenter !== undefined && colMap.currentLocation === undefined && displayName.includes('current'))) {
         colMap.currentLocation = idx
       }
-      if (combined.includes('production status') || combined.includes('prod status')) {
-        colMap.prodStatus = idx
+      // Production Status
+      else if (combined.includes('production status') || combined.includes('prod status') || 
+               (name === 'name_2' || name === 'name')) {
+        if (colMap.prodStatus === undefined) colMap.prodStatus = idx
       }
     })
+    
+    // Debug: log the column mapping
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Column mapping:', colMap)
+    }
 
-    return rows.map(row => ({
-      ordlineId: row[colMap.ordlineId],
-      orderNumber: row[colMap.order] || '',
-      lineNumber: row[colMap.line] || '',
-      part: row[colMap.part] || '',
-      workcenter: row[colMap.workcenter] || 'Unknown',
-      currentLocation: row[colMap.currentLocation] || row[colMap.workcenter] || 'Unknown',
-      prodStatus: row[colMap.prodStatus] || '',
-      rawRow: row,
-    })).filter(wo => wo.ordlineId)
+    return rows.map(row => {
+      const workcenter = row[colMap.workcenter] || 'Unknown'
+      const currentLocation = row[colMap.currentLocation] || workcenter
+      
+      return {
+        ordlineId: row[colMap.ordlineId],
+        orderNumber: row[colMap.order] || '',
+        lineNumber: row[colMap.line] || '',
+        part: row[colMap.part] || '',
+        workcenter: workcenter,
+        currentLocation: currentLocation,
+        prodStatus: row[colMap.prodStatus] || '',
+        rawRow: row,
+        colMap: colMap // Include for debugging
+      }
+    }).filter(wo => wo.ordlineId)
   }, [scheduleData])
 
-  // Group by workcenter
+  // Group by current location (not scheduled workcenter)
   const workcenters = useMemo(() => {
     const grouped = {}
     workorders.forEach(wo => {
-      const wc = wo.workcenter || 'Unknown'
-      if (!grouped[wc]) {
-        grouped[wc] = {
-          name: wc,
+      // Use current location for grouping, fallback to workcenter if not available
+      const location = wo.currentLocation || wo.workcenter || 'Unknown'
+      if (!grouped[location]) {
+        grouped[location] = {
+          name: location,
           workorders: []
         }
       }
-      grouped[wc].workorders.push(wo)
+      grouped[location].workorders.push(wo)
     })
 
     return Object.values(grouped)
