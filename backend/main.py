@@ -3766,6 +3766,76 @@ def get_cetec_ordline_statuses(
         )
 
 
+@app.patch("/api/cetec/ordline/{ordline_id}/move")
+def move_ordline_to_location(
+    ordline_id: int,
+    move_data: dict = Body(...),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Move an ordline to a new location using Cetec API
+    Requires location_id or ordline_map_id, optional complete_schedule flag and user_id
+    """
+    try:
+        params = {
+            "preshared_token": CETEC_CONFIG["token"]
+        }
+        
+        # Get user_id from request body or current user
+        user_id = move_data.get("userId") or current_user.id
+        
+        if user_id:
+            params["user_id"] = str(user_id)
+        
+        # Build request body
+        body = {}
+        
+        if "locationId" in move_data:
+            body["location_id"] = move_data["locationId"]
+        elif "ordlineMapId" in move_data:
+            body["ordline_map_id"] = move_data["ordlineMapId"]
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Either location_id or ordline_map_id is required"
+            )
+        
+        if "completeSchedule" in move_data:
+            body["complete_schedule"] = bool(move_data["completeSchedule"])
+        
+        if "ordlineStatus" in move_data:
+            body["ordline_status"] = move_data["ordlineStatus"]
+        
+        url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordline/{ordline_id}/move"
+        
+        print(f"Moving ordline {ordline_id} to location: {body}")
+        print(f"URL: {url}")
+        print(f"Params: {params}")
+        
+        response = requests.patch(url, json=body, params=params, timeout=30)
+        
+        print(f"Cetec move response status: {response.status_code}")
+        
+        if response.status_code == 200:
+            return {"success": True, "message": "Work order moved successfully", "data": response.json()}
+        else:
+            error_text = response.text
+            print(f"Cetec move error response: {error_text}")
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"Failed to move work order: {error_text}"
+            )
+        
+    except HTTPException:
+        raise
+    except requests.exceptions.RequestException as e:
+        print(f"Cetec API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to move work order: {str(e)}"
+        )
+
+
 @app.get("/api/cetec/part/{prcpart}")
 def get_cetec_part(
     prcpart: str,

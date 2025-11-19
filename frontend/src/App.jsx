@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
-import { Home, Calendar, Settings, CheckCircle, List, LayoutGrid, LogOut, User as UserIcon, Users, Clock, Timer, Tag, ChevronDown, Key, AlertTriangle, Database, RefreshCw, BarChart3 } from 'lucide-react'
+import { Home, Calendar, Settings, CheckCircle, List, LayoutGrid, LogOut, User as UserIcon, Users, Clock, Timer, Tag, ChevronDown, Key, AlertTriangle, Database, RefreshCw, BarChart3, Move } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import Login from './pages/Login'
@@ -25,6 +25,7 @@ import MetabaseDashboardExplorer from './pages/MetabaseDashboardExplorer'
 import WireHarnessDashboard from './pages/WireHarnessDashboard'
 import WireHarnessSchedule from './pages/WireHarnessSchedule'
 import WireHarnessTimeline from './pages/WireHarnessTimeline'
+import WorkOrderMove from './pages/WorkOrderMove'
 import './App.css'
 
 const SETTINGS_ROLES = ['admin', 'manager', 'scheduler']
@@ -40,7 +41,7 @@ function ProtectedRoute({ children, requireAuth = true, allowedRoles }) {
     return <Navigate to="/login" />
   }
 
-  if (allowedRoles && (!user || !allowedRoles.includes(user.role))) {
+  if (allowedRoles && (!user || !allowedRoles.map(r => r.toLowerCase()).includes(user.role?.toLowerCase()))) {
     return <Navigate to="/" replace />
   }
 
@@ -59,7 +60,7 @@ function Navigation() {
   
   const isActive = (path) => location.pathname === path
   const surfaceMountPaths = ['/', '/schedule', '/visual', '/lines', '/completed', '/issues', '/progress']
-  const wireHarnessPaths = ['/wire-harness-dashboard', '/wire-harness', '/wire-harness-timeline']
+  const wireHarnessPaths = ['/wire-harness-dashboard', '/wire-harness', '/wire-harness-timeline', '/work-order-move']
   const isSurfaceMountActive = surfaceMountPaths.includes(location.pathname)
   const isWireHarnessActive = wireHarnessPaths.includes(location.pathname)
   const isSettingsActive = ['/capacity', '/shifts', '/users', '/statuses', '/issue-types', '/resolution-types', '/cetec-import', '/cetec-sync-report', '/prodline-explorer', '/metabase-explorer', '/settings'].includes(location.pathname)
@@ -193,6 +194,16 @@ function Navigation() {
                   <Calendar size={16} />
                   Timeline
                 </Link>
+                {user && (user.role?.toUpperCase() === 'ADMIN' || user.role?.toUpperCase() === 'MANAGER') && (
+                  <Link
+                    to="/work-order-move"
+                    className={isActive('/work-order-move') ? 'active' : ''}
+                    onClick={() => setWireHarnessOpen(false)}
+                  >
+                    <Move size={16} />
+                    Move Work Orders
+                  </Link>
+                )}
               </div>
             )}
           </div>
@@ -369,6 +380,7 @@ function AppContent() {
           <Route path="/wire-harness/schedule" element={<ProtectedRoute><WireHarnessSchedule /></ProtectedRoute>} />
           <Route path="/wire-harness-timeline" element={<ProtectedRoute><WireHarnessTimeline /></ProtectedRoute>} />
           <Route path="/wire-harness/timeline" element={<ProtectedRoute><WireHarnessTimeline /></ProtectedRoute>} />
+          <Route path="/work-order-move" element={<ProtectedRoute allowedRoles={['admin', 'manager']}><WorkOrderMove /></ProtectedRoute>} />
           <Route path="/capacity" element={<ProtectedRoute allowedRoles={SETTINGS_ROLES}><CapacityCalendar /></ProtectedRoute>} />
           <Route path="/shifts" element={<ProtectedRoute allowedRoles={SETTINGS_ROLES}><ShiftConfiguration /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute allowedRoles={['admin']}><UserManagement /></ProtectedRoute>} />
