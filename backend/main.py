@@ -3766,6 +3766,114 @@ def get_cetec_ordline_statuses(
         )
 
 
+@app.get("/api/cetec/wire-harness/ordlines")
+def get_wire_harness_ordlines(
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Fetch Wire Harness (prodline 300) ordlines with current location (work_location) from CETEC
+    """
+    try:
+        params = {
+            "preshared_token": CETEC_CONFIG["token"],
+            "transcode": "SA,SN",  # Build orders only
+            "rows": "1000"
+        }
+        
+        url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines/list"
+        
+        print(f"Fetching Wire Harness ordlines from CETEC: {url}")
+        
+        response = requests.get(url, params=params, timeout=30)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        # Extract ordlines array
+        ordlines = []
+        if isinstance(data, list):
+            ordlines = data
+        elif isinstance(data, dict):
+            for key in ["data", "rows", "ordlines", "entries"]:
+                if key in data and isinstance(data[key], list):
+                    ordlines = data[key]
+                    break
+        
+        # Filter to Wire Harness (prodline 300) and map to work orders
+        work_orders = []
+        for ordline in ordlines:
+            # Check if it's Wire Harness - check prodline, production_line_description, or work_location
+            prodline = str(ordline.get("prodline") or ordline.get("production_line") or "")
+            work_location = str(ordline.get("work_location") or ordline.get("current_location") or "")
+            prod_line_desc = str(ordline.get("production_line_description") or "")
+            
+            # Filter to Wire Harness (300) or WH locations
+            is_wire_harness = (
+                prodline == "300" or
+                work_location.upper().startswith("WH ") or
+                prod_line_desc.upper().startswith("WH ") or
+                "WIRE HARNESS" in prod_line_desc.upper()
+            )
+            
+            if is_wire_harness:
+                # Resolve work_location name if it's an ID
+                work_location_id = ordline.get("work_location") or ordline.get("work_location_id")
+                work_location_name = work_location if not str(work_location).isdigit() else None
+                
+                work_orders.append({
+                    "ordline_id": ordline.get("ordline_id") or ordline.get("id"),
+                    "order_number": ordline.get("ordernum") or ordline.get("order_number"),
+                    "line_number": ordline.get("lineitem") or ordline.get("line_number") or ordline.get("line_item"),
+                    "part": ordline.get("prcpart") or ordline.get("part"),
+                    "work_location_id": work_location_id,
+                    "work_location": work_location_name or work_location_id,
+                    "current_location": work_location_name or work_location_id,
+                    "prod_status": ordline.get("prod_stats") or ordline.get("prod_status") or ordline.get("production_status"),
+                    "priority_rank": ordline.get("priority_rank") or 0,
+                    "scheduled_location": ordline.get("scheduled_location") or ordline.get("production_line_description"),
+                })
+        
+        # Resolve work_location IDs to names using ordlinestatus list
+        try:
+            status_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlinestatus/list"
+            status_response = requests.get(
+                status_url,
+                params={"preshared_token": CETEC_CONFIG["token"], "rows": "1000"},
+                timeout=30
+            )
+            if status_response.status_code == 200:
+                status_data = status_response.json()
+                status_list = status_data if isinstance(status_data, list) else (status_data.get("data") or [])
+                
+                id_to_name = {}
+                for status in status_list:
+                    status_id = status.get("id") or status.get("status_id")
+                    status_name = status.get("description") or status.get("name")
+                    if status_id and status_name:
+                        id_to_name[int(status_id)] = str(status_name)
+                
+                # Map work_location IDs to names
+                for wo in work_orders:
+                    if wo["work_location_id"] and str(wo["work_location_id"]).isdigit():
+                        location_name = id_to_name.get(int(wo["work_location_id"]))
+                        if location_name:
+                            wo["work_location"] = location_name
+                            wo["current_location"] = location_name
+        except Exception as e:
+            print(f"Error resolving location names: {str(e)}")
+        
+        print(f"Returning {len(work_orders)} Wire Harness work orders")
+        
+        return work_orders
+        
+    except requests.exceptions.RequestException as e:
+        print(f"CETEC API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch from CETEC: {str(e)}"
+        )
+
+
 @app.patch("/api/cetec/ordline/{ordline_id}/move")
 def move_ordline_to_location(
     ordline_id: int,

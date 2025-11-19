@@ -141,6 +141,8 @@ export const getCetecOrdlineWorkProgress = (ordlineId) =>
   api.get(`/api/cetec/ordline/${ordlineId}/work_progress`)
 export const getCetecOrdlineStatuses = () =>
   api.get('/api/cetec/ordlinestatus/list')
+export const getWireHarnessOrdlines = () =>
+  api.get('/api/cetec/wire-harness/ordlines')
 export const moveOrdlineToLocation = (ordlineId, data) =>
   api.patch(`/api/cetec/ordline/${ordlineId}/move`, data)
 export const getCetecPart = (prcpart) =>

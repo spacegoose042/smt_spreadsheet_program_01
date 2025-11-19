@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getWireHarnessSchedule, getCetecOrdlineStatuses, getCetecLocationMaps, moveOrdlineToLocation } from '../api'
+import { getWireHarnessOrdlines, getCetecOrdlineStatuses, moveOrdlineToLocation } from '../api'
 import { Calendar, Package, RefreshCw, Loader2, MapPin, CheckCircle2, AlertCircle, Filter, X, ChevronDown } from 'lucide-react'
 import { format, parseISO, startOfDay, endOfDay } from 'date-fns'
 
@@ -58,11 +58,11 @@ export default function WorkOrderMove() {
   const [movingWo, setMovingWo] = useState(null)
   const queryClient = useQueryClient()
 
-  // Fetch work orders
-  const { data: scheduleData, isLoading, error, refetch } = useQuery({
-    queryKey: ['wireHarnessScheduleForMove'],
+  // Fetch work orders directly from CETEC with current location
+  const { data: workordersData, isLoading, error, refetch } = useQuery({
+    queryKey: ['wireHarnessOrdlinesForMove'],
     queryFn: async () => {
-      const response = await getWireHarnessSchedule('300')
+      const response = await getWireHarnessOrdlines()
       setLastRefresh(new Date())
       return response.data || response
     },
@@ -90,87 +90,22 @@ export default function WorkOrderMove() {
     staleTime: 10 * 60 * 1000, // Cache for 10 minutes
   })
 
-  // Process work orders
+  // Process work orders - data comes directly from CETEC with proper fields
   const workorders = useMemo(() => {
-    if (!scheduleData?.results?.[0]?.data?.data?.rows) return []
-
-    const rows = scheduleData.results[0].data.data.rows
-    const cols = scheduleData.results[0].data.data.cols || []
-
-    const colMap = {}
+    if (!workordersData || !Array.isArray(workordersData)) return []
     
-    // Debug: log all columns to help identify the current location field
-    if (cols.length > 0 && process.env.NODE_ENV === 'development') {
-      console.log('Available columns:', cols.map((col, idx) => ({
-        idx,
-        display_name: col.display_name,
-        name: col.name,
-        base_type: col.base_type
-      })))
-    }
-    
-    cols.forEach((col, idx) => {
-      const displayName = (col.display_name || '').toLowerCase()
-      const name = (col.name || '').toLowerCase()
-      const combined = `${displayName} ${name}`
-
-      // Ordline ID
-      if ((displayName.includes('ordline') || displayName.includes('line')) && name.includes('id') && colMap.ordlineId === undefined) {
-        colMap.ordlineId = idx
-      }
-      // Workcenter (Scheduled Location) - first description field
-      else if ((displayName.includes('scheduled location') || displayName.includes('ordline status') || 
-               (name.includes('description') && !displayName.includes('current'))) && colMap.workcenter === undefined) {
-        colMap.workcenter = idx
-      }
-      // Order Number
-      else if (combined.includes('order') && (combined.includes('ordernum') || combined.includes('order num'))) {
-        colMap.order = idx
-      }
-      // Line Item
-      else if (combined.includes('line') && (combined.includes('lineitem') || combined.includes('line item'))) {
-        colMap.line = idx
-      }
-      // Part Number
-      else if (combined.includes('prcpart') || combined.includes('prc part') || combined.includes('part')) {
-        if (colMap.part === undefined) colMap.part = idx
-      }
-      // Current Location - look for explicit current location field or work_location
-      else if (displayName.includes('current location') || 
-               displayName.includes('work location') ||
-               name === 'work_location' ||
-               (name.includes('description') && colMap.workcenter !== undefined && colMap.currentLocation === undefined && displayName.includes('current'))) {
-        colMap.currentLocation = idx
-      }
-      // Production Status
-      else if (combined.includes('production status') || combined.includes('prod status') || 
-               (name === 'name_2' || name === 'name')) {
-        if (colMap.prodStatus === undefined) colMap.prodStatus = idx
-      }
-    })
-    
-    // Debug: log the column mapping
-    if (process.env.NODE_ENV === 'development') {
-      console.log('Column mapping:', colMap)
-    }
-
-    return rows.map(row => {
-      const workcenter = row[colMap.workcenter] || 'Unknown'
-      const currentLocation = row[colMap.currentLocation] || workcenter
-      
-      return {
-        ordlineId: row[colMap.ordlineId],
-        orderNumber: row[colMap.order] || '',
-        lineNumber: row[colMap.line] || '',
-        part: row[colMap.part] || '',
-        workcenter: workcenter,
-        currentLocation: currentLocation,
-        prodStatus: row[colMap.prodStatus] || '',
-        rawRow: row,
-        colMap: colMap // Include for debugging
-      }
-    }).filter(wo => wo.ordlineId)
-  }, [scheduleData])
+    return workordersData.map(wo => ({
+      ordlineId: wo.ordline_id || wo.ordlineId,
+      orderNumber: wo.order_number || wo.orderNumber || '',
+      lineNumber: wo.line_number || wo.lineNumber || '',
+      part: wo.part || '',
+      workcenter: wo.scheduled_location || wo.workcenter || 'Unknown',
+      currentLocation: wo.current_location || wo.work_location || wo.scheduled_location || 'Unknown',
+      prodStatus: wo.prod_status || wo.prodStatus || '',
+      priority: wo.priority_rank || wo.priority || 0,
+      workLocationId: wo.work_location_id || wo.workLocationId
+    })).filter(wo => wo.ordlineId)
+  }, [workordersData])
 
   // Group by current location (not scheduled workcenter)
   const workcenters = useMemo(() => {
@@ -214,7 +149,7 @@ export default function WorkOrderMove() {
       return await moveOrdlineToLocation(ordlineId, { locationId, ordlineMapId, completeSchedule, userId })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['wireHarnessScheduleForMove'])
+      queryClient.invalidateQueries(['wireHarnessOrdlinesForMove'])
       setOpenDropdowns({})
       setMovingWo(null)
     },
