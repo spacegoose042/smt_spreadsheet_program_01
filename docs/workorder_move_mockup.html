@@ -161,6 +161,27 @@
             border-top: 1px solid #e5e7eb;
         }
 
+        .complete-schedule-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .complete-schedule-option input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: #3b82f6;
+        }
+
+        .complete-schedule-option label {
+            cursor: pointer;
+            user-select: none;
+        }
+
         .btn-move-next {
             width: 100%;
             padding: 8px 16px;
@@ -228,7 +249,7 @@
 
         .wo-list-card {
             display: grid;
-            grid-template-columns: 120px 200px 1fr auto;
+            grid-template-columns: 120px 200px 1fr auto auto;
             gap: 16px;
             align-items: center;
             padding: 12px 16px;
@@ -236,6 +257,33 @@
             border-left: 4px solid #3b82f6;
             border-radius: 6px;
             transition: all 0.2s;
+        }
+
+        .wo-list-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: flex-end;
+        }
+
+        .wo-list-complete-option {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: #6b7280;
+        }
+
+        .wo-list-complete-option input[type="checkbox"] {
+            width: 14px;
+            height: 14px;
+            cursor: pointer;
+            accent-color: #3b82f6;
+        }
+
+        .wo-list-complete-option label {
+            cursor: pointer;
+            user-select: none;
         }
 
         .wo-list-card:hover {
@@ -308,6 +356,10 @@
                             <span class="wo-status-badge status-active">Active</span>
                         </div>
                         <div class="wo-actions">
+                            <div class="complete-schedule-option">
+                                <input type="checkbox" id="complete-12345" checked>
+                                <label for="complete-12345">Complete schedule entry</label>
+                            </div>
                             <button class="btn-move-next">Move to Next →</button>
                         </div>
                     </div>
@@ -329,6 +381,10 @@
                             <span class="wo-status-badge status-hold">Hold</span>
                         </div>
                         <div class="wo-actions">
+                            <div class="complete-schedule-option">
+                                <input type="checkbox" id="complete-12346" checked>
+                                <label for="complete-12346">Complete schedule entry</label>
+                            </div>
                             <button class="btn-move-next">Move to Next →</button>
                         </div>
                     </div>
@@ -350,6 +406,10 @@
                             <span class="wo-status-badge status-pending">Pending</span>
                         </div>
                         <div class="wo-actions">
+                            <div class="complete-schedule-option">
+                                <input type="checkbox" id="complete-12347" checked>
+                                <label for="complete-12347">Complete schedule entry</label>
+                            </div>
                             <button class="btn-move-next">Move to Next →</button>
                         </div>
                     </div>
@@ -379,6 +439,10 @@
                             <span class="wo-status-badge status-active">Active</span>
                         </div>
                         <div class="wo-actions">
+                            <div class="complete-schedule-option">
+                                <input type="checkbox" id="complete-12348" checked>
+                                <label for="complete-12348">Complete schedule entry</label>
+                            </div>
                             <button class="btn-move-next">Move to Next →</button>
                         </div>
                     </div>
@@ -408,6 +472,10 @@
                             <span class="wo-status-badge status-active">Active</span>
                         </div>
                         <div class="wo-actions">
+                            <div class="complete-schedule-option">
+                                <input type="checkbox" id="complete-12349" checked>
+                                <label for="complete-12349">Complete schedule entry</label>
+                            </div>
                             <button class="btn-move-next">Move to Next →</button>
                         </div>
                     </div>
@@ -475,7 +543,13 @@
                             <span class="wo-status-badge status-active">Active</span>
                             <div style="margin-top: 4px; font-size: 12px; color: #6b7280;">Next: WH TERMINATING</div>
                         </div>
-                        <button class="btn-move-next" style="width: auto; padding: 8px 20px;">Move to Next →</button>
+                        <div class="wo-list-actions">
+                            <div class="wo-list-complete-option">
+                                <input type="checkbox" id="list-complete-12345" checked>
+                                <label for="list-complete-12345">Complete entry</label>
+                            </div>
+                            <button class="btn-move-next" style="width: auto; padding: 8px 20px;">Move to Next →</button>
+                        </div>
                     </div>
 
                     <div class="wo-list-card past-due">
@@ -491,7 +565,13 @@
                             <span class="wo-status-badge status-hold">Hold</span>
                             <div style="margin-top: 4px; font-size: 12px; color: #6b7280;">Next: WH TERMINATING</div>
                         </div>
-                        <button class="btn-move-next" style="width: auto; padding: 8px 20px;">Move to Next →</button>
+                        <div class="wo-list-actions">
+                            <div class="wo-list-complete-option">
+                                <input type="checkbox" id="list-complete-12346" checked>
+                                <label for="list-complete-12346">Complete entry</label>
+                            </div>
+                            <button class="btn-move-next" style="width: auto; padding: 8px 20px;">Move to Next →</button>
+                        </div>
                     </div>
 
                     <div class="wo-list-card">
@@ -507,7 +587,13 @@
                             <span class="wo-status-badge status-pending">Pending</span>
                             <div style="margin-top: 4px; font-size: 12px; color: #6b7280;">Next: WH TERMINATING</div>
                         </div>
-                        <button class="btn-move-next" style="width: auto; padding: 8px 20px;">Move to Next →</button>
+                        <div class="wo-list-actions">
+                            <div class="wo-list-complete-option">
+                                <input type="checkbox" id="list-complete-12347" checked>
+                                <label for="list-complete-12347">Complete entry</label>
+                            </div>
+                            <button class="btn-move-next" style="width: auto; padding: 8px 20px;">Move to Next →</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -519,7 +605,8 @@
                 <li><strong>Kanban Style:</strong> Visual flow from left to right, shows bottleneck columns easily, great for production floor screens, supports drag-and-drop in future</li>
                 <li><strong>Card List Style:</strong> More compact, easier to scan many work orders, familiar from current schedule page, better for detailed information display</li>
                 <li><strong>Common Features:</strong> Both show current location, next location, priority/status indicators, and "Move to Next" button (disabled when at final step)</li>
-                <li><strong>Move Behavior:</strong> Button click → API call with <code>complete_schedule: true</code> → Card moves to next column or disappears if complete → Auto-refresh</li>
+                <li><strong>Complete Schedule Option:</strong> Checkbox allows user to choose whether to complete the schedule entry (checked = complete, unchecked = leave open)</li>
+                <li><strong>Move Behavior:</strong> Button click → API call with <code>complete_schedule: true/false</code> based on checkbox → Card moves to next column or disappears if complete → Auto-refresh</li>
                 <li><strong>User ID:</strong> Automatically pulled from logged-in user's session for audit trail in CETEC</li>
             </ul>
         </div>
