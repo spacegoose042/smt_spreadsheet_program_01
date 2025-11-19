@@ -241,11 +241,14 @@ export default function WireHarnessSchedule() {
     const rawFilterStart = dateFilterStart ? startOfDay(parseISO(dateFilterStart)) : null
     const rawFilterEnd = dateFilterEnd ? endOfDay(parseISO(dateFilterEnd)) : null
     const noDateFilters = !rawFilterStart && !rawFilterEnd
+    // When no date filters and not including past due, show jobs from today forward
+    // (only set start filter, leave end open to show all future dates)
     const effectiveFilterStart = noDateFilters && !includePastDue
       ? startOfDay(new Date())
       : rawFilterStart
-    const effectiveFilterEnd = noDateFilters && !includePastDue
-      ? endOfDay(new Date())
+    // Only set end filter if explicitly provided or if we're in "today" mode with both dates
+    const effectiveFilterEnd = (noDateFilters && !includePastDue)
+      ? null  // Leave end open to show all future dates
       : rawFilterEnd
 
     let filtered = workcenters
@@ -276,18 +279,36 @@ export default function WireHarnessSchedule() {
             const effectiveJobStart = jobStart || jobEnd
             const effectiveJobEnd = jobEnd || jobStart
 
-            if (effectiveFilterStart && effectiveJobEnd && effectiveJobEnd < effectiveFilterStart) {
-              if (!(includePastDue && effectiveJobEnd < effectiveFilterStart)) {
+            // Check for date range overlap: job should be included if it overlaps with the filter range
+            // Job overlaps if: jobStart <= filterEnd AND jobEnd >= filterStart
+            let overlaps = false
+            
+            if (effectiveFilterStart !== null && effectiveFilterEnd !== null) {
+              // Both filter dates set - check for overlap
+              overlaps = effectiveJobStart <= effectiveFilterEnd && effectiveJobEnd >= effectiveFilterStart
+            } else if (effectiveFilterStart !== null) {
+              // Only start filter - include if job ends on or after filter start
+              overlaps = effectiveJobEnd >= effectiveFilterStart
+            } else if (effectiveFilterEnd !== null) {
+              // Only end filter - include if job starts on or before filter end
+              overlaps = effectiveJobStart <= effectiveFilterEnd
+            }
+
+            // If job doesn't overlap and it's past due, check if we should include it anyway
+            if (!overlaps) {
+              if (includePastDue && effectiveJobEnd && effectiveFilterStart && effectiveJobEnd < effectiveFilterStart) {
+                // Include past due jobs
+                overlaps = true
+              } else {
                 return false
               }
             }
-
-            if (effectiveFilterEnd && effectiveJobStart && effectiveJobStart > effectiveFilterEnd) {
-              return false
-            }
-          } else if (!includePastDue) {
-            const todayStart = startOfDay(new Date())
-            if (effectiveFilterStart && effectiveFilterStart > todayStart) {
+          } else {
+            // Job has no dates
+            // If user set explicit date filters, exclude jobs without dates
+            // If we defaulted to "today" mode, also exclude jobs without dates (they're not scheduled)
+            // Only include jobs without dates if no date filtering is applied at all
+            if (effectiveFilterStart !== null || effectiveFilterEnd !== null) {
               return false
             }
           }
