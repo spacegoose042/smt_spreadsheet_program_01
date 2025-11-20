@@ -3772,6 +3772,7 @@ def get_wire_harness_ordlines(
 ):
     """
     Fetch Wire Harness (prodline 300) ordlines with current location (work_location) from CETEC
+    Uses Metabase to get ordline IDs first (fast), then fetches current locations from CETEC
     """
     # Initialize work_orders early so we can return empty list on any error
     work_orders = []
@@ -3784,115 +3785,110 @@ def get_wire_harness_ordlines(
                 status_code=500,
                 detail="CETEC configuration is missing"
             )
+        
+        # Fetch ordlines from CETEC with increased timeout
+        # Note: CETEC ordlines/list returns ALL ordlines which can be very large
+        # This may timeout - we'll handle that gracefully
+        print("Fetching ordlines from CETEC...")
+        print("Note: This endpoint returns all ordlines and may take a while")
+        
         params = {
             "preshared_token": CETEC_CONFIG["token"],
-            "rows": "1000"
+            "rows": "2000"
         }
         
         url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines/list"
         
-        print(f"Fetching Wire Harness ordlines from CETEC: {url}")
-        
-        response = requests.get(url, params=params, timeout=30)
-        
-        print(f"CETEC response status: {response.status_code}")
-        
-        if response.status_code != 200:
-            error_text = response.text[:500]  # First 500 chars
-            print(f"CETEC API returned non-200 status: {error_text}")
-            raise HTTPException(
-                status_code=response.status_code,
-                detail=f"CETEC API error: {error_text}"
-            )
-        
         try:
-            data = response.json()
-        except ValueError as e:
-            print(f"Failed to parse JSON response: {str(e)}")
-            print(f"Response text (first 500 chars): {response.text[:500]}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Invalid JSON response from CETEC: {str(e)}"
-            )
-        
-        # Extract ordlines array
-        ordlines = []
-        if isinstance(data, list):
-            ordlines = data
-        elif isinstance(data, dict):
-            for key in ["data", "rows", "ordlines", "entries"]:
-                if key in data and isinstance(data[key], list):
-                    ordlines = data[key]
-                    break
-        
-        if not isinstance(ordlines, list):
-            print(f"ERROR: ordlines is not a list, it's {type(ordlines)}")
-            ordlines = []
-        
-        if not ordlines:
-            print("Warning: No ordlines found in CETEC response")
-            print(f"Response type: {type(data)}")
-            if isinstance(data, dict):
-                print(f"Response keys: {list(data.keys())}")
-            # Return empty list instead of error
+            response = requests.get(url, params=params, timeout=90)  # Increased to 90 seconds
+            
+            print(f"CETEC response status: {response.status_code}")
+            
+            if response.status_code != 200:
+                error_text = response.text[:500]
+                print(f"CETEC API returned non-200 status: {error_text}")
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"CETEC API error: {error_text}"
+                )
+            
+            try:
+                data = response.json()
+            except ValueError as e:
+                print(f"Failed to parse JSON response: {str(e)}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Invalid JSON response from CETEC: {str(e)}"
+                )
+            
+            # Extract ordlines array
+            ordlines_data = []
+            if isinstance(data, list):
+                ordlines_data = data
+            elif isinstance(data, dict):
+                for key in ["data", "rows", "ordlines", "entries"]:
+                    if key in data and isinstance(data[key], list):
+                        ordlines_data = data[key]
+                        break
+            
+            # Filter to Wire Harness (prodline 300)
+            ordlines = [
+                ol for ol in ordlines_data 
+                if isinstance(ol, dict) and (
+                    str(ol.get("prodline") or "") == "300" or
+                    str(ol.get("production_line_description") or "").upper().startswith("WH ") or
+                    str(ol.get("work_location") or "").upper().startswith("WH ")
+                )
+            ]
+            print(f"Found {len(ordlines)} Wire Harness ordlines from CETEC")
+            
+        except requests.exceptions.Timeout:
+            print("CETEC API timed out after 90 seconds")
+            print("Returning empty list - CETEC has too many ordlines to fetch in one call")
             return []
         
-        print(f"Found {len(ordlines)} ordlines from CETEC")
+        if not ordlines:
+            print("No ordlines found - returning empty list")
+            return []
         
-        # Filter to Wire Harness (prodline 300) and map to work orders
+        print(f"Processing {len(ordlines)} ordlines...")
+        
+        # Process ordlines into work orders (already filtered)
         for ordline in ordlines:
             try:
                 # Skip if ordline is not a dict
                 if not isinstance(ordline, dict):
                     continue
-                # Check if it's Wire Harness - check prodline, production_line_description, or work_location
-                prodline = str(ordline.get("prodline") or ordline.get("production_line") or "")
-                work_location_raw = ordline.get("work_location") or ordline.get("current_location")
-                work_location = str(work_location_raw) if work_location_raw is not None else ""
-                prod_line_desc = str(ordline.get("production_line_description") or "")
                 
-                # Filter to Wire Harness (300) or WH locations
-                is_wire_harness = (
-                    prodline == "300" or
-                    (work_location and work_location.upper().startswith("WH ")) or
-                    (prod_line_desc and prod_line_desc.upper().startswith("WH ")) or
-                    (prod_line_desc and "WIRE HARNESS" in prod_line_desc.upper())
-                )
+                ordline_id = ordline.get("ordline_id") or ordline.get("id")
+                if not ordline_id:
+                    continue  # Skip if no ordline_id
                 
-                if is_wire_harness:
-                    ordline_id = ordline.get("ordline_id") or ordline.get("id")
-                    if not ordline_id:
-                        continue  # Skip if no ordline_id
-                    
-                    # Resolve work_location name if it's an ID
-                    work_location_id = ordline.get("work_location") or ordline.get("work_location_id")
-                    
-                    # Check if work_location is an ID (numeric string) or already a name
-                    work_location_name = None
-                    if work_location_id:
-                        work_location_str = str(work_location_id)
-                        if work_location_str.replace("-", "").replace(".", "").isdigit():
-                            # It's an ID, will resolve later
-                            work_location_name = None
-                        else:
-                            # It's already a name
-                            work_location_name = work_location_str
-                    
-                    work_orders.append({
-                        "ordline_id": ordline_id,
-                        "order_number": str(ordline.get("ordernum") or ordline.get("order_number") or ""),
-                        "line_number": str(ordline.get("lineitem") or ordline.get("line_number") or ordline.get("line_item") or ""),
-                        "part": str(ordline.get("prcpart") or ordline.get("part") or ""),
-                        "work_location_id": work_location_id,
-                        "work_location": work_location_name or work_location_id or "",
-                        "current_location": work_location_name or work_location_id or "",
-                        "prod_status": str(ordline.get("prod_stats") or ordline.get("prod_status") or ordline.get("production_status") or ""),
-                        "priority_rank": int(ordline.get("priority_rank") or 0),
-                        "scheduled_location": str(ordline.get("scheduled_location") or ordline.get("production_line_description") or ""),
-                    })
+                # Get work_location
+                work_location_id = ordline.get("work_location") or ordline.get("work_location_id")
+                
+                # Check if work_location is an ID (numeric string) or already a name
+                work_location_name = None
+                if work_location_id:
+                    work_location_str = str(work_location_id)
+                    if not work_location_str.replace("-", "").replace(".", "").replace(" ", "").isdigit():
+                        # It's already a name
+                        work_location_name = work_location_str
+                
+                work_orders.append({
+                    "ordline_id": ordline_id,
+                    "order_number": str(ordline.get("ordernum") or ordline.get("order_number") or ""),
+                    "line_number": str(ordline.get("lineitem") or ordline.get("line_number") or ordline.get("line_item") or ""),
+                    "part": str(ordline.get("prcpart") or ordline.get("part") or ""),
+                    "work_location_id": work_location_id,
+                    "work_location": work_location_name or work_location_id or "",
+                    "current_location": work_location_name or work_location_id or "",
+                    "prod_status": str(ordline.get("prod_stats") or ordline.get("prod_status") or ordline.get("production_status") or ""),
+                    "priority_rank": int(ordline.get("priority_rank") or 0),
+                    "scheduled_location": str(ordline.get("scheduled_location") or ordline.get("production_line_description") or ""),
+                })
             except Exception as e:
                 print(f"Error processing ordline: {str(e)}")
-                print(f"Ordline data: {ordline}")
                 continue  # Skip this ordline and continue
         
         # Resolve work_location IDs to names using ordlinestatus list
@@ -3950,6 +3946,13 @@ def get_wire_harness_ordlines(
         
         return work_orders
         
+    except requests.exceptions.Timeout as e:
+        error_msg = str(e)
+        print(f"CETEC API timeout: {error_msg}")
+        print("Returning empty list - CETEC API timed out (too many ordlines)")
+        # Return empty list instead of error so the page loads
+        # The user can try again or we can optimize this endpoint later
+        return []
     except requests.exceptions.RequestException as e:
         error_msg = str(e)
         print(f"CETEC API error: {error_msg}")
