@@ -3784,9 +3784,26 @@ def get_wire_harness_ordlines(
         print(f"Fetching Wire Harness ordlines from CETEC: {url}")
         
         response = requests.get(url, params=params, timeout=30)
-        response.raise_for_status()
         
-        data = response.json()
+        print(f"CETEC response status: {response.status_code}")
+        
+        if response.status_code != 200:
+            error_text = response.text[:500]  # First 500 chars
+            print(f"CETEC API returned non-200 status: {error_text}")
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"CETEC API error: {error_text}"
+            )
+        
+        try:
+            data = response.json()
+        except ValueError as e:
+            print(f"Failed to parse JSON response: {str(e)}")
+            print(f"Response text (first 500 chars): {response.text[:500]}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Invalid JSON response from CETEC: {str(e)}"
+            )
         
         # Extract ordlines array
         ordlines = []
@@ -3797,6 +3814,12 @@ def get_wire_harness_ordlines(
                 if key in data and isinstance(data[key], list):
                     ordlines = data[key]
                     break
+        
+        if not ordlines:
+            print("Warning: No ordlines found in CETEC response")
+            print(f"Response type: {type(data)}")
+            if isinstance(data, dict):
+                print(f"Response keys: {list(data.keys())}")
         
         print(f"Found {len(ordlines)} ordlines from CETEC")
         
@@ -3855,6 +3878,7 @@ def get_wire_harness_ordlines(
                 continue  # Skip this ordline and continue
         
         # Resolve work_location IDs to names using ordlinestatus list
+        # This is optional - if it fails, we'll still return work orders with IDs
         try:
             status_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlinestatus/list"
             status_response = requests.get(
@@ -3863,35 +3887,46 @@ def get_wire_harness_ordlines(
                 timeout=30
             )
             if status_response.status_code == 200:
-                status_data = status_response.json()
-                status_list = status_data if isinstance(status_data, list) else (status_data.get("data") or [])
-                
-                id_to_name = {}
-                for status in status_list:
-                    status_id = status.get("id") or status.get("status_id")
-                    status_name = status.get("description") or status.get("name")
-                    if status_id and status_name:
-                        id_to_name[int(status_id)] = str(status_name)
-                
-                # Map work_location IDs to names
-                for wo in work_orders:
-                    work_loc_id = wo.get("work_location_id")
-                    if work_loc_id:
+                try:
+                    status_data = status_response.json()
+                    status_list = status_data if isinstance(status_data, list) else (status_data.get("data") or [])
+                    
+                    id_to_name = {}
+                    for status in status_list:
                         try:
-                            work_loc_str = str(work_loc_id)
-                            # Check if it's a numeric ID
-                            if work_loc_str.replace("-", "").replace(".", "").isdigit():
-                                location_id = int(float(work_loc_str))
-                                location_name = id_to_name.get(location_id)
-                                if location_name:
-                                    wo["work_location"] = location_name
-                                    wo["current_location"] = location_name
-                        except (ValueError, TypeError) as e:
-                            # Not a numeric ID, might already be a name
-                            print(f"Could not parse work_location_id as int: {work_loc_id}")
+                            status_id = status.get("id") or status.get("status_id")
+                            status_name = status.get("description") or status.get("name")
+                            if status_id is not None and status_name:
+                                try:
+                                    id_to_name[int(status_id)] = str(status_name)
+                                except (ValueError, TypeError):
+                                    pass
+                        except Exception:
                             continue
+                    
+                    # Map work_location IDs to names
+                    for wo in work_orders:
+                        work_loc_id = wo.get("work_location_id")
+                        if work_loc_id:
+                            try:
+                                work_loc_str = str(work_loc_id)
+                                # Check if it's a numeric ID
+                                clean_str = work_loc_str.replace("-", "").replace(".", "").replace(" ", "")
+                                if clean_str.isdigit():
+                                    location_id = int(float(work_loc_str))
+                                    location_name = id_to_name.get(location_id)
+                                    if location_name:
+                                        wo["work_location"] = location_name
+                                        wo["current_location"] = location_name
+                            except (ValueError, TypeError, AttributeError):
+                                # Not a numeric ID, might already be a name - that's ok
+                                pass
+                except ValueError as e:
+                    print(f"Failed to parse status response JSON: {str(e)}")
         except Exception as e:
-            print(f"Error resolving location names: {str(e)}")
+            print(f"Error resolving location names (non-fatal): {str(e)}")
+            import traceback
+            print(traceback.format_exc())
         
         print(f"Returning {len(work_orders)} Wire Harness work orders")
         
