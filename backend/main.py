@@ -3773,7 +3773,17 @@ def get_wire_harness_ordlines(
     """
     Fetch Wire Harness (prodline 300) ordlines with current location (work_location) from CETEC
     """
+    # Initialize work_orders early so we can return empty list on any error
+    work_orders = []
+    
     try:
+        # Validate CETEC config
+        if not CETEC_CONFIG or not CETEC_CONFIG.get("token") or not CETEC_CONFIG.get("domain"):
+            print("ERROR: CETEC_CONFIG is missing or incomplete")
+            raise HTTPException(
+                status_code=500,
+                detail="CETEC configuration is missing"
+            )
         params = {
             "preshared_token": CETEC_CONFIG["token"],
             "rows": "1000"
@@ -3815,18 +3825,26 @@ def get_wire_harness_ordlines(
                     ordlines = data[key]
                     break
         
+        if not isinstance(ordlines, list):
+            print(f"ERROR: ordlines is not a list, it's {type(ordlines)}")
+            ordlines = []
+        
         if not ordlines:
             print("Warning: No ordlines found in CETEC response")
             print(f"Response type: {type(data)}")
             if isinstance(data, dict):
                 print(f"Response keys: {list(data.keys())}")
+            # Return empty list instead of error
+            return []
         
         print(f"Found {len(ordlines)} ordlines from CETEC")
         
         # Filter to Wire Harness (prodline 300) and map to work orders
-        work_orders = []
         for ordline in ordlines:
             try:
+                # Skip if ordline is not a dict
+                if not isinstance(ordline, dict):
+                    continue
                 # Check if it's Wire Harness - check prodline, production_line_description, or work_location
                 prodline = str(ordline.get("prodline") or ordline.get("production_line") or "")
                 work_location_raw = ordline.get("work_location") or ordline.get("current_location")
@@ -3945,11 +3963,28 @@ def get_wire_harness_ordlines(
             status_code=500,
             detail=f"Failed to fetch from CETEC: {error_msg}"
         )
+    except HTTPException:
+        # Re-raise HTTPExceptions as-is
+        raise
     except Exception as e:
         error_msg = str(e)
         import traceback
+        error_trace = traceback.format_exc()
         print(f"Unexpected error in get_wire_harness_ordlines: {error_msg}")
-        print(traceback.format_exc())
+        print(error_trace)
+        
+        # Log to help debug
+        print(f"ERROR DETAILS:")
+        print(f"  Error type: {type(e).__name__}")
+        print(f"  Error message: {error_msg}")
+        print(f"  Work orders collected so far: {len(work_orders)}")
+        
+        # If we have some work orders, return them with a warning
+        if work_orders:
+            print(f"WARNING: Returning partial data due to error")
+            return work_orders
+        
+        # Otherwise raise the error
         raise HTTPException(
             status_code=500,
             detail=f"Internal server error: {error_msg}"
