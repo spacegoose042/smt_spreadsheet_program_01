@@ -2176,6 +2176,82 @@ def execute_metabase_query(
             detail=f"Failed to execute query: {str(e)}"
         )
 
+@app.get("/api/debug/work-order-move")
+def debug_work_order_move(current_user: User = Depends(auth.get_current_user)):
+    """
+    Debug endpoint to test Work Order Move data processing step by step
+    """
+    try:
+        # Step 1: Test Card 984
+        card_id = 984
+        url = f"{METABASE_CONFIG['base_url']}/api/card/{card_id}/query"
+        headers = get_metabase_headers()
+        request_body = {"prodline": "300"}
+        
+        response = requests.post(url, headers=headers, json=request_body, timeout=15)
+        
+        if response.status_code not in [200, 202]:
+            return {"error": f"Card 984 failed: {response.status_code}", "details": response.text[:500]}
+        
+        result = response.json()
+        
+        # Step 2: Extract data
+        data_rows = []
+        columns = []
+        
+        if 'data' in result and 'rows' in result['data']:
+            data_rows = result['data'].get('rows', [])
+            columns = result['data'].get('cols', [])
+        
+        # Step 3: Test column mapping
+        col_map = {}
+        for idx, col in enumerate(columns):
+            display_name = (col.get('display_name') or '').lower()
+            name = (col.get('name') or '').lower()
+            combined = f"{display_name} {name}"
+            
+            if (combined.find('order') >= 0 and (combined.find('ordernum') >= 0 or combined.find('order num') >= 0)):
+                col_map['order'] = idx
+            elif (combined.find('line') >= 0 and (combined.find('lineitem') >= 0 or combined.find('line item') >= 0)):
+                col_map['line'] = idx
+        
+        # Step 4: Test work order extraction
+        unique_work_orders = {}
+        for i, row in enumerate(data_rows[:10]):  # Test first 10 rows
+            try:
+                order_num = row[col_map.get('order')] if 'order' in col_map and col_map['order'] < len(row) else None
+                line_num = row[col_map.get('line')] if 'line' in col_map and col_map['line'] < len(row) else None
+                
+                if order_num:
+                    ordline_id = f"{order_num}.{line_num}" if line_num else str(order_num)
+                    if ordline_id not in unique_work_orders:
+                        unique_work_orders[ordline_id] = {
+                            "order_number": str(order_num),
+                            "line_number": str(line_num) if line_num else "",
+                        }
+            except Exception as e:
+                continue
+        
+        return {
+            "success": True,
+            "card_984_status": response.status_code,
+            "data_rows_count": len(data_rows),
+            "columns_count": len(columns),
+            "column_mapping": col_map,
+            "unique_work_orders_found": len(unique_work_orders),
+            "sample_work_orders": dict(list(unique_work_orders.items())[:5]),
+            "first_row_sample": data_rows[0][:10] if data_rows else [],
+            "column_names": [col.get('display_name', col.get('name', '')) for col in columns[:10]]
+        }
+        
+    except Exception as e:
+        import traceback
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
 @app.get("/api/metabase/test-card-984")
 def test_metabase_card_984(
     current_user: User = Depends(auth.get_current_user)
