@@ -2176,6 +2176,74 @@ def execute_metabase_query(
             detail=f"Failed to execute query: {str(e)}"
         )
 
+@app.get("/api/debug/ordline/{ordline_id}")
+def debug_specific_ordline(ordline_id: str, current_user: User = Depends(auth.get_current_user)):
+    """
+    Debug a specific ordline to see its current location in CETEC
+    """
+    try:
+        print(f"🔍 Testing ordline {ordline_id} directly from CETEC...")
+        
+        # Test direct CETEC call for this specific ordline
+        ordline_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines/list"
+        ordline_params = {
+            "preshared_token": CETEC_CONFIG["token"],
+            "ordline_id": ordline_id,
+            "rows": "1"
+        }
+        
+        print(f"   URL: {ordline_url}")
+        print(f"   Params: {ordline_params}")
+        
+        response = requests.get(ordline_url, params=ordline_params, timeout=15)
+        
+        if response.status_code != 200:
+            return {"error": f"CETEC API failed: {response.status_code}", "response": response.text[:500]}
+        
+        data = response.json()
+        ordlines = data if isinstance(data, list) else (data.get("data") or [])
+        
+        if not ordlines:
+            return {"error": "No ordline found", "response_data": data}
+        
+        ordline = ordlines[0]
+        work_location_id = ordline.get("work_location")
+        
+        # Get location mapping
+        status_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlinestatus/list"
+        status_response = requests.get(
+            status_url,
+            params={"preshared_token": CETEC_CONFIG["token"], "rows": "1000"},
+            timeout=15
+        )
+        
+        location_name = "Unknown"
+        if status_response.status_code == 200:
+            status_data = status_response.json()
+            status_list = status_data if isinstance(status_data, list) else (status_data.get("data") or [])
+            
+            for status in status_list:
+                if isinstance(status, dict) and status.get("id") == work_location_id:
+                    location_name = status.get("description") or status.get("name") or f"Location {work_location_id}"
+                    break
+        
+        return {
+            "success": True,
+            "ordline_id": ordline_id,
+            "cetec_response": ordline,
+            "work_location_id": work_location_id,
+            "resolved_location_name": location_name,
+            "raw_ordline_data": ordline
+        }
+        
+    except Exception as e:
+        import traceback
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
 @app.get("/api/debug/work-order-move")
 def debug_work_order_move(current_user: User = Depends(auth.get_current_user)):
     """
