@@ -4500,6 +4500,13 @@ def get_wire_harness_ordlines(
         
         print(f"   📍 Successfully mapped {len(ordline_locations)} ordline locations")
         
+        # DEBUG: Show some sample location mappings
+        if ordline_locations:
+            sample_mappings = list(ordline_locations.items())[:3]
+            for oid, loc_id in sample_mappings:
+                loc_name = ordline_status_map.get(loc_id, f"Location {loc_id}")
+                print(f"   🗺️  Sample: Ordline {oid} → Location ID {loc_id} → {loc_name}")
+        
         # Create final work orders with resolved locations
         for ordline_id, wo_data in unique_work_orders.items():
             work_location_id = ordline_locations.get(str(ordline_id))
@@ -4518,6 +4525,10 @@ def get_wire_harness_ordlines(
                 "current_location": current_location,
                 "scheduled_location": current_location,  # For now, same as current
             }
+            
+            # DEBUG: Log location assignment for first few work orders
+            if len(work_orders) < 3:
+                print(f"   📍 WO {ordline_id}: Location ID {work_location_id} → '{current_location}'")
             
             work_orders.append(work_order)
         

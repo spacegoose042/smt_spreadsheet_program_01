@@ -319,8 +319,20 @@ export default function WorkOrderMove() {
                     </div>
                     <div>
                       <div><strong>Line:</strong> {wo.lineNumber}</div>
-                      <div style={{ marginTop: '4px', fontSize: '12px', color: '#6b7280' }}>
-                        <strong>Current:</strong> {wo.currentLocation}
+                      <div style={{ marginTop: '4px', fontSize: '13px', fontWeight: '600' }}>
+                        <span style={{ color: '#374151' }}>Current Location:</span>
+                        <div style={{ 
+                          marginTop: '2px',
+                          padding: '3px 8px',
+                          background: '#f3f4f6',
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                          color: '#1f2937',
+                          fontWeight: '700',
+                          border: '1px solid #d1d5db'
+                        }}>
+                          {wo.currentLocation}
+                        </div>
                       </div>
                     </div>
                     <div>
