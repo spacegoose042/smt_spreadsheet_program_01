@@ -2208,21 +2208,31 @@ def test_cetec_api(current_user: User = Depends(auth.get_current_user)):
     """
     results = []
     
-    # Test multiple endpoints to see if any work
+    # Test multiple endpoints and API formats to see if any work
     test_endpoints = [
         {
-            "name": "ordlinestatus/list",
+            "name": "NEW API: ordlinestatus/list",
             "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlinestatus/list",
             "params": {"preshared_token": CETEC_CONFIG["token"], "rows": "1"}
         },
         {
-            "name": "ordlines/list", 
+            "name": "NEW API: ordlines/list", 
             "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines/list",
             "params": {"preshared_token": CETEC_CONFIG["token"], "rows": "1"}
         },
         {
-            "name": "Simple domain test",
+            "name": "OLD API: Test endpoint",
+            "url": f"https://{CETEC_CONFIG['domain']}/api/customer",
+            "params": {"preshared_token": CETEC_CONFIG["token"]}
+        },
+        {
+            "name": "Domain root test",
             "url": f"https://{CETEC_CONFIG['domain']}/",
+            "params": {}
+        },
+        {
+            "name": "Login page test",
+            "url": f"https://{CETEC_CONFIG['domain']}/login",
             "params": {}
         }
     ]
@@ -2266,11 +2276,26 @@ def test_cetec_api(current_user: User = Depends(auth.get_current_user)):
                 "url_tested": test['url']
             })
     
+    # Test if domain resolves at all
+    domain_reachable = False
+    try:
+        import socket
+        socket.gethostbyname(CETEC_CONFIG['domain'])
+        domain_reachable = True
+    except:
+        domain_reachable = False
+    
     return {
         "domain": CETEC_CONFIG['domain'],
+        "domain_reachable": domain_reachable,
         "token_preview": CETEC_CONFIG['token'][:10] + "..." if len(CETEC_CONFIG['token']) > 10 else CETEC_CONFIG['token'],
         "tests": results,
-        "any_working": any(r.get('success', False) for r in results)
+        "any_working": any(r.get('success', False) for r in results),
+        "summary": {
+            "total_tests": len(results),
+            "successful": len([r for r in results if r.get('success', False)]),
+            "failed": len([r for r in results if not r.get('success', False)])
+        }
     }
 
 @app.get("/api/debug/ordline/{ordline_id}")

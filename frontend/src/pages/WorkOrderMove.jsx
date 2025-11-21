@@ -302,8 +302,13 @@ export default function WorkOrderMove() {
         }}>
           <strong>CETEC API Tests:</strong> {cetecTest.any_working ? '✅ Some Working' : '❌ All Failed'}
           <div style={{ marginTop: '4px' }}>
-            Domain: {cetecTest.domain} | Token: {cetecTest.token_preview}
+            Domain: {cetecTest.domain} {cetecTest.domain_reachable ? '✅ Reachable' : '❌ Not Reachable'} | Token: {cetecTest.token_preview}
           </div>
+          {cetecTest.summary && (
+            <div style={{ marginTop: '4px', fontSize: '11px' }}>
+              Tests: {cetecTest.summary.successful}/{cetecTest.summary.total_tests} successful
+            </div>
+          )}
           {cetecTest.tests && cetecTest.tests.map((test, idx) => (
             <div key={idx} style={{ 
               marginTop: '6px', 
