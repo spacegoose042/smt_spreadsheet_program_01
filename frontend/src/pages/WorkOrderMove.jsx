@@ -295,23 +295,37 @@ export default function WorkOrderMove() {
         <div style={{ 
           marginBottom: '16px',
           padding: '12px',
-          background: cetecTest.success ? '#dcfce7' : '#fef2f2',
-          border: `1px solid ${cetecTest.success ? '#16a34a' : '#dc2626'}`,
+          background: cetecTest.any_working ? '#dcfce7' : '#fef2f2',
+          border: `1px solid ${cetecTest.any_working ? '#16a34a' : '#dc2626'}`,
           borderRadius: '6px',
           fontSize: '12px'
         }}>
-          <strong>CETEC Direct API Test:</strong> {cetecTest.success ? '✅ Working' : '❌ Failed'}
+          <strong>CETEC API Tests:</strong> {cetecTest.any_working ? '✅ Some Working' : '❌ All Failed'}
           <div style={{ marginTop: '4px' }}>
-            Domain: {cetecTest.domain} | Status: {cetecTest.status_code} | Token: {cetecTest.token_preview}
+            Domain: {cetecTest.domain} | Token: {cetecTest.token_preview}
           </div>
-          <div style={{ marginTop: '4px' }}>
-            Content-Type: {cetecTest.content_type} | Is JSON: {cetecTest.is_json ? 'Yes' : 'No'}
-          </div>
-          {!cetecTest.success && (
-            <div style={{ marginTop: '4px', color: '#dc2626' }}>
-              Error: {cetecTest.error || cetecTest.response_preview}
+          {cetecTest.tests && cetecTest.tests.map((test, idx) => (
+            <div key={idx} style={{ 
+              marginTop: '6px', 
+              padding: '4px 8px', 
+              background: test.success ? '#f0f9ff' : '#fef2f2',
+              borderRadius: '3px',
+              fontSize: '11px'
+            }}>
+              <strong>{test.name}:</strong> {test.success ? '✅' : '❌'} 
+              Status: {test.status_code} | Type: {test.content_type} | JSON: {test.is_json ? 'Yes' : 'No'}
+              {!test.success && test.error && (
+                <div style={{ color: '#dc2626', marginTop: '2px' }}>
+                  {test.error}
+                </div>
+              )}
+              {!test.success && test.response_preview && (
+                <div style={{ color: '#dc2626', marginTop: '2px', fontSize: '10px' }}>
+                  Response: {test.response_preview.substring(0, 100)}...
+                </div>
+              )}
             </div>
-          )}
+          ))}
         </div>
       )}
 
