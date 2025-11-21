@@ -74,6 +74,26 @@ export default function WorkOrderMove() {
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   })
 
+  // Also test the existing ordlinestatus endpoint
+  const { data: ordlineStatusTest } = useQuery({
+    queryKey: ['ordlineStatusTest'],
+    queryFn: async () => {
+      try {
+        const response = await fetch('/api/cetec/ordlinestatus/list')
+        const data = await response.json()
+        return { 
+          success: response.ok, 
+          status: response.status,
+          data_preview: Array.isArray(data) ? `Array with ${data.length} items` : typeof data,
+          first_item: Array.isArray(data) && data.length > 0 ? data[0] : null
+        }
+      } catch (error) {
+        return { success: false, error: error.message }
+      }
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+
   // Fetch work orders directly from CETEC with current location
   const { data: workordersData, isLoading, error, refetch } = useQuery({
     queryKey: ['wireHarnessOrdlinesForMove'],
@@ -270,7 +290,7 @@ export default function WorkOrderMove() {
         </div>
       </div>
 
-      {/* DEBUG: Show CETEC API test result */}
+      {/* DEBUG: Show CETEC API test results */}
       {cetecTest && (
         <div style={{ 
           marginBottom: '16px',
@@ -280,13 +300,42 @@ export default function WorkOrderMove() {
           borderRadius: '6px',
           fontSize: '12px'
         }}>
-          <strong>CETEC API Test:</strong> {cetecTest.success ? '✅ Working' : '❌ Failed'}
+          <strong>CETEC Direct API Test:</strong> {cetecTest.success ? '✅ Working' : '❌ Failed'}
           <div style={{ marginTop: '4px' }}>
             Domain: {cetecTest.domain} | Status: {cetecTest.status_code} | Token: {cetecTest.token_preview}
+          </div>
+          <div style={{ marginTop: '4px' }}>
+            Content-Type: {cetecTest.content_type} | Is JSON: {cetecTest.is_json ? 'Yes' : 'No'}
           </div>
           {!cetecTest.success && (
             <div style={{ marginTop: '4px', color: '#dc2626' }}>
               Error: {cetecTest.error || cetecTest.response_preview}
+            </div>
+          )}
+        </div>
+      )}
+
+      {ordlineStatusTest && (
+        <div style={{ 
+          marginBottom: '16px',
+          padding: '12px',
+          background: ordlineStatusTest.success ? '#dcfce7' : '#fef2f2',
+          border: `1px solid ${ordlineStatusTest.success ? '#16a34a' : '#dc2626'}`,
+          borderRadius: '6px',
+          fontSize: '12px'
+        }}>
+          <strong>Ordline Status Endpoint Test:</strong> {ordlineStatusTest.success ? '✅ Working' : '❌ Failed'}
+          <div style={{ marginTop: '4px' }}>
+            Status: {ordlineStatusTest.status} | Data: {ordlineStatusTest.data_preview}
+          </div>
+          {ordlineStatusTest.first_item && (
+            <div style={{ marginTop: '4px' }}>
+              Sample: {JSON.stringify(ordlineStatusTest.first_item).substring(0, 100)}...
+            </div>
+          )}
+          {!ordlineStatusTest.success && (
+            <div style={{ marginTop: '4px', color: '#dc2626' }}>
+              Error: {ordlineStatusTest.error}
             </div>
           )}
         </div>

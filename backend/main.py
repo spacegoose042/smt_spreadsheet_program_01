@@ -2207,28 +2207,53 @@ def test_cetec_api(current_user: User = Depends(auth.get_current_user)):
     Test CETEC API credentials and return the result
     """
     try:
+        # Test the same endpoint that the app uses for ordline statuses
         test_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlinestatus/list"
-        response = requests.get(
-            test_url,
-            params={"preshared_token": CETEC_CONFIG["token"], "rows": "1"},
-            timeout=10
-        )
+        params = {
+            "preshared_token": CETEC_CONFIG["token"],
+            "rows": "1"
+        }
+        
+        print(f"🔍 Testing CETEC API: {test_url}")
+        print(f"   Parameters: {params}")
+        
+        response = requests.get(test_url, params=params, timeout=10)
+        
+        print(f"   Response status: {response.status_code}")
+        print(f"   Response headers: {dict(response.headers)}")
+        print(f"   Response content type: {response.headers.get('content-type', 'unknown')}")
+        print(f"   Response preview: {response.text[:200]}")
+        
+        # Check if response is JSON
+        is_json = False
+        json_data = None
+        try:
+            json_data = response.json()
+            is_json = True
+        except:
+            is_json = False
         
         return {
-            "success": response.status_code == 200,
+            "success": response.status_code == 200 and is_json,
             "status_code": response.status_code,
             "domain": CETEC_CONFIG['domain'],
             "token_preview": CETEC_CONFIG['token'][:10] + "..." if len(CETEC_CONFIG['token']) > 10 else CETEC_CONFIG['token'],
-            "response_preview": response.text[:200] if response.text else "No response body",
-            "url_tested": test_url
+            "response_preview": response.text[:300] if response.text else "No response body",
+            "url_tested": test_url,
+            "content_type": response.headers.get('content-type', 'unknown'),
+            "is_json": is_json,
+            "json_data_preview": str(json_data)[:200] if is_json else None,
+            "response_length": len(response.text) if response.text else 0
         }
         
     except Exception as e:
+        import traceback
         return {
             "success": False,
             "error": str(e),
             "domain": CETEC_CONFIG['domain'],
-            "token_preview": CETEC_CONFIG['token'][:10] + "..." if len(CETEC_CONFIG['token']) > 10 else CETEC_CONFIG['token']
+            "token_preview": CETEC_CONFIG['token'][:10] + "..." if len(CETEC_CONFIG['token']) > 10 else CETEC_CONFIG['token'],
+            "traceback": traceback.format_exc()
         }
 
 @app.get("/api/debug/ordline/{ordline_id}")
