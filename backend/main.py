@@ -2176,6 +2176,89 @@ def execute_metabase_query(
             detail=f"Failed to execute query: {str(e)}"
         )
 
+@app.get("/api/metabase/test-card-985")
+def test_metabase_card_985(
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Test Metabase Card 985 directly to debug Work Order Move page issue
+    """
+    try:
+        print("🧪 Testing Metabase Card 985 for debugging...")
+        
+        card_id = 985
+        url = f"{METABASE_CONFIG['base_url']}/api/card/{card_id}/query"
+        headers = get_metabase_headers()
+        
+        # Execute the card with prodline 300 filter
+        request_body = {"prodline": "300"}
+        
+        print(f"   URL: {url}")
+        print(f"   Headers: {headers}")
+        print(f"   Body: {request_body}")
+        
+        response = requests.post(url, headers=headers, json=request_body, timeout=30)
+        
+        print(f"   Response status: {response.status_code}")
+        
+        if response.status_code not in [200, 202]:
+            error_text = response.text[:1000]
+            print(f"   Error: {error_text}")
+            return {
+                "success": False,
+                "error": f"Status {response.status_code}: {error_text}",
+                "card_id": card_id
+            }
+        
+        try:
+            result = response.json()
+        except ValueError as e:
+            print(f"   JSON parse error: {str(e)}")
+            return {
+                "success": False,
+                "error": f"Invalid JSON: {str(e)}",
+                "card_id": card_id
+            }
+        
+        # Extract data
+        data_rows = []
+        columns = []
+        
+        if 'data' in result:
+            data_rows = result['data'].get('rows', [])
+            columns = result['data'].get('cols', [])
+        
+        print(f"   Rows: {len(data_rows)}")
+        print(f"   Columns: {len(columns)}")
+        
+        # Show column names
+        column_names = [col.get('name', 'unknown') for col in columns]
+        print(f"   Column names: {column_names}")
+        
+        # Show first few rows
+        sample_rows = data_rows[:3] if data_rows else []
+        print(f"   Sample rows: {sample_rows}")
+        
+        return {
+            "success": True,
+            "card_id": card_id,
+            "row_count": len(data_rows),
+            "column_count": len(columns),
+            "column_names": column_names,
+            "sample_rows": sample_rows,
+            "full_result_keys": list(result.keys()) if isinstance(result, dict) else "not_dict"
+        }
+        
+    except Exception as e:
+        print(f"   Exception: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e),
+            "card_id": 985
+        }
+
 @app.post("/api/metabase/query/native")
 def execute_native_sql_query(
     query_request: dict,
