@@ -4392,18 +4392,18 @@ def get_wire_harness_ordlines(
         
         print(f"   ✅ Processed {len(work_orders)} work orders with real current locations")
         
-            # If we got no work orders with the new approach, fall back to using Card 984 data as-is
-            if len(work_orders) == 0 and len(unique_work_orders) > 0:
-                print(f"   ⚠️  Fallback: Using Card 984 scheduled locations since CETEC fetch failed")
-                for ordline_id, wo_data in unique_work_orders.items():
-                    work_order = {
-                        **wo_data,
-                        "work_location_id": None,
-                        "work_location": "Scheduled Location",
-                        "current_location": "Scheduled Location", 
-                        "scheduled_location": "Scheduled Location",
-                    }
-                    work_orders.append(work_order)
+        # If we got no work orders with the new approach, fall back to using Card 984 data as-is
+        if len(work_orders) == 0 and len(unique_work_orders) > 0:
+            print(f"   ⚠️  Fallback: Using Card 984 scheduled locations since CETEC fetch failed")
+            for ordline_id, wo_data in unique_work_orders.items():
+                work_order = {
+                    **wo_data,
+                    "work_location_id": None,
+                    "work_location": "Scheduled Location",
+                    "current_location": "Scheduled Location", 
+                    "scheduled_location": "Scheduled Location",
+                }
+                work_orders.append(work_order)
         
         except Exception as cetec_error:
             print(f"   ❌ CETEC location fetching failed: {str(cetec_error)}")
