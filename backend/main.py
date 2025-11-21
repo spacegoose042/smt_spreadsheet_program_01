@@ -4089,9 +4089,39 @@ def get_wire_harness_ordlines(
     current_user: User = Depends(auth.get_current_user)
 ):
     """
-    Fetch Wire Harness (prodline 300) ordlines using Metabase Card 985
+    Fetch Wire Harness (prodline 300) ordlines using Metabase Card 984
     This is much faster than calling CETEC ordlines/list directly (which times out)
     """
+    
+    # TEMPORARY: Return dummy data to test if frontend works
+    # Remove this after debugging
+    return [
+        {
+            "ordline_id": "14802.1",
+            "order_number": "14802",
+            "line_number": "1",
+            "part": "BOM530-323-1",
+            "current_location": "WH HOLD RACK",
+            "work_location": "WH HOLD RACK",
+            "scheduled_location": "WH HOLD RACK",
+            "prod_status": "PROD - MISSING MATERIAL IN PROCESS",
+            "priority_rank": 1,
+            "work_location_id": 123
+        },
+        {
+            "ordline_id": "14803.1",
+            "order_number": "14803",
+            "line_number": "1", 
+            "part": "TEST-PART-001",
+            "current_location": "WH WIRE AND CABLE PROCESSING",
+            "work_location": "WH WIRE AND CABLE PROCESSING",
+            "scheduled_location": "WH WIRE AND CABLE PROCESSING",
+            "prod_status": "PROD - IN PROCESS",
+            "priority_rank": 2,
+            "work_location_id": 124
+        }
+    ]
+    
     try:
         print("🔍 Fetching Wire Harness ordlines from Metabase Card 985...")
         print("   This is much faster than CETEC ordlines/list (which times out)")
@@ -4303,6 +4333,11 @@ def get_wire_harness_ordlines(
         # If we have no unique work orders from Card 984, return empty immediately
         if len(unique_work_orders) == 0:
             print(f"   ❌ No work orders from Card 984 - returning empty list")
+            print(f"   🔍 DEBUG: data_rows count = {len(data_rows)}")
+            print(f"   🔍 DEBUG: columns count = {len(columns)}")
+            print(f"   🔍 DEBUG: col_map = {col_map}")
+            if data_rows and len(data_rows) > 0:
+                print(f"   🔍 DEBUG: first row = {data_rows[0][:10]}")
             return []
         
         # Now get the REAL current locations from CETEC ordlines API
