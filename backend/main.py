@@ -4130,11 +4130,16 @@ def get_wire_harness_ordlines(
                 detail=f"Invalid JSON response from Metabase: {str(e)}"
             )
         
-        # Extract data from Metabase response
+        # Extract data from Metabase response - Card 984 format
         data_rows = []
         columns = []
         
-        if 'data' in result:
+        # Card 984 returns data in result.data.rows format
+        if 'data' in result and 'rows' in result['data']:
+            data_rows = result['data'].get('rows', [])
+            columns = result['data'].get('cols', [])
+        # Fallback for other formats
+        elif 'data' in result:
             data_rows = result['data'].get('rows', [])
             columns = result['data'].get('cols', [])
         
@@ -4145,35 +4150,62 @@ def get_wire_harness_ordlines(
             print("   ⚠️  No data rows found in Metabase response")
             return []
         
-        # Map column names to indices for easier access
+        # Map column names to indices - using the same logic as Wire Harness Schedule
         col_map = {}
         for idx, col in enumerate(columns):
-            name = col.get('name', '').lower()
-            display_name = col.get('display_name', '').lower()
+            display_name = (col.get('display_name') or '').lower()
+            name = (col.get('name') or '').lower()
+            combined = f"{display_name} {name}"
             
-            # Map various possible column names to our standard fields
-            if 'ordline' in name and 'id' in name:
-                col_map['ordline_id'] = idx
-            elif 'order' in name and ('num' in name or 'number' in name):
-                col_map['order_number'] = idx
-            elif 'line' in name and ('item' in name or 'number' in name):
-                col_map['line_number'] = idx
-            elif 'prcpart' in name or 'part' in name:
-                col_map['part'] = idx
-            elif 'current' in name and 'location' in name:
-                col_map['current_location'] = idx
-            elif 'work' in name and 'location' in name:
-                col_map['work_location'] = idx
-            elif 'location' in name and 'current' not in name:
-                col_map['location'] = idx
-            elif 'prod' in name and 'status' in name:
+            # Workcenter (Scheduled Location) - this will be our current_location
+            if ((display_name.find('scheduled location') >= 0 or display_name.find('ordline status') >= 0 or 
+                 name.find('description') >= 0) and 'workcenter' not in col_map):
+                col_map['workcenter'] = idx
+                col_map['current_location'] = idx  # Same field for work order move
+            # Build Operation
+            elif (combined.find('build operation') >= 0 or combined.find('operation') >= 0 or name == 'name'):
+                if 'operation' not in col_map:
+                    col_map['operation'] = idx
+            # Order Number
+            elif (combined.find('order') >= 0 and (combined.find('ordernum') >= 0 or combined.find('order num') >= 0)):
+                col_map['order'] = idx
+                col_map['order_number'] = idx  # Alias for work order move
+            # Line Item
+            elif (combined.find('line') >= 0 and (combined.find('lineitem') >= 0 or combined.find('line item') >= 0)):
+                col_map['line'] = idx
+                col_map['line_number'] = idx  # Alias for work order move
+            # Part Number
+            elif (combined.find('prcpart') >= 0 or combined.find('prc part') >= 0 or combined.find('part') >= 0):
+                if 'part' not in col_map:
+                    col_map['part'] = idx
+            # Production Status
+            elif (combined.find('prod') >= 0 and combined.find('status') >= 0):
                 col_map['prod_status'] = idx
-            elif 'priority' in name:
-                col_map['priority_rank'] = idx
-            elif 'scheduled' in name and 'location' in name:
-                col_map['scheduled_location'] = idx
+            # Priority
+            elif combined.find('priority') >= 0:
+                col_map['priority'] = idx
+                col_map['priority_rank'] = idx  # Alias for work order move
+            # Current Location (alternative field)
+            elif (combined.find('current') >= 0 and combined.find('location') >= 0):
+                if 'current_location' not in col_map:
+                    col_map['current_location'] = idx
+            # Look for ordline_id field specifically
+            elif (name.find('ordline') >= 0 and name.find('id') >= 0):
+                col_map['ordline_id'] = idx
         
         print(f"   📋 Column mapping: {col_map}")
+        
+        # Debug: Print first few column names to understand structure
+        if columns:
+            print(f"   🔍 First 10 columns:")
+            for i, col in enumerate(columns[:10]):
+                display_name = col.get('display_name', '')
+                name = col.get('name', '')
+                print(f"     [{i}] {display_name} ({name})")
+        
+        # Debug: Print first row to see data structure
+        if data_rows:
+            print(f"   📊 First row sample: {data_rows[0][:10] if len(data_rows[0]) > 10 else data_rows[0]}")
         
         # Process rows into work orders
         work_orders = []
@@ -4182,13 +4214,29 @@ def get_wire_harness_ordlines(
                 if not isinstance(row, list) or len(row) == 0:
                     continue
                 
-                # Extract ordline_id (required)
+                # Extract ordline_id (try to get it, but construct if not available)
                 ordline_id = None
                 if 'ordline_id' in col_map and col_map['ordline_id'] < len(row):
                     ordline_id = row[col_map['ordline_id']]
                 
+                # If no ordline_id, try to construct from order + line
                 if not ordline_id:
-                    continue  # Skip if no ordline_id
+                    order_num = None
+                    line_num = None
+                    
+                    if 'order' in col_map and col_map['order'] < len(row):
+                        order_num = row[col_map['order']]
+                    if 'line' in col_map and col_map['line'] < len(row):
+                        line_num = row[col_map['line']]
+                    
+                    if order_num:
+                        if line_num:
+                            ordline_id = f"{order_num}.{line_num}"
+                        else:
+                            ordline_id = str(order_num)
+                
+                if not ordline_id:
+                    continue  # Skip if we can't identify this work order
                 
                 # Extract other fields with fallbacks
                 def get_field(field_name, fallback_fields=None, default=""):
@@ -4214,24 +4262,28 @@ def get_wire_harness_ordlines(
                 current_location = get_field('current_location', ['work_location', 'location'])
                 
                 work_order = {
-                    "ordline_id": int(ordline_id),
-                    "order_number": get_field('order_number'),
-                    "line_number": get_field('line_number'),
+                    "ordline_id": ordline_id,  # Keep as string or int as received
+                    "order_number": get_field('order', ['order_number']),
+                    "line_number": get_field('line', ['line_number']),
                     "part": get_field('part'),
                     "work_location_id": None,  # We'll resolve this if needed
                     "work_location": current_location,
                     "current_location": current_location,
                     "prod_status": get_field('prod_status'),
                     "priority_rank": 0,  # Default priority
-                    "scheduled_location": get_field('scheduled_location', ['location']),
+                    "scheduled_location": get_field('workcenter', ['scheduled_location', 'current_location']),
                 }
                 
                 # Try to extract priority as integer
                 try:
-                    if 'priority_rank' in col_map and col_map['priority_rank'] < len(row):
+                    priority_val = None
+                    if 'priority' in col_map and col_map['priority'] < len(row):
+                        priority_val = row[col_map['priority']]
+                    elif 'priority_rank' in col_map and col_map['priority_rank'] < len(row):
                         priority_val = row[col_map['priority_rank']]
-                        if priority_val is not None:
-                            work_order["priority_rank"] = int(float(priority_val))
+                    
+                    if priority_val is not None:
+                        work_order["priority_rank"] = int(float(priority_val))
                 except (ValueError, TypeError):
                     pass  # Keep default 0
                 
