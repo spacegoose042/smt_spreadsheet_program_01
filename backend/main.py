@@ -2176,6 +2176,91 @@ def execute_metabase_query(
             detail=f"Failed to execute query: {str(e)}"
         )
 
+@app.post("/api/metabase/query/native")
+def execute_native_sql_query(
+    query_request: dict,
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Execute a native SQL query through Metabase
+    Test if we can run custom SQL queries for more flexible data access
+    
+    Expected format:
+    {
+        "database_id": 1,
+        "sql": "SELECT * FROM ordlines WHERE prodline = '300' LIMIT 10",
+        "parameters": {}
+    }
+    """
+    try:
+        database_id = query_request.get("database_id")
+        sql = query_request.get("sql")
+        parameters = query_request.get("parameters", {})
+        
+        if not database_id or not sql:
+            raise HTTPException(status_code=400, detail="database_id and sql are required")
+        
+        # Construct Metabase native query
+        metabase_query = {
+            "type": "native",
+            "native": {
+                "query": sql,
+                "template-tags": parameters
+            },
+            "database": database_id
+        }
+        
+        url = f"{METABASE_CONFIG['base_url']}/api/dataset"
+        headers = get_metabase_headers()
+        
+        print(f"🔍 Executing native SQL query on database {database_id}")
+        print(f"   SQL: {sql[:100]}...")
+        
+        response = requests.post(url, headers=headers, json=metabase_query, timeout=60)
+        
+        print(f"   Response status: {response.status_code}")
+        
+        if response.status_code not in [200, 202]:
+            error_text = response.text[:1000]
+            print(f"   ❌ Error: {error_text}")
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"Metabase query failed: {error_text}"
+            )
+        
+        result = response.json()
+        
+        # Extract data
+        data_rows = []
+        columns = []
+        
+        if 'data' in result:
+            data_rows = result['data'].get('rows', [])
+            columns = result['data'].get('cols', [])
+        
+        print(f"   ✅ Query successful: {len(data_rows)} rows returned")
+        
+        return {
+            "success": True,
+            "database_id": database_id,
+            "sql": sql,
+            "row_count": len(data_rows),
+            "columns": [{"name": col.get("name"), "type": col.get("base_type")} for col in columns],
+            "data": data_rows[:100],  # Limit to first 100 rows for response size
+            "truncated": len(data_rows) > 100
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error executing native query: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to execute query: {str(e)}"
+        )
+
 @app.get("/api/metabase/cards")
 def get_metabase_cards(
     current_user: User = Depends(auth.get_current_user)
@@ -2671,6 +2756,156 @@ def execute_dashboard_with_params(
         raise HTTPException(
             status_code=500,
             detail=f"Unexpected error: {str(e)}"
+        )
+
+@app.get("/api/metabase/explore/structure")
+def explore_metabase_structure(
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Comprehensive exploration of Metabase structure - databases, tables, fields
+    This will help us understand what data is available for native integration
+    """
+    try:
+        results = {
+            "databases": [],
+            "summary": {
+                "total_databases": 0,
+                "total_tables": 0,
+                "ordlines_tables": [],
+                "wire_harness_tables": []
+            }
+        }
+        
+        # Get all databases
+        url = f"{METABASE_CONFIG['base_url']}/api/database"
+        headers = get_metabase_headers()
+        
+        print(f"🔍 Exploring complete Metabase structure")
+        
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+        
+        databases_response = response.json()
+        databases = databases_response.get('data', [])
+        
+        print(f"   Found {len(databases)} databases")
+        results["summary"]["total_databases"] = len(databases)
+        
+        for db in databases:
+            db_id = db.get('id')
+            db_name = db.get('name', 'Unknown')
+            db_engine = db.get('engine', 'Unknown')
+            
+            print(f"   📊 Exploring database: {db_name} (ID: {db_id}, Engine: {db_engine})")
+            
+            db_info = {
+                "id": db_id,
+                "name": db_name,
+                "engine": db_engine,
+                "tables": [],
+                "table_count": 0
+            }
+            
+            # Get tables for this database
+            try:
+                meta_url = f"{METABASE_CONFIG['base_url']}/api/database/{db_id}/metadata"
+                meta_response = requests.get(meta_url, headers=headers, timeout=30)
+                meta_response.raise_for_status()
+                metadata = meta_response.json()
+                tables = metadata.get('tables', [])
+                
+                print(f"      Found {len(tables)} tables")
+                db_info["table_count"] = len(tables)
+                results["summary"]["total_tables"] += len(tables)
+                
+                for table in tables:
+                    table_id = table.get('id')
+                    table_name = table.get('name', 'Unknown')
+                    table_display_name = table.get('display_name', table_name)
+                    
+                    table_info = {
+                        "id": table_id,
+                        "name": table_name,
+                        "display_name": table_display_name,
+                        "schema": table.get('schema'),
+                        "fields": [],
+                        "field_count": 0,
+                        "has_ordline_fields": False,
+                        "has_wire_harness_fields": False
+                    }
+                    
+                    # Check if this looks like an ordlines table
+                    table_lower = table_name.lower()
+                    if 'ordline' in table_lower or 'order' in table_lower:
+                        results["summary"]["ordlines_tables"].append({
+                            "database": db_name,
+                            "table": table_name,
+                            "id": table_id
+                        })
+                    
+                    if 'wire' in table_lower or 'harness' in table_lower or 'wh' in table_lower:
+                        results["summary"]["wire_harness_tables"].append({
+                            "database": db_name,
+                            "table": table_name,
+                            "id": table_id
+                        })
+                    
+                    # Get fields for this table (sample first few tables)
+                    if len(db_info["tables"]) < 5:  # Limit to avoid timeout
+                        try:
+                            fields_url = f"{METABASE_CONFIG['base_url']}/api/table/{table_id}/query_metadata"
+                            fields_response = requests.get(fields_url, headers=headers, timeout=15)
+                            if fields_response.status_code == 200:
+                                fields_metadata = fields_response.json()
+                                fields = fields_metadata.get('fields', [])
+                                
+                                table_info["field_count"] = len(fields)
+                                
+                                for field in fields[:20]:  # Limit fields to avoid huge response
+                                    field_name = field.get('name', 'Unknown')
+                                    field_type = field.get('base_type', 'Unknown')
+                                    field_display_name = field.get('display_name', field_name)
+                                    
+                                    table_info["fields"].append({
+                                        "name": field_name,
+                                        "display_name": field_display_name,
+                                        "type": field_type
+                                    })
+                                    
+                                    # Check for ordline/wire harness related fields
+                                    field_lower = field_name.lower()
+                                    if 'ordline' in field_lower or 'order' in field_lower:
+                                        table_info["has_ordline_fields"] = True
+                                    if 'wire' in field_lower or 'harness' in field_lower or 'prodline' in field_lower:
+                                        table_info["has_wire_harness_fields"] = True
+                                        
+                        except Exception as e:
+                            print(f"         ⚠️  Could not fetch fields for table {table_name}: {str(e)}")
+                    
+                    db_info["tables"].append(table_info)
+                    
+            except Exception as e:
+                print(f"      ❌ Could not fetch tables for database {db_name}: {str(e)}")
+                db_info["error"] = str(e)
+            
+            results["databases"].append(db_info)
+        
+        print(f"✅ Exploration complete!")
+        print(f"   📊 {results['summary']['total_databases']} databases")
+        print(f"   📋 {results['summary']['total_tables']} total tables")
+        print(f"   🔍 {len(results['summary']['ordlines_tables'])} ordlines-related tables")
+        print(f"   🔌 {len(results['summary']['wire_harness_tables'])} wire harness-related tables")
+        
+        return results
+        
+    except Exception as e:
+        print(f"❌ Error exploring Metabase structure: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to explore Metabase structure: {str(e)}"
         )
 
 @app.get("/api/metabase/explore/prodline/{prodline}")
