@@ -5,6 +5,7 @@ import { Calendar, Package, RefreshCw, Loader2, MapPin, CheckCircle2, AlertCircl
 import { format, parseISO, startOfDay, endOfDay } from 'date-fns'
 
 const PREFERRED_WIRE_HARNESS_WORKCENTERS = [
+  'WH HOLD RACK',
   'WH WIRE AND CABLE PROCESSING',
   'WH TERMINATING',
   'WH SMALL ASSEMBLY',
@@ -15,6 +16,7 @@ const PREFERRED_WIRE_HARNESS_WORKCENTERS = [
 ]
 
 const WORKCENTER_COLOR_MAP = {
+  'WH HOLD RACK': '#f87171',
   'WH WIRE AND CABLE PROCESSING': '#fde68a',
   'WH TERMINATING': '#bbf7d0',
   'WH SMALL ASSEMBLY': '#bfdbfe',
