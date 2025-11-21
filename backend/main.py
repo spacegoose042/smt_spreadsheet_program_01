@@ -3800,13 +3800,15 @@ def get_wire_harness_ordlines(
         url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines/list"
         
         try:
-            response = requests.get(url, params=params, timeout=90)  # Increased to 90 seconds
+            print(f"Making request to: {url}")
+            print(f"Timeout: 60 seconds (reduced from 90)")
+            response = requests.get(url, params=params, timeout=60)  # Reduced to 60 seconds
             
-            print(f"CETEC response status: {response.status_code}")
+            print(f"✅ CETEC response received! Status: {response.status_code}")
             
             if response.status_code != 200:
                 error_text = response.text[:500]
-                print(f"CETEC API returned non-200 status: {error_text}")
+                print(f"❌ CETEC API returned non-200 status: {error_text}")
                 raise HTTPException(
                     status_code=response.status_code,
                     detail=f"CETEC API error: {error_text}"
@@ -3814,8 +3816,9 @@ def get_wire_harness_ordlines(
             
             try:
                 data = response.json()
+                print(f"✅ JSON parsed successfully. Data type: {type(data)}")
             except ValueError as e:
-                print(f"Failed to parse JSON response: {str(e)}")
+                print(f"❌ Failed to parse JSON response: {str(e)}")
                 raise HTTPException(
                     status_code=500,
                     detail=f"Invalid JSON response from CETEC: {str(e)}"
@@ -3825,11 +3828,18 @@ def get_wire_harness_ordlines(
             ordlines_data = []
             if isinstance(data, list):
                 ordlines_data = data
+                print(f"Data is a list with {len(ordlines_data)} items")
             elif isinstance(data, dict):
+                print(f"Data is a dict with keys: {list(data.keys())}")
                 for key in ["data", "rows", "ordlines", "entries"]:
                     if key in data and isinstance(data[key], list):
                         ordlines_data = data[key]
+                        print(f"Found ordlines in '{key}' field: {len(ordlines_data)} items")
                         break
+            
+            if not ordlines_data:
+                print("⚠️  No ordlines found in response")
+                return []
             
             # Filter to Wire Harness (prodline 300)
             ordlines = [
@@ -3840,11 +3850,16 @@ def get_wire_harness_ordlines(
                     str(ol.get("work_location") or "").upper().startswith("WH ")
                 )
             ]
-            print(f"Found {len(ordlines)} Wire Harness ordlines from CETEC")
+            print(f"✅ Found {len(ordlines)} Wire Harness ordlines from CETEC (filtered from {len(ordlines_data)} total)")
             
         except requests.exceptions.Timeout:
-            print("CETEC API timed out after 90 seconds")
-            print("Returning empty list - CETEC has too many ordlines to fetch in one call")
+            print("⏰ CETEC API timed out after 60 seconds")
+            print("📝 Note: CETEC ordlines/list returns ALL ordlines which can be very large")
+            print("🔄 Returning empty list so page loads - optimization needed")
+            return []
+        except requests.exceptions.ConnectionError as e:
+            print(f"🌐 CETEC API connection error: {str(e)}")
+            print("🔄 Returning empty list so page loads")
             return []
         
         if not ordlines:
