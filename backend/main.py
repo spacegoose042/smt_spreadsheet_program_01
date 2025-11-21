@@ -4297,6 +4297,8 @@ def get_wire_harness_ordlines(
         
         # Get ordline status mapping first
         ordline_status_map = {}
+        
+        # Wrap the entire CETEC fetching in a try-catch to provide fallback
         try:
             status_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlinestatus/list"
             status_response = requests.get(
@@ -4319,62 +4321,106 @@ def get_wire_harness_ordlines(
         except Exception as e:
             print(f"   ⚠️  Error loading ordline statuses: {str(e)}")
         
-        # Fetch current location for each unique work order
-        for ordline_id, wo_data in unique_work_orders.items():
+        # Try to fetch current locations in batch from CETEC (more efficient)
+        ordline_ids = list(unique_work_orders.keys())
+        print(f"   🔍 Fetching current locations for {len(ordline_ids)} work orders...")
+        
+        # Batch fetch ordlines from CETEC (limit to reasonable batch size)
+        batch_size = 50  # Limit batch size to avoid timeouts
+        ordline_locations = {}
+        
+        for i in range(0, len(ordline_ids), batch_size):
+            batch_ids = ordline_ids[i:i + batch_size]
+            print(f"   📦 Processing batch {i//batch_size + 1}: {len(batch_ids)} ordlines")
+            
             try:
-                # Get the ordline details from CETEC to get the real work_location
+                # Build filter for this batch of ordline IDs
+                ordline_filter = ",".join(str(oid) for oid in batch_ids)
+                
                 ordline_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines/list"
                 ordline_params = {
                     "preshared_token": CETEC_CONFIG["token"],
-                    "ordline_id": ordline_id,
-                    "rows": "1"
+                    "prodline": "300",  # Wire Harness only
+                    "ordline_id": ordline_filter,
+                    "rows": str(batch_size * 2)  # Allow for some extra
                 }
                 
-                ordline_response = requests.get(ordline_url, params=ordline_params, timeout=10)
+                ordline_response = requests.get(ordline_url, params=ordline_params, timeout=30)
                 
                 if ordline_response.status_code == 200:
                     ordline_data = ordline_response.json()
                     ordlines = ordline_data if isinstance(ordline_data, list) else (ordline_data.get("data") or [])
                     
-                    if ordlines and len(ordlines) > 0:
-                        ordline = ordlines[0]
-                        work_location_id = ordline.get("work_location")
-                        current_location = "Unknown"
-                        
-                        if work_location_id and work_location_id in ordline_status_map:
-                            current_location = ordline_status_map[work_location_id]
-                        
-                        # Create the final work order with real current location
-                        work_order = {
-                            **wo_data,  # Include all the data from Card 984
-                            "work_location_id": work_location_id,
-                            "work_location": current_location,
-                            "current_location": current_location,
-                            "scheduled_location": current_location,  # For now, same as current
-                        }
-                        
-                        work_orders.append(work_order)
-                        
-                    else:
-                        print(f"   ⚠️  No ordline data found for {ordline_id}")
+                    # Map ordline_id to work_location
+                    for ordline in ordlines:
+                        if isinstance(ordline, dict):
+                            oid = ordline.get("ordline_id")
+                            work_loc_id = ordline.get("work_location")
+                            if oid and work_loc_id:
+                                ordline_locations[str(oid)] = work_loc_id
+                    
+                    print(f"   ✅ Batch {i//batch_size + 1}: Found locations for {len([oid for oid in batch_ids if str(oid) in ordline_locations])} ordlines")
                 else:
-                    print(f"   ⚠️  Failed to fetch ordline {ordline_id}: {ordline_response.status_code}")
+                    print(f"   ⚠️  Batch {i//batch_size + 1} failed: {ordline_response.status_code}")
                     
             except Exception as e:
-                print(f"   ⚠️  Error fetching current location for ordline {ordline_id}: {str(e)}")
-                # Add work order without current location as fallback
-                work_order = {
-                    **wo_data,
-                    "work_location_id": None,
-                    "work_location": "Unknown",
-                    "current_location": "Unknown",
-                    "scheduled_location": "Unknown",
-                }
-                work_orders.append(work_order)
+                print(f"   ⚠️  Error fetching batch {i//batch_size + 1}: {str(e)}")
+                continue
+        
+        print(f"   📍 Successfully mapped {len(ordline_locations)} ordline locations")
+        
+        # Create final work orders with resolved locations
+        for ordline_id, wo_data in unique_work_orders.items():
+            work_location_id = ordline_locations.get(str(ordline_id))
+            current_location = "Unknown"
+            
+            if work_location_id and work_location_id in ordline_status_map:
+                current_location = ordline_status_map[work_location_id]
+            elif work_location_id:
+                current_location = f"Location {work_location_id}"  # Fallback if name not found
+            
+            # Create the final work order
+            work_order = {
+                **wo_data,  # Include all the data from Card 984
+                "work_location_id": work_location_id,
+                "work_location": current_location,
+                "current_location": current_location,
+                "scheduled_location": current_location,  # For now, same as current
+            }
+            
+            work_orders.append(work_order)
         
         print(f"   ✅ Processed {len(work_orders)} work orders with real current locations")
         
-        print(f"   🎯 Returning {len(work_orders)} Wire Harness work orders with real current locations")
+            # If we got no work orders with the new approach, fall back to using Card 984 data as-is
+            if len(work_orders) == 0 and len(unique_work_orders) > 0:
+                print(f"   ⚠️  Fallback: Using Card 984 scheduled locations since CETEC fetch failed")
+                for ordline_id, wo_data in unique_work_orders.items():
+                    work_order = {
+                        **wo_data,
+                        "work_location_id": None,
+                        "work_location": "Scheduled Location",
+                        "current_location": "Scheduled Location", 
+                        "scheduled_location": "Scheduled Location",
+                    }
+                    work_orders.append(work_order)
+        
+        except Exception as cetec_error:
+            print(f"   ❌ CETEC location fetching failed: {str(cetec_error)}")
+            print(f"   🔄 Falling back to Card 984 data without real current locations")
+            
+            # Fallback: Use Card 984 data as-is
+            for ordline_id, wo_data in unique_work_orders.items():
+                work_order = {
+                    **wo_data,
+                    "work_location_id": None,
+                    "work_location": "From Schedule",
+                    "current_location": "From Schedule", 
+                    "scheduled_location": "From Schedule",
+                }
+                work_orders.append(work_order)
+        
+        print(f"   🎯 Returning {len(work_orders)} Wire Harness work orders")
         
         return work_orders
         
