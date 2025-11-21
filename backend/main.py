@@ -4193,7 +4193,8 @@ def get_wire_harness_ordlines(
             elif (name.find('ordline') >= 0 and name.find('id') >= 0):
                 col_map['ordline_id'] = idx
         
-        print(f"   📋 Column mapping: {col_map}")
+        print(f"   📋 Column mapping found: {list(col_map.keys())}")
+        print(f"   📋 Full column mapping: {col_map}")
         
         # Debug: Print first few column names to understand structure
         if columns:
@@ -4294,6 +4295,16 @@ def get_wire_harness_ordlines(
                 continue  # Skip this row and continue
         
         print(f"   ✅ Processed {len(work_orders)} work orders from Metabase data")
+        
+        # If no work orders were processed, let's see why
+        if len(work_orders) == 0 and len(data_rows) > 0:
+            print(f"   ⚠️  No work orders processed despite {len(data_rows)} rows available")
+            print(f"   🔍 Checking first few rows for debugging:")
+            for i, row in enumerate(data_rows[:3]):
+                print(f"     Row {i}: {row}")
+                if 'order' in col_map:
+                    order_val = row[col_map['order']] if col_map['order'] < len(row) else 'N/A'
+                    print(f"       Order field: {order_val}")
         
         # Optional: Resolve any numeric location IDs to names using CETEC ordlinestatus
         # This is only needed if Metabase data has numeric IDs instead of names
