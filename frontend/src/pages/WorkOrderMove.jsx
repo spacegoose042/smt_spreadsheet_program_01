@@ -256,6 +256,23 @@ export default function WorkOrderMove() {
         </div>
       </div>
 
+      {/* DEBUG: Show raw data for 14802.1 */}
+      {workorders.find(wo => wo.orderNumber === '14802' && wo.lineNumber === '1') && (
+        <div style={{ 
+          marginBottom: '20px',
+          padding: '12px',
+          background: '#fef3c7',
+          border: '1px solid #f59e0b',
+          borderRadius: '6px',
+          fontSize: '12px'
+        }}>
+          <strong>DEBUG - WO 14802.1 Data:</strong>
+          <pre style={{ marginTop: '8px', fontSize: '11px', overflow: 'auto' }}>
+            {JSON.stringify(workorders.find(wo => wo.orderNumber === '14802' && wo.lineNumber === '1'), null, 2)}
+          </pre>
+        </div>
+      )}
+
       {/* Work Centers */}
       <div style={{ display: 'grid', gap: '16px' }}>
         {workcenters.map(wc => (
@@ -316,6 +333,20 @@ export default function WorkOrderMove() {
                     <div>
                       <div style={{ fontWeight: 700, fontSize: '16px' }}>{wo.orderNumber}</div>
                       <div style={{ fontSize: '12px', color: '#6b7280' }}>{wo.part}</div>
+                      {/* DEBUG: Show debug info for 14802.1 */}
+                      {wo.orderNumber === '14802' && wo.lineNumber === '1' && (
+                        <div style={{ 
+                          marginTop: '4px', 
+                          padding: '4px 6px', 
+                          background: '#fef3c7', 
+                          border: '1px solid #f59e0b',
+                          borderRadius: '3px',
+                          fontSize: '10px',
+                          color: '#92400e'
+                        }}>
+                          DEBUG: ordlineId={wo.ordlineId}, workLocationId={wo.workLocationId}
+                        </div>
+                      )}
                     </div>
                     <div>
                       <div><strong>Line:</strong> {wo.lineNumber}</div>
