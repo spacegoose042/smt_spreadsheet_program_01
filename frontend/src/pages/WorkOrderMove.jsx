@@ -309,6 +309,25 @@ export default function WorkOrderMove() {
               Tests: {cetecTest.summary.successful}/{cetecTest.summary.total_tests} successful
             </div>
           )}
+          {cetecTest.network_diagnostics && (
+            <div style={{ marginTop: '8px', fontSize: '11px' }}>
+              <strong>Network Diagnostics:</strong>
+              <div style={{ marginTop: '4px' }}>
+                DNS: {cetecTest.network_diagnostics.dns_resolution?.success ? '✅' : '❌'} 
+                {cetecTest.network_diagnostics.dns_resolution?.ip && ` (${cetecTest.network_diagnostics.dns_resolution.ip})`}
+                {cetecTest.network_diagnostics.dns_resolution?.error && ` - ${cetecTest.network_diagnostics.dns_resolution.error}`}
+              </div>
+              <div style={{ marginTop: '2px' }}>
+                TCP: {cetecTest.network_diagnostics.tcp_connection?.success ? '✅' : '❌'}
+                {cetecTest.network_diagnostics.tcp_connection?.error && ` - ${cetecTest.network_diagnostics.tcp_connection.error}`}
+              </div>
+              <div style={{ marginTop: '2px' }}>
+                HTTP: {cetecTest.network_diagnostics.http_request?.success ? '✅' : '❌'}
+                {cetecTest.network_diagnostics.http_request?.status_code && ` (${cetecTest.network_diagnostics.http_request.status_code})`}
+                {cetecTest.network_diagnostics.http_request?.error_type && ` - ${cetecTest.network_diagnostics.http_request.error_type}: ${cetecTest.network_diagnostics.http_request.error.substring(0, 100)}`}
+              </div>
+            </div>
+          )}
           {cetecTest.tests && cetecTest.tests.map((test, idx) => (
             <div key={idx} style={{ 
               marginTop: '6px', 

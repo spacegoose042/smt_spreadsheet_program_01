@@ -2276,19 +2276,54 @@ def test_cetec_api(current_user: User = Depends(auth.get_current_user)):
                 "url_tested": test['url']
             })
     
-    # Test if domain resolves at all
-    domain_reachable = False
+    # Detailed network diagnostics
+    network_diagnostics = {}
+    
+    # Test 1: DNS resolution
     try:
         import socket
-        socket.gethostbyname(CETEC_CONFIG['domain'])
-        domain_reachable = True
-    except:
-        domain_reachable = False
+        ip_address = socket.gethostbyname(CETEC_CONFIG['domain'])
+        network_diagnostics['dns_resolution'] = {'success': True, 'ip': ip_address}
+    except Exception as e:
+        network_diagnostics['dns_resolution'] = {'success': False, 'error': str(e)}
+    
+    # Test 2: Basic TCP connection
+    try:
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(10)
+        result = sock.connect_ex((CETEC_CONFIG['domain'], 443))  # HTTPS port
+        sock.close()
+        network_diagnostics['tcp_connection'] = {'success': result == 0, 'result_code': result}
+    except Exception as e:
+        network_diagnostics['tcp_connection'] = {'success': False, 'error': str(e)}
+    
+    # Test 3: HTTP request with detailed error info
+    try:
+        import requests
+        response = requests.get(f"https://{CETEC_CONFIG['domain']}/", timeout=10)
+        network_diagnostics['http_request'] = {
+            'success': True, 
+            'status_code': response.status_code,
+            'headers': dict(response.headers),
+            'content_preview': response.text[:200]
+        }
+    except requests.exceptions.SSLError as e:
+        network_diagnostics['http_request'] = {'success': False, 'error_type': 'SSL', 'error': str(e)}
+    except requests.exceptions.ConnectionError as e:
+        network_diagnostics['http_request'] = {'success': False, 'error_type': 'Connection', 'error': str(e)}
+    except requests.exceptions.Timeout as e:
+        network_diagnostics['http_request'] = {'success': False, 'error_type': 'Timeout', 'error': str(e)}
+    except Exception as e:
+        network_diagnostics['http_request'] = {'success': False, 'error_type': 'Other', 'error': str(e)}
+    
+    domain_reachable = network_diagnostics['dns_resolution']['success']
     
     return {
         "domain": CETEC_CONFIG['domain'],
         "domain_reachable": domain_reachable,
         "token_preview": CETEC_CONFIG['token'][:10] + "..." if len(CETEC_CONFIG['token']) > 10 else CETEC_CONFIG['token'],
+        "network_diagnostics": network_diagnostics,
         "tests": results,
         "any_working": any(r.get('success', False) for r in results),
         "summary": {
