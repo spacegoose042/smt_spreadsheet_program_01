@@ -4291,6 +4291,20 @@ def get_wire_harness_ordlines(
         
         print(f"   ✅ Found {len(unique_work_orders)} unique work orders from Metabase data")
         
+        # DEBUG: Show some sample work orders
+        if unique_work_orders:
+            sample_ids = list(unique_work_orders.keys())[:3]
+            for oid in sample_ids:
+                wo = unique_work_orders[oid]
+                print(f"   📋 Sample WO {oid}: {wo.get('order_number')}-{wo.get('line_number')} ({wo.get('part')})")
+        else:
+            print(f"   ⚠️  No unique work orders found - this means Card 984 data processing failed")
+        
+        # If we have no unique work orders from Card 984, return empty immediately
+        if len(unique_work_orders) == 0:
+            print(f"   ❌ No work orders from Card 984 - returning empty list")
+            return []
+        
         # Now get the REAL current locations from CETEC ordlines API
         print(f"   🔍 Fetching actual current locations from CETEC...")
         work_orders = []
@@ -4325,8 +4339,13 @@ def get_wire_harness_ordlines(
         ordline_ids = list(unique_work_orders.keys())
         print(f"   🔍 Fetching current locations for {len(ordline_ids)} work orders...")
         
+        # If too many work orders, skip CETEC fetching and use fallback
+        if len(ordline_ids) > 100:
+            print(f"   ⚠️  Too many work orders ({len(ordline_ids)}) - skipping CETEC fetch to avoid timeout")
+            raise Exception("Too many work orders for CETEC batch fetch")
+        
         # Batch fetch ordlines from CETEC (limit to reasonable batch size)
-        batch_size = 50  # Limit batch size to avoid timeouts
+        batch_size = 25  # Reduced batch size to avoid timeouts
         ordline_locations = {}
         
         for i in range(0, len(ordline_ids), batch_size):
@@ -4345,7 +4364,7 @@ def get_wire_harness_ordlines(
                     "rows": str(batch_size * 2)  # Allow for some extra
                 }
                 
-                ordline_response = requests.get(ordline_url, params=ordline_params, timeout=30)
+                ordline_response = requests.get(ordline_url, params=ordline_params, timeout=15)
                 
                 if ordline_response.status_code == 200:
                     ordline_data = ordline_response.json()
