@@ -2206,6 +2206,9 @@ def test_cetec_api(current_user: User = Depends(auth.get_current_user)):
     """
     Test CETEC API credentials and return the result
     """
+    # First run network diagnostics
+    network_diagnostics = test_cetec_connectivity()
+    
     results = []
     
     # Get IP address for direct connection test
@@ -2215,6 +2218,16 @@ def test_cetec_api(current_user: User = Depends(auth.get_current_user)):
     
     # Test multiple endpoints and connection methods
     test_endpoints = [
+        {
+            "name": "Domain root (no auth)",
+            "url": f"https://{CETEC_CONFIG['domain']}/",
+            "params": {}
+        },
+        {
+            "name": "Login page test",
+            "url": f"https://{CETEC_CONFIG['domain']}/login",
+            "params": {}
+        },
         {
             "name": "NEW API: ordlinestatus/list",
             "url": f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlinestatus/list",
@@ -2229,11 +2242,6 @@ def test_cetec_api(current_user: User = Depends(auth.get_current_user)):
             "name": "OLD API: Test endpoint",
             "url": f"https://{CETEC_CONFIG['domain']}/api/customer",
             "params": {"preshared_token": CETEC_CONFIG["token"]}
-        },
-        {
-            "name": "Domain root test",
-            "url": f"https://{CETEC_CONFIG['domain']}/",
-            "params": {}
         }
     ]
     
@@ -2275,11 +2283,18 @@ def test_cetec_api(current_user: User = Depends(auth.get_current_user)):
             # Check if response is JSON
             is_json = False
             json_data = None
+            html_title = None
             try:
                 json_data = response.json()
                 is_json = True
             except:
                 is_json = False
+                # If it's HTML, try to extract the title for debugging
+                if 'html' in response.headers.get('content-type', '').lower():
+                    import re
+                    title_match = re.search(r'<title>(.*?)</title>', response.text, re.IGNORECASE)
+                    if title_match:
+                        html_title = title_match.group(1).strip()
             
             results.append({
                 "name": test['name'],
@@ -2290,6 +2305,7 @@ def test_cetec_api(current_user: User = Depends(auth.get_current_user)):
                 "is_json": is_json,
                 "response_preview": response.text[:200] if response.text else "No response body",
                 "json_data_preview": str(json_data)[:100] if is_json else None,
+                "html_title": html_title,
                 "ssl_verify": ssl_verify,
                 "headers_used": headers
             })
