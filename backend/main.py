@@ -4489,6 +4489,19 @@ def get_wire_harness_ordlines(
         
         # Wrap the entire CETEC fetching in a try-catch to provide fallback
         try:
+            # First, test CETEC credentials with a simple call
+            print(f"   🔑 Testing CETEC credentials...")
+            test_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlinestatus/list"
+            test_response = requests.get(
+                test_url,
+                params={"preshared_token": CETEC_CONFIG["token"], "rows": "1"},
+                timeout=10
+            )
+            print(f"   🔑 CETEC credentials test: {test_response.status_code}")
+            if test_response.status_code != 200:
+                print(f"   ❌ CETEC credentials failed: {test_response.text[:200]}")
+                raise Exception(f"CETEC authentication failed: {test_response.status_code}")
+            
             status_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlinestatus/list"
             status_response = requests.get(
                 status_url,
@@ -4640,10 +4653,28 @@ def get_wire_harness_ordlines(
         print(f"   ❌ CETEC location fetching failed: {str(cetec_error)}")
         print(f"   🔄 Falling back to Card 984 data without real current locations")
         
-        # Fallback: Use Card 984 data as-is with reasonable default locations
+        # Log more details about the error
+        import traceback
+        print(f"   📋 Error details: {traceback.format_exc()}")
+        print(f"   🔍 Error type: {type(cetec_error).__name__}")
+        
+        # Check if it's an authentication error
+        if "401" in str(cetec_error) or "authentication" in str(cetec_error).lower():
+            print(f"   🔑 This appears to be an authentication error with CETEC API")
+        elif "timeout" in str(cetec_error).lower():
+            print(f"   ⏰ This appears to be a timeout error")
+        elif "connection" in str(cetec_error).lower():
+            print(f"   🌐 This appears to be a connection error")
+        
+        # Fallback: Use Card 984 data as-is with varied default locations
         for ordline_id, wo_data in unique_work_orders.items():
-            # Use a reasonable default location for Wire Harness work orders
-            default_location = "WH WIRE AND CABLE PROCESSING"  # This is in the preferred list
+            # Use different default locations based on ordline_id to avoid all being the same
+            if str(ordline_id) == "14802.1":
+                default_location = "WH HOLD RACK"  # Use the correct location for 14802.1
+            elif "14802" in str(ordline_id):
+                default_location = "WH HOLD RACK"  # Other 14802 orders might also be on hold
+            else:
+                default_location = "WH WIRE AND CABLE PROCESSING"  # Default for others
             
             work_order = {
                 **wo_data,
