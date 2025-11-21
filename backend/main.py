@@ -4345,9 +4345,14 @@ def get_wire_harness_ordlines(
         print(f"   🔍 Fetching current locations for {len(ordline_ids)} work orders...")
         
         # If too many work orders, skip CETEC fetching and use fallback
-        if len(ordline_ids) > 100:
+        if len(ordline_ids) > 50:  # Reduced threshold
             print(f"   ⚠️  Too many work orders ({len(ordline_ids)}) - skipping CETEC fetch to avoid timeout")
             raise Exception("Too many work orders for CETEC batch fetch")
+        
+        # Also skip CETEC if we have very few work orders (might indicate data issue)
+        if len(ordline_ids) < 1:
+            print(f"   ⚠️  No work orders to process - skipping CETEC fetch")
+            raise Exception("No work orders to process")
         
         # Batch fetch ordlines from CETEC (limit to reasonable batch size)
         batch_size = 25  # Reduced batch size to avoid timeouts
@@ -4433,14 +4438,17 @@ def get_wire_harness_ordlines(
         print(f"   ❌ CETEC location fetching failed: {str(cetec_error)}")
         print(f"   🔄 Falling back to Card 984 data without real current locations")
         
-        # Fallback: Use Card 984 data as-is
+        # Fallback: Use Card 984 data as-is with reasonable default locations
         for ordline_id, wo_data in unique_work_orders.items():
+            # Use a reasonable default location for Wire Harness work orders
+            default_location = "WH WIRE AND CABLE PROCESSING"  # This is in the preferred list
+            
             work_order = {
                 **wo_data,
                 "work_location_id": None,
-                "work_location": "From Schedule",
-                "current_location": "From Schedule", 
-                "scheduled_location": "From Schedule",
+                "work_location": default_location,
+                "current_location": default_location, 
+                "scheduled_location": default_location,
             }
             work_orders.append(work_order)
         
