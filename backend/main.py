@@ -4006,152 +4006,179 @@ def get_wire_harness_ordlines(
     current_user: User = Depends(auth.get_current_user)
 ):
     """
-    Fetch Wire Harness (prodline 300) ordlines with current location (work_location) from CETEC
-    Uses Metabase to get ordline IDs first (fast), then fetches current locations from CETEC
+    Fetch Wire Harness (prodline 300) ordlines using Metabase Card 985
+    This is much faster than calling CETEC ordlines/list directly (which times out)
     """
-    # Initialize work_orders early so we can return empty list on any error
-    work_orders = []
-    
     try:
-        # Validate CETEC config
-        if not CETEC_CONFIG or not CETEC_CONFIG.get("token") or not CETEC_CONFIG.get("domain"):
-            print("ERROR: CETEC_CONFIG is missing or incomplete")
+        print("🔍 Fetching Wire Harness ordlines from Metabase Card 985...")
+        print("   This is much faster than CETEC ordlines/list (which times out)")
+        
+        # Use Metabase Card 985: "Scheduled Work Orders min and max day by prodline, location, and build operation"
+        # This card is already filtered to prodline 300 (Wire Harness)
+        card_id = 985
+        
+        url = f"{METABASE_CONFIG['base_url']}/api/card/{card_id}/query"
+        headers = get_metabase_headers()
+        
+        # Execute the card with prodline 300 filter
+        request_body = {"prodline": "300"}
+        
+        print(f"   Executing Metabase Card {card_id}")
+        print(f"   URL: {url}")
+        
+        response = requests.post(url, headers=headers, json=request_body, timeout=30)
+        
+        print(f"   Response status: {response.status_code}")
+        
+        if response.status_code not in [200, 202]:
+            error_text = response.text[:500]
+            print(f"   ❌ Metabase error: {error_text}")
             raise HTTPException(
-                status_code=500,
-                detail="CETEC configuration is missing"
+                status_code=response.status_code,
+                detail=f"Metabase query failed: {error_text}"
             )
         
-        # Fetch ordlines from CETEC with increased timeout
-        # Note: CETEC ordlines/list returns ALL ordlines which can be very large
-        # This may timeout - we'll handle that gracefully
-        print("Fetching ordlines from CETEC...")
-        print("Note: This endpoint returns all ordlines and may take a while")
-        
-        params = {
-            "preshared_token": CETEC_CONFIG["token"],
-            "rows": "2000"
-        }
-        
-        url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines/list"
-        
         try:
-            print(f"Making request to: {url}")
-            print(f"Timeout: 60 seconds (reduced from 90)")
-            response = requests.get(url, params=params, timeout=60)  # Reduced to 60 seconds
+            result = response.json()
+        except ValueError as e:
+            print(f"   ❌ Failed to parse Metabase response: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Invalid JSON response from Metabase: {str(e)}"
+            )
+        
+        # Extract data from Metabase response
+        data_rows = []
+        columns = []
+        
+        if 'data' in result:
+            data_rows = result['data'].get('rows', [])
+            columns = result['data'].get('cols', [])
+        
+        print(f"   ✅ Metabase query successful: {len(data_rows)} rows returned")
+        print(f"   📊 Columns: {len(columns)}")
+        
+        if not data_rows:
+            print("   ⚠️  No data rows found in Metabase response")
+            return []
+        
+        # Map column names to indices for easier access
+        col_map = {}
+        for idx, col in enumerate(columns):
+            name = col.get('name', '').lower()
+            display_name = col.get('display_name', '').lower()
             
-            print(f"✅ CETEC response received! Status: {response.status_code}")
-            
-            if response.status_code != 200:
-                error_text = response.text[:500]
-                print(f"❌ CETEC API returned non-200 status: {error_text}")
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail=f"CETEC API error: {error_text}"
-                )
-            
+            # Map various possible column names to our standard fields
+            if 'ordline' in name and 'id' in name:
+                col_map['ordline_id'] = idx
+            elif 'order' in name and ('num' in name or 'number' in name):
+                col_map['order_number'] = idx
+            elif 'line' in name and ('item' in name or 'number' in name):
+                col_map['line_number'] = idx
+            elif 'prcpart' in name or 'part' in name:
+                col_map['part'] = idx
+            elif 'current' in name and 'location' in name:
+                col_map['current_location'] = idx
+            elif 'work' in name and 'location' in name:
+                col_map['work_location'] = idx
+            elif 'location' in name and 'current' not in name:
+                col_map['location'] = idx
+            elif 'prod' in name and 'status' in name:
+                col_map['prod_status'] = idx
+            elif 'priority' in name:
+                col_map['priority_rank'] = idx
+            elif 'scheduled' in name and 'location' in name:
+                col_map['scheduled_location'] = idx
+        
+        print(f"   📋 Column mapping: {col_map}")
+        
+        # Process rows into work orders
+        work_orders = []
+        for row in data_rows:
             try:
-                data = response.json()
-                print(f"✅ JSON parsed successfully. Data type: {type(data)}")
-            except ValueError as e:
-                print(f"❌ Failed to parse JSON response: {str(e)}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Invalid JSON response from CETEC: {str(e)}"
-                )
-            
-            # Extract ordlines array
-            ordlines_data = []
-            if isinstance(data, list):
-                ordlines_data = data
-                print(f"Data is a list with {len(ordlines_data)} items")
-            elif isinstance(data, dict):
-                print(f"Data is a dict with keys: {list(data.keys())}")
-                for key in ["data", "rows", "ordlines", "entries"]:
-                    if key in data and isinstance(data[key], list):
-                        ordlines_data = data[key]
-                        print(f"Found ordlines in '{key}' field: {len(ordlines_data)} items")
-                        break
-            
-            if not ordlines_data:
-                print("⚠️  No ordlines found in response")
-                return []
-            
-            # Filter to Wire Harness (prodline 300)
-            ordlines = [
-                ol for ol in ordlines_data 
-                if isinstance(ol, dict) and (
-                    str(ol.get("prodline") or "") == "300" or
-                    str(ol.get("production_line_description") or "").upper().startswith("WH ") or
-                    str(ol.get("work_location") or "").upper().startswith("WH ")
-                )
-            ]
-            print(f"✅ Found {len(ordlines)} Wire Harness ordlines from CETEC (filtered from {len(ordlines_data)} total)")
-            
-        except requests.exceptions.Timeout:
-            print("⏰ CETEC API timed out after 60 seconds")
-            print("📝 Note: CETEC ordlines/list returns ALL ordlines which can be very large")
-            print("🔄 Returning empty list so page loads - optimization needed")
-            return []
-        except requests.exceptions.ConnectionError as e:
-            print(f"🌐 CETEC API connection error: {str(e)}")
-            print("🔄 Returning empty list so page loads")
-            return []
-        
-        if not ordlines:
-            print("No ordlines found - returning empty list")
-            return []
-        
-        print(f"Processing {len(ordlines)} ordlines...")
-        
-        # Process ordlines into work orders (already filtered)
-        for ordline in ordlines:
-            try:
-                # Skip if ordline is not a dict
-                if not isinstance(ordline, dict):
+                if not isinstance(row, list) or len(row) == 0:
                     continue
                 
-                ordline_id = ordline.get("ordline_id") or ordline.get("id")
+                # Extract ordline_id (required)
+                ordline_id = None
+                if 'ordline_id' in col_map and col_map['ordline_id'] < len(row):
+                    ordline_id = row[col_map['ordline_id']]
+                
                 if not ordline_id:
                     continue  # Skip if no ordline_id
                 
-                # Get work_location
-                work_location_id = ordline.get("work_location") or ordline.get("work_location_id")
+                # Extract other fields with fallbacks
+                def get_field(field_name, fallback_fields=None, default=""):
+                    if fallback_fields is None:
+                        fallback_fields = []
+                    
+                    # Try primary field first
+                    if field_name in col_map and col_map[field_name] < len(row):
+                        value = row[col_map[field_name]]
+                        if value is not None:
+                            return str(value)
+                    
+                    # Try fallback fields
+                    for fallback in fallback_fields:
+                        if fallback in col_map and col_map[fallback] < len(row):
+                            value = row[col_map[fallback]]
+                            if value is not None:
+                                return str(value)
+                    
+                    return default
                 
-                # Check if work_location is an ID (numeric string) or already a name
-                work_location_name = None
-                if work_location_id:
-                    work_location_str = str(work_location_id)
-                    if not work_location_str.replace("-", "").replace(".", "").replace(" ", "").isdigit():
-                        # It's already a name
-                        work_location_name = work_location_str
+                # Extract current location (this is key for the move functionality)
+                current_location = get_field('current_location', ['work_location', 'location'])
                 
-                work_orders.append({
-                    "ordline_id": ordline_id,
-                    "order_number": str(ordline.get("ordernum") or ordline.get("order_number") or ""),
-                    "line_number": str(ordline.get("lineitem") or ordline.get("line_number") or ordline.get("line_item") or ""),
-                    "part": str(ordline.get("prcpart") or ordline.get("part") or ""),
-                    "work_location_id": work_location_id,
-                    "work_location": work_location_name or work_location_id or "",
-                    "current_location": work_location_name or work_location_id or "",
-                    "prod_status": str(ordline.get("prod_stats") or ordline.get("prod_status") or ordline.get("production_status") or ""),
-                    "priority_rank": int(ordline.get("priority_rank") or 0),
-                    "scheduled_location": str(ordline.get("scheduled_location") or ordline.get("production_line_description") or ""),
-                })
-            except Exception as e:
-                print(f"Error processing ordline: {str(e)}")
-                continue  # Skip this ordline and continue
-        
-        # Resolve work_location IDs to names using ordlinestatus list
-        # This is optional - if it fails, we'll still return work orders with IDs
-        try:
-            status_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlinestatus/list"
-            status_response = requests.get(
-                status_url,
-                params={"preshared_token": CETEC_CONFIG["token"], "rows": "1000"},
-                timeout=30
-            )
-            if status_response.status_code == 200:
+                work_order = {
+                    "ordline_id": int(ordline_id),
+                    "order_number": get_field('order_number'),
+                    "line_number": get_field('line_number'),
+                    "part": get_field('part'),
+                    "work_location_id": None,  # We'll resolve this if needed
+                    "work_location": current_location,
+                    "current_location": current_location,
+                    "prod_status": get_field('prod_status'),
+                    "priority_rank": 0,  # Default priority
+                    "scheduled_location": get_field('scheduled_location', ['location']),
+                }
+                
+                # Try to extract priority as integer
                 try:
+                    if 'priority_rank' in col_map and col_map['priority_rank'] < len(row):
+                        priority_val = row[col_map['priority_rank']]
+                        if priority_val is not None:
+                            work_order["priority_rank"] = int(float(priority_val))
+                except (ValueError, TypeError):
+                    pass  # Keep default 0
+                
+                work_orders.append(work_order)
+                
+            except Exception as e:
+                print(f"   ⚠️  Error processing row: {str(e)}")
+                continue  # Skip this row and continue
+        
+        print(f"   ✅ Processed {len(work_orders)} work orders from Metabase data")
+        
+        # Optional: Resolve any numeric location IDs to names using CETEC ordlinestatus
+        # This is only needed if Metabase data has numeric IDs instead of names
+        try:
+            # Check if we have any work orders with numeric-looking locations
+            needs_resolution = any(
+                wo.get("current_location", "").replace("-", "").replace(".", "").isdigit()
+                for wo in work_orders
+            )
+            
+            if needs_resolution:
+                print("   🔍 Resolving numeric location IDs to names...")
+                status_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlinestatus/list"
+                status_response = requests.get(
+                    status_url,
+                    params={"preshared_token": CETEC_CONFIG["token"], "rows": "1000"},
+                    timeout=15
+                )
+                
+                if status_response.status_code == 200:
                     status_data = status_response.json()
                     status_list = status_data if isinstance(status_data, list) else (status_data.get("data") or [])
                     
@@ -4161,36 +4188,34 @@ def get_wire_harness_ordlines(
                             status_id = status.get("id") or status.get("status_id")
                             status_name = status.get("description") or status.get("name")
                             if status_id is not None and status_name:
-                                try:
-                                    id_to_name[int(status_id)] = str(status_name)
-                                except (ValueError, TypeError):
-                                    pass
-                        except Exception:
+                                id_to_name[int(status_id)] = str(status_name)
+                        except (ValueError, TypeError):
                             continue
                     
-                    # Map work_location IDs to names
+                    # Map numeric IDs to names
+                    resolved_count = 0
                     for wo in work_orders:
-                        work_loc_id = wo.get("work_location_id")
-                        if work_loc_id:
+                        current_loc = wo.get("current_location", "")
+                        if current_loc and current_loc.replace("-", "").replace(".", "").isdigit():
                             try:
-                                work_loc_str = str(work_loc_id)
-                                # Check if it's a numeric ID
-                                clean_str = work_loc_str.replace("-", "").replace(".", "").replace(" ", "")
-                                if clean_str.isdigit():
-                                    location_id = int(float(work_loc_str))
-                                    location_name = id_to_name.get(location_id)
-                                    if location_name:
-                                        wo["work_location"] = location_name
-                                        wo["current_location"] = location_name
-                            except (ValueError, TypeError, AttributeError):
-                                # Not a numeric ID, might already be a name - that's ok
+                                location_id = int(float(current_loc))
+                                location_name = id_to_name.get(location_id)
+                                if location_name:
+                                    wo["work_location"] = location_name
+                                    wo["current_location"] = location_name
+                                    wo["work_location_id"] = location_id
+                                    resolved_count += 1
+                            except (ValueError, TypeError):
                                 pass
-                except ValueError as e:
-                    print(f"Failed to parse status response JSON: {str(e)}")
+                    
+                    print(f"   ✅ Resolved {resolved_count} location IDs to names")
+                else:
+                    print(f"   ⚠️  Could not fetch location names (status {status_response.status_code})")
+            else:
+                print("   ✅ All locations already have names, no resolution needed")
+                
         except Exception as e:
-            print(f"Error resolving location names (non-fatal): {str(e)}")
-            import traceback
-            print(traceback.format_exc())
+            print(f"   ⚠️  Error resolving location names (non-fatal): {str(e)}")
         
         print(f"Returning {len(work_orders)} Wire Harness work orders")
         
