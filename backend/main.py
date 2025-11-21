@@ -2208,7 +2208,12 @@ def test_cetec_api(current_user: User = Depends(auth.get_current_user)):
     """
     results = []
     
-    # Test multiple endpoints and API formats to see if any work
+    # Get IP address for direct connection test
+    cetec_ip = None
+    if network_diagnostics['dns_resolution']['success']:
+        cetec_ip = network_diagnostics['dns_resolution']['ip']
+    
+    # Test multiple endpoints and connection methods
     test_endpoints = [
         {
             "name": "NEW API: ordlinestatus/list",
@@ -2229,20 +2234,39 @@ def test_cetec_api(current_user: User = Depends(auth.get_current_user)):
             "name": "Domain root test",
             "url": f"https://{CETEC_CONFIG['domain']}/",
             "params": {}
-        },
-        {
-            "name": "Login page test",
-            "url": f"https://{CETEC_CONFIG['domain']}/login",
-            "params": {}
         }
     ]
+    
+    # Add IP-based test if DNS resolution worked
+    if cetec_ip:
+        test_endpoints.append({
+            "name": f"Direct IP API test ({cetec_ip})",
+            "url": f"https://{cetec_ip}/goapis/api/v1/ordlinestatus/list",
+            "params": {"preshared_token": CETEC_CONFIG["token"], "rows": "1"},
+            "headers": {"Host": CETEC_CONFIG['domain']}  # Required for SSL
+        })
     
     for test in test_endpoints:
         try:
             print(f"🔍 Testing {test['name']}: {test['url']}")
             print(f"   Parameters: {test['params']}")
             
-            response = requests.get(test['url'], params=test['params'], timeout=10)
+            # Prepare request with optional headers and SSL verification settings
+            headers = test.get('headers', {})
+            
+            # Try with different SSL and timeout settings
+            ssl_verify = True
+            if 'Direct IP' in test['name']:
+                ssl_verify = False  # IP-based requests might have SSL issues
+            
+            response = requests.get(
+                test['url'], 
+                params=test['params'], 
+                headers=headers,
+                timeout=15,
+                verify=ssl_verify,
+                allow_redirects=True
+            )
             
             print(f"   Response status: {response.status_code}")
             print(f"   Response content type: {response.headers.get('content-type', 'unknown')}")
@@ -2266,13 +2290,32 @@ def test_cetec_api(current_user: User = Depends(auth.get_current_user)):
                 "is_json": is_json,
                 "response_preview": response.text[:200] if response.text else "No response body",
                 "json_data_preview": str(json_data)[:100] if is_json else None,
+                "ssl_verify": ssl_verify,
+                "headers_used": headers
             })
             
+        except requests.exceptions.SSLError as e:
+            results.append({
+                "name": test['name'],
+                "success": False,
+                "error_type": "SSL Error",
+                "error": str(e)[:200],
+                "url_tested": test['url']
+            })
+        except requests.exceptions.ConnectionError as e:
+            results.append({
+                "name": test['name'],
+                "success": False,
+                "error_type": "Connection Error", 
+                "error": str(e)[:200],
+                "url_tested": test['url']
+            })
         except Exception as e:
             results.append({
                 "name": test['name'],
                 "success": False,
-                "error": str(e),
+                "error_type": "Other Error",
+                "error": str(e)[:200],
                 "url_tested": test['url']
             })
     
