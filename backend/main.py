@@ -4208,8 +4208,9 @@ def get_wire_harness_ordlines(
         if data_rows:
             print(f"   📊 First row sample: {data_rows[0][:10] if len(data_rows[0]) > 10 else data_rows[0]}")
         
-        # Process rows into work orders
-        work_orders = []
+        # First, collect unique work orders from Card 984 (which shows each WO multiple times)
+        unique_work_orders = {}  # Key: ordline_id, Value: work order data
+        
         for row in data_rows:
             try:
                 if not isinstance(row, list) or len(row) == 0:
@@ -4259,111 +4260,121 @@ def get_wire_harness_ordlines(
                     
                     return default
                 
-                # Extract current location (this is key for the move functionality)
-                current_location = get_field('current_location', ['work_location', 'location'])
-                
-                work_order = {
-                    "ordline_id": ordline_id,  # Keep as string or int as received
-                    "order_number": get_field('order', ['order_number']),
-                    "line_number": get_field('line', ['line_number']),
-                    "part": get_field('part'),
-                    "work_location_id": None,  # We'll resolve this if needed
-                    "work_location": current_location,
-                    "current_location": current_location,
-                    "prod_status": get_field('prod_status'),
-                    "priority_rank": 0,  # Default priority
-                    "scheduled_location": get_field('workcenter', ['scheduled_location', 'current_location']),
-                }
-                
-                # Try to extract priority as integer
-                try:
-                    priority_val = None
-                    if 'priority' in col_map and col_map['priority'] < len(row):
-                        priority_val = row[col_map['priority']]
-                    elif 'priority_rank' in col_map and col_map['priority_rank'] < len(row):
-                        priority_val = row[col_map['priority_rank']]
+                # Store unique work orders (Card 984 shows each WO multiple times for different steps)
+                if ordline_id not in unique_work_orders:
+                    unique_work_orders[ordline_id] = {
+                        "ordline_id": ordline_id,
+                        "order_number": get_field('order', ['order_number']),
+                        "line_number": get_field('line', ['line_number']),
+                        "part": get_field('part'),
+                        "prod_status": get_field('prod_status'),
+                        "priority_rank": 0,  # Default priority
+                        # Note: We'll get the REAL current location from CETEC below
+                    }
                     
-                    if priority_val is not None:
-                        work_order["priority_rank"] = int(float(priority_val))
-                except (ValueError, TypeError):
-                    pass  # Keep default 0
-                
-                work_orders.append(work_order)
+                    # Try to extract priority as integer
+                    try:
+                        priority_val = None
+                        if 'priority' in col_map and col_map['priority'] < len(row):
+                            priority_val = row[col_map['priority']]
+                        elif 'priority_rank' in col_map and col_map['priority_rank'] < len(row):
+                            priority_val = row[col_map['priority_rank']]
+                        
+                        if priority_val is not None:
+                            unique_work_orders[ordline_id]["priority_rank"] = int(float(priority_val))
+                    except (ValueError, TypeError):
+                        pass  # Keep default 0
                 
             except Exception as e:
                 print(f"   ⚠️  Error processing row: {str(e)}")
                 continue  # Skip this row and continue
         
-        print(f"   ✅ Processed {len(work_orders)} work orders from Metabase data")
+        print(f"   ✅ Found {len(unique_work_orders)} unique work orders from Metabase data")
         
-        # If no work orders were processed, let's see why
-        if len(work_orders) == 0 and len(data_rows) > 0:
-            print(f"   ⚠️  No work orders processed despite {len(data_rows)} rows available")
-            print(f"   🔍 Checking first few rows for debugging:")
-            for i, row in enumerate(data_rows[:3]):
-                print(f"     Row {i}: {row}")
-                if 'order' in col_map:
-                    order_val = row[col_map['order']] if col_map['order'] < len(row) else 'N/A'
-                    print(f"       Order field: {order_val}")
+        # Now get the REAL current locations from CETEC ordlines API
+        print(f"   🔍 Fetching actual current locations from CETEC...")
+        work_orders = []
         
-        # Optional: Resolve any numeric location IDs to names using CETEC ordlinestatus
-        # This is only needed if Metabase data has numeric IDs instead of names
+        # Get ordline status mapping first
+        ordline_status_map = {}
         try:
-            # Check if we have any work orders with numeric-looking locations
-            needs_resolution = any(
-                wo.get("current_location", "").replace("-", "").replace(".", "").isdigit()
-                for wo in work_orders
+            status_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlinestatus/list"
+            status_response = requests.get(
+                status_url,
+                params={"preshared_token": CETEC_CONFIG["token"], "rows": "1000"},
+                timeout=15
             )
             
-            if needs_resolution:
-                print("   🔍 Resolving numeric location IDs to names...")
-                status_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlinestatus/list"
-                status_response = requests.get(
-                    status_url,
-                    params={"preshared_token": CETEC_CONFIG["token"], "rows": "1000"},
-                    timeout=15
-                )
+            if status_response.status_code == 200:
+                status_data = status_response.json()
+                status_list = status_data if isinstance(status_data, list) else (status_data.get("data") or [])
                 
-                if status_response.status_code == 200:
-                    status_data = status_response.json()
-                    status_list = status_data if isinstance(status_data, list) else (status_data.get("data") or [])
-                    
-                    id_to_name = {}
-                    for status in status_list:
-                        try:
-                            status_id = status.get("id") or status.get("status_id")
-                            status_name = status.get("description") or status.get("name")
-                            if status_id is not None and status_name:
-                                id_to_name[int(status_id)] = str(status_name)
-                        except (ValueError, TypeError):
-                            continue
-                    
-                    # Map numeric IDs to names
-                    resolved_count = 0
-                    for wo in work_orders:
-                        current_loc = wo.get("current_location", "")
-                        if current_loc and current_loc.replace("-", "").replace(".", "").isdigit():
-                            try:
-                                location_id = int(float(current_loc))
-                                location_name = id_to_name.get(location_id)
-                                if location_name:
-                                    wo["work_location"] = location_name
-                                    wo["current_location"] = location_name
-                                    wo["work_location_id"] = location_id
-                                    resolved_count += 1
-                            except (ValueError, TypeError):
-                                pass
-                    
-                    print(f"   ✅ Resolved {resolved_count} location IDs to names")
-                else:
-                    print(f"   ⚠️  Could not fetch location names (status {status_response.status_code})")
+                for status in status_list:
+                    if isinstance(status, dict) and status.get("id"):
+                        ordline_status_map[status["id"]] = status.get("description") or status.get("name") or f"Location {status['id']}"
+                
+                print(f"   📍 Loaded {len(ordline_status_map)} location mappings")
             else:
-                print("   ✅ All locations already have names, no resolution needed")
-                
+                print(f"   ⚠️  Failed to load ordline statuses: {status_response.status_code}")
         except Exception as e:
-            print(f"   ⚠️  Error resolving location names (non-fatal): {str(e)}")
+            print(f"   ⚠️  Error loading ordline statuses: {str(e)}")
         
-        print(f"Returning {len(work_orders)} Wire Harness work orders")
+        # Fetch current location for each unique work order
+        for ordline_id, wo_data in unique_work_orders.items():
+            try:
+                # Get the ordline details from CETEC to get the real work_location
+                ordline_url = f"https://{CETEC_CONFIG['domain']}/goapis/api/v1/ordlines/list"
+                ordline_params = {
+                    "preshared_token": CETEC_CONFIG["token"],
+                    "ordline_id": ordline_id,
+                    "rows": "1"
+                }
+                
+                ordline_response = requests.get(ordline_url, params=ordline_params, timeout=10)
+                
+                if ordline_response.status_code == 200:
+                    ordline_data = ordline_response.json()
+                    ordlines = ordline_data if isinstance(ordline_data, list) else (ordline_data.get("data") or [])
+                    
+                    if ordlines and len(ordlines) > 0:
+                        ordline = ordlines[0]
+                        work_location_id = ordline.get("work_location")
+                        current_location = "Unknown"
+                        
+                        if work_location_id and work_location_id in ordline_status_map:
+                            current_location = ordline_status_map[work_location_id]
+                        
+                        # Create the final work order with real current location
+                        work_order = {
+                            **wo_data,  # Include all the data from Card 984
+                            "work_location_id": work_location_id,
+                            "work_location": current_location,
+                            "current_location": current_location,
+                            "scheduled_location": current_location,  # For now, same as current
+                        }
+                        
+                        work_orders.append(work_order)
+                        
+                    else:
+                        print(f"   ⚠️  No ordline data found for {ordline_id}")
+                else:
+                    print(f"   ⚠️  Failed to fetch ordline {ordline_id}: {ordline_response.status_code}")
+                    
+            except Exception as e:
+                print(f"   ⚠️  Error fetching current location for ordline {ordline_id}: {str(e)}")
+                # Add work order without current location as fallback
+                work_order = {
+                    **wo_data,
+                    "work_location_id": None,
+                    "work_location": "Unknown",
+                    "current_location": "Unknown",
+                    "scheduled_location": "Unknown",
+                }
+                work_orders.append(work_order)
+        
+        print(f"   ✅ Processed {len(work_orders)} work orders with real current locations")
+        
+        print(f"   🎯 Returning {len(work_orders)} Wire Harness work orders with real current locations")
         
         return work_orders
         
