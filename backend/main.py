@@ -2176,17 +2176,17 @@ def execute_metabase_query(
             detail=f"Failed to execute query: {str(e)}"
         )
 
-@app.get("/api/metabase/test-card-985")
-def test_metabase_card_985(
+@app.get("/api/metabase/test-card-984")
+def test_metabase_card_984(
     current_user: User = Depends(auth.get_current_user)
 ):
     """
-    Test Metabase Card 985 directly to debug Work Order Move page issue
+    Test Metabase Card 984 directly to debug Work Order Move page issue
     """
     try:
-        print("🧪 Testing Metabase Card 985 for debugging...")
+        print("🧪 Testing Metabase Card 984 for debugging...")
         
-        card_id = 985
+        card_id = 984
         url = f"{METABASE_CONFIG['base_url']}/api/card/{card_id}/query"
         headers = get_metabase_headers()
         
@@ -2256,7 +2256,7 @@ def test_metabase_card_985(
         return {
             "success": False,
             "error": str(e),
-            "card_id": 985
+            "card_id": 984
         }
 
 @app.post("/api/metabase/query/native")
@@ -4096,9 +4096,9 @@ def get_wire_harness_ordlines(
         print("🔍 Fetching Wire Harness ordlines from Metabase Card 985...")
         print("   This is much faster than CETEC ordlines/list (which times out)")
         
-        # Use Metabase Card 985: "Scheduled Work Orders min and max day by prodline, location, and build operation"
-        # This card is already filtered to prodline 300 (Wire Harness)
-        card_id = 985
+        # Use Metabase Card 984: Same as Wire Harness Schedule Detail
+        # This is the card that the working Wire Harness pages use
+        card_id = 984
         
         url = f"{METABASE_CONFIG['base_url']}/api/card/{card_id}/query"
         headers = get_metabase_headers()
