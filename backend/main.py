@@ -4268,6 +4268,9 @@ def get_wire_harness_ordlines(
             # Look for ordline_id field specifically
             elif (name.find('ordline') >= 0 and name.find('id') >= 0):
                 col_map['ordline_id'] = idx
+            # Look for prodline field
+            elif (combined.find('prodline') >= 0 or combined.find('production line') >= 0):
+                col_map['prodline'] = idx
         
         print(f"   📋 Column mapping found: {list(col_map.keys())}")
         print(f"   📋 Full column mapping: {col_map}")
@@ -4284,7 +4287,20 @@ def get_wire_harness_ordlines(
         if data_rows:
             print(f"   📊 First row sample: {data_rows[0][:10] if len(data_rows[0]) > 10 else data_rows[0]}")
         
+        # Define Wire Harness locations to filter by
+        WH_LOCATIONS = {
+            'WH HOLD RACK',
+            'WH WIRE AND CABLE PROCESSING',
+            'WH TERMINATING',
+            'WH SMALL ASSEMBLY',
+            'WH LARGE ASSEMBLY',
+            'WH ULTRA SONIC SPLICING',
+            'WH OVERMOLDING',
+            'WH QUALITY CONTROL'
+        }
+        
         # First, collect unique work orders from Card 984 (which shows each WO multiple times)
+        # Only include work orders that are scheduled for Wire Harness locations
         unique_work_orders = {}  # Key: ordline_id, Value: work order data
         
         for row in data_rows:
@@ -4336,6 +4352,16 @@ def get_wire_harness_ordlines(
                     
                     return default
                 
+                # Filter by prodline 300 (Wire Harness) if available
+                prodline = get_field('prodline', ['production_line'])
+                if prodline and prodline != '300':
+                    continue  # Skip non-Wire Harness work orders
+                
+                # Check if this work order is scheduled for a Wire Harness location
+                scheduled_location = get_field('workcenter', ['scheduled_location', 'current_location'])
+                if scheduled_location not in WH_LOCATIONS:
+                    continue  # Skip work orders not scheduled for WH locations
+                
                 # Store unique work orders (Card 984 shows each WO multiple times for different steps)
                 if ordline_id not in unique_work_orders:
                     unique_work_orders[ordline_id] = {
@@ -4365,7 +4391,7 @@ def get_wire_harness_ordlines(
                 print(f"   ⚠️  Error processing row: {str(e)}")
                 continue  # Skip this row and continue
         
-        print(f"   ✅ Found {len(unique_work_orders)} unique work orders from Metabase data")
+        print(f"   ✅ Found {len(unique_work_orders)} unique Wire Harness work orders from {len(data_rows)} total rows")
         
         # DEBUG: Show some sample work orders
         if unique_work_orders:
@@ -4374,7 +4400,7 @@ def get_wire_harness_ordlines(
                 wo = unique_work_orders[oid]
                 print(f"   📋 Sample WO {oid}: {wo.get('order_number')}-{wo.get('line_number')} ({wo.get('part')})")
         else:
-            print(f"   ⚠️  No unique work orders found - this means Card 984 data processing failed")
+            print(f"   ⚠️  No Wire Harness work orders found after filtering")
         
         # If we have no unique work orders from Card 984, return empty immediately
         if len(unique_work_orders) == 0:
