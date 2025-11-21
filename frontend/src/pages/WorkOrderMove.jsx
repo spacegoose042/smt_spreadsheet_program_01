@@ -60,6 +60,20 @@ export default function WorkOrderMove() {
   const [movingWo, setMovingWo] = useState(null)
   const queryClient = useQueryClient()
 
+  // Test CETEC API credentials
+  const { data: cetecTest } = useQuery({
+    queryKey: ['cetecTest'],
+    queryFn: async () => {
+      try {
+        const response = await fetch('/api/debug/cetec-test')
+        return await response.json()
+      } catch (error) {
+        return { success: false, error: error.message }
+      }
+    },
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  })
+
   // Fetch work orders directly from CETEC with current location
   const { data: workordersData, isLoading, error, refetch } = useQuery({
     queryKey: ['wireHarnessOrdlinesForMove'],
@@ -255,6 +269,28 @@ export default function WorkOrderMove() {
           </div>
         </div>
       </div>
+
+      {/* DEBUG: Show CETEC API test result */}
+      {cetecTest && (
+        <div style={{ 
+          marginBottom: '16px',
+          padding: '12px',
+          background: cetecTest.success ? '#dcfce7' : '#fef2f2',
+          border: `1px solid ${cetecTest.success ? '#16a34a' : '#dc2626'}`,
+          borderRadius: '6px',
+          fontSize: '12px'
+        }}>
+          <strong>CETEC API Test:</strong> {cetecTest.success ? '✅ Working' : '❌ Failed'}
+          <div style={{ marginTop: '4px' }}>
+            Domain: {cetecTest.domain} | Status: {cetecTest.status_code} | Token: {cetecTest.token_preview}
+          </div>
+          {!cetecTest.success && (
+            <div style={{ marginTop: '4px', color: '#dc2626' }}>
+              Error: {cetecTest.error || cetecTest.response_preview}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* DEBUG: Show raw data for 14802.1 */}
       {workorders.find(wo => wo.orderNumber === '14802' && wo.lineNumber === '1') && (
