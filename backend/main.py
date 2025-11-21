@@ -4449,6 +4449,7 @@ def get_wire_harness_ordlines(
         # If too many work orders, skip CETEC fetching and use fallback
         if len(ordline_ids) > 50:  # Reduced threshold
             print(f"   ⚠️  Too many work orders ({len(ordline_ids)}) - skipping CETEC fetch to avoid timeout")
+            print(f"   🔍 Sample ordline IDs that would be skipped: {ordline_ids[:5]}")
             raise Exception("Too many work orders for CETEC batch fetch")
         
         # Also skip CETEC if we have very few work orders (might indicate data issue)
@@ -4476,6 +4477,10 @@ def get_wire_harness_ordlines(
                     "rows": str(batch_size * 2)  # Allow for some extra
                 }
                 
+                print(f"   🔍 CETEC API call: {ordline_url}")
+                print(f"   📋 Batch ordline IDs: {ordline_filter}")
+                print(f"   ⚙️  Params: prodline=300, rows={batch_size * 2}")
+                
                 ordline_response = requests.get(ordline_url, params=ordline_params, timeout=15)
                 
                 if ordline_response.status_code == 200:
@@ -4487,6 +4492,13 @@ def get_wire_harness_ordlines(
                         if isinstance(ordline, dict):
                             oid = ordline.get("ordline_id")
                             work_loc_id = ordline.get("work_location")
+                            
+                            # Special debug for 14802.1
+                            if str(oid) == "14802.1":
+                                print(f"   🎯 FOUND 14802.1 in CETEC response!")
+                                print(f"      work_location ID: {work_loc_id}")
+                                print(f"      Full ordline data: {ordline}")
+                            
                             if oid and work_loc_id:
                                 ordline_locations[str(oid)] = work_loc_id
                     
@@ -4511,6 +4523,15 @@ def get_wire_harness_ordlines(
         for ordline_id, wo_data in unique_work_orders.items():
             work_location_id = ordline_locations.get(str(ordline_id))
             current_location = "Unknown"
+            
+            # Special debug for 14802.1
+            if str(ordline_id) == "14802.1":
+                print(f"   🎯 Processing 14802.1 location assignment:")
+                print(f"      Found in ordline_locations: {str(ordline_id) in ordline_locations}")
+                print(f"      work_location_id: {work_location_id}")
+                print(f"      ordline_status_map has this ID: {work_location_id in ordline_status_map if work_location_id else False}")
+                if work_location_id and work_location_id in ordline_status_map:
+                    print(f"      Resolved name: {ordline_status_map[work_location_id]}")
             
             if work_location_id and work_location_id in ordline_status_map:
                 current_location = ordline_status_map[work_location_id]
