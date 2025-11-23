@@ -4743,13 +4743,7 @@ def get_wire_harness_ordlines(
         ordline_ids = list(unique_work_orders.keys())
         print(f"   🔍 Fetching current locations for {len(ordline_ids)} work orders...")
         
-        # If too many work orders, skip CETEC fetching and use fallback
-        if len(ordline_ids) > 50:  # Reduced threshold
-            print(f"   ⚠️  Too many work orders ({len(ordline_ids)}) - skipping CETEC fetch to avoid timeout")
-            print(f"   🔍 Sample ordline IDs that would be skipped: {ordline_ids[:5]}")
-            raise Exception("Too many work orders for CETEC batch fetch")
-        
-        # Also skip CETEC if we have very few work orders (might indicate data issue)
+        # Skip CETEC if we have very few work orders (might indicate data issue)
         if len(ordline_ids) < 1:
             print(f"   ⚠️  No work orders to process - skipping CETEC fetch")
             raise Exception("No work orders to process")
